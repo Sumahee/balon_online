@@ -1,40 +1,68 @@
 "use client";
 
-import React, { useState } from "react";
-import { X, Plus, Wrench, Calendar, MapPin, Building, User, FileText } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { X, Plus, Wrench, Calendar, MapPin, Building, User, FileText, Phone, Palette, Layers, UserCheck, Sparkles } from "lucide-react";
 import { useData } from "@/context/DataContext";
-import { Priority, WorkItem, CardType, DeadlineType } from "@/types";
+import { Priority, WorkItem, CardType, DeadlineType, ClientInfo, UserInfo, MaterialOrderItem, DrawingType } from "@/types";
+import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
+import { cn } from "@/lib/utils";
 
 export function QuickModals() {
   const { quickModalType, setQuickModalType, addWorkItem, addAsItem } = useData();
 
+  // Dynamic Client and Staff lists loaded from shared DB
+  const [clientsList, setClientsList] = useState<ClientInfo[]>([]);
+  const [staffList, setStaffList] = useState<UserInfo[]>([]);
+
+  useEffect(() => {
+    fetch("/api/clients")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.clients) {
+          setClientsList(data.clients);
+        }
+      })
+      .catch(() => {});
+
+    fetch("/api/users")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.staff) {
+          setStaffList(data.staff);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Work form state
   const [workForm, setWorkForm] = useState<{
-    title: string;
     clientName: string;
+    siteAddress: string;
+    drawingType: DrawingType;
     cardType: CardType;
     deadlineType: DeadlineType;
     deliveryDate: string;
-    category: WorkItem["category"];
-    assignee: string;
+    siteContactPhone: string;
+    postColor: string;
+    boardColor: string;
+    drawingAssignee: string;
     priority: Priority;
-    startDate: string;
-    dueDate: string;
     notes: string;
-    description: string;
+    materialOrders: MaterialOrderItem[];
   }>({
-    title: "",
     clientName: "",
+    siteAddress: "",
+    drawingType: "옴니버스",
     cardType: "도면",
     deadlineType: "시공일",
     deliveryDate: new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0],
-    category: "제작",
-    assignee: "김진우 실장",
+    siteContactPhone: "",
+    postColor: "흑니켈",
+    boardColor: "PET 18T 화이트",
+    drawingAssignee: "김진우 실장 (로그인 유저)",
     priority: "보통",
-    startDate: new Date().toISOString().split("T")[0],
-    dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
     notes: "",
-    description: "",
+    materialOrders: [],
   });
 
   // AS form state
@@ -58,45 +86,72 @@ export function QuickModals() {
 
   if (!quickModalType) return null;
 
+  const autoTitlePreview = `${workForm.clientName.trim() || "업체명"}${
+    workForm.siteAddress.trim() ? ` ${workForm.siteAddress.trim()}` : ""
+  }(${workForm.drawingType})`;
+
   const handleWorkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!workForm.title.trim()) return;
+    if (!workForm.clientName.trim()) {
+      alert("업체명을 입력해 주세요.");
+      return;
+    }
+
+    const todayStr = new Date().toISOString().split("T")[0];
+    const siteStr = workForm.siteAddress.trim() ? ` ${workForm.siteAddress.trim()}` : "";
+    const autoTitle = `${workForm.clientName.trim()}${siteStr}(${workForm.drawingType})`;
+
+    const hasOrders = workForm.materialOrders.length > 0;
+    const isAllDone = hasOrders && workForm.materialOrders.every((o) => o.isOrdered);
+    const finalOrderStatus = isAllDone ? "발주완료" : hasOrders ? "발주필요" : "발주불필요";
 
     await addWorkItem({
       type: "work",
-      title: workForm.title,
-      clientName: workForm.clientName || "(주)바론 협력사",
+      title: autoTitle,
+      clientName: workForm.clientName.trim(),
+      siteAddress: workForm.siteAddress.trim(),
+      region: workForm.siteAddress.trim().split(" ")[0] || "서울/수도권",
+      drawingType: workForm.drawingType,
       cardType: workForm.cardType,
       deadlineType: workForm.deadlineType,
-      deliveryDate: workForm.deliveryDate || workForm.dueDate,
-      category: workForm.category,
-      assignee: workForm.assignee,
+      deliveryDate: workForm.deliveryDate,
+      siteContactPhone: workForm.siteContactPhone,
+      postColor: workForm.postColor,
+      boardColor: workForm.boardColor,
+      drawingAssignee: workForm.drawingAssignee,
+      assignee: workForm.drawingAssignee || "김진우 실장", // 로그인 유저 자동 지정
       priority: workForm.priority,
       status: "대기",
       progress: 0,
-      startDate: workForm.startDate,
-      dueDate: workForm.dueDate,
+      startDate: todayStr, // 등록일이 시작일
+      dueDate: workForm.deliveryDate, // 시공일이 마감일
       notes: workForm.notes,
-      description: workForm.description,
+      materialOrders: workForm.materialOrders,
+      materialOrderNeeded: workForm.materialOrders.map((o) => o.name).join(", "),
+      materialOrderStatus: finalOrderStatus,
       attachments: [],
     });
 
     setWorkForm({
-      title: "",
       clientName: "",
+      siteAddress: "",
+      drawingType: "옴니버스",
       cardType: "도면",
       deadlineType: "시공일",
       deliveryDate: new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0],
-      category: "제작",
-      assignee: "김진우 실장",
+      siteContactPhone: "",
+      postColor: "흑니켈",
+      boardColor: "PET 18T 화이트",
+      drawingAssignee: "김진우 실장 (로그인 유저)",
       priority: "보통",
-      startDate: new Date().toISOString().split("T")[0],
-      dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
       notes: "",
-      description: "",
+      materialOrders: [],
     });
+
     setQuickModalType(null);
   };
+
+  const DRAWING_TYPES: DrawingType[] = ["천정형", "에보라", "옴니버스", "기타"];
 
   const handleAsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,10 +186,10 @@ export function QuickModals() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
-      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 backdrop-blur-xs animate-in fade-in">
+      <div className="w-full max-w-2xl sm:max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
           <div className="flex items-center gap-2.5">
             <div
               className={`p-2 rounded-lg text-white ${
@@ -156,7 +211,7 @@ export function QuickModals() {
           </div>
           <button
             onClick={() => setQuickModalType(null)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 transition"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -164,177 +219,291 @@ export function QuickModals() {
 
         {/* Modal Body: Work Form */}
         {quickModalType === "work" && (
-          <form onSubmit={handleWorkSubmit} className="p-6 space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                업체명 / 의뢰사 <span className="text-blue-600">*</span>
-              </label>
-              <div className="relative">
-                <Building className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  required
-                  placeholder="예: (주)디자인에이치"
-                  value={workForm.clientName}
-                  onChange={(e) => setWorkForm({ ...workForm, clientName: e.target.value })}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
+          <form onSubmit={handleWorkSubmit} className="flex-1 overflow-y-auto flex flex-col min-h-0">
+            <div className="p-6 space-y-4 flex-1 overflow-y-auto">
+              {/* 업체명 & 현장 주소/지역 (2열 배치) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    업체명 / 의뢰사 <span className="text-blue-600">*</span>
+                  </label>
+                  <div className="relative">
+                    <Building className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      required
+                      list="clients-datalist"
+                      placeholder="예: 홈파베르, (주)디자인에이치"
+                      value={workForm.clientName}
+                      onChange={(e) => setWorkForm({ ...workForm, clientName: e.target.value })}
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-900"
+                    />
+                    <datalist id="clients-datalist">
+                      {clientsList.map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.companyAddress ? `${c.name} (${c.companyAddress})` : c.name}
+                        </option>
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    현장 주소 / 세부 지역 <span className="text-blue-600">*</span>
+                  </label>
+                  <div className="relative">
+                    <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      placeholder="예: 서초동 팬트리, 반포동 104동, 일산"
+                      value={workForm.siteAddress}
+                      onChange={(e) => setWorkForm({ ...workForm, siteAddress: e.target.value })}
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-900"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 도면 타입 선택 (천정형, 에보라, 옴니버스, 기타) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  카드 타입 (종류) <span className="text-indigo-600">*</span>
+                  도면 세부 타입 선택 (자동 프로젝트명 표기용) <span className="text-rose-500">*</span>
                 </label>
-                <select
-                  value={workForm.cardType}
-                  onChange={(e) =>
-                    setWorkForm({ ...workForm, cardType: e.target.value as CardType })
-                  }
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-800"
-                >
-                  <option value="도면">도면 (Drawing)</option>
-                  <option value="자재리스트">자재리스트 (Materials)</option>
-                  <option value="견적">견적 (Estimate)</option>
-                  <option value="기타">기타 (Etc)</option>
-                </select>
+                <div className="grid grid-cols-4 gap-2">
+                  {DRAWING_TYPES.map((dt) => {
+                    const isSelected = workForm.drawingType === dt;
+                    return (
+                      <button
+                        key={dt}
+                        type="button"
+                        onClick={() => setWorkForm({ ...workForm, drawingType: dt })}
+                        className={cn(
+                          "py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer text-center",
+                          isSelected
+                            ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        )}
+                      >
+                        {dt}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  마감 기준 및 날짜 <span className="text-rose-500">*</span>
-                </label>
-                <div className="flex gap-1.5">
+              {/* 자동 생성 프로젝트명 미리보기 배너 */}
+              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                <span className="text-blue-900 font-bold flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>카드 표기 프로젝트명 (자동기입):</span>
+                </span>
+                <span className="font-extrabold text-blue-950 bg-white px-2.5 py-1 rounded-lg border border-blue-200 shadow-2xs font-mono text-xs truncate max-w-full">
+                  {autoTitlePreview}
+                </span>
+              </div>
+
+              {/* 카드 타입 & 마감 시공일 & 우선순위 */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    카드 구분
+                  </label>
                   <select
-                    value={workForm.deadlineType}
+                    value={workForm.cardType}
                     onChange={(e) =>
-                      setWorkForm({ ...workForm, deadlineType: e.target.value as DeadlineType })
+                      setWorkForm({ ...workForm, cardType: e.target.value as CardType })
                     }
-                    className="w-24 px-2 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 font-bold"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-800"
                   >
-                    <option value="시공일">시공일</option>
-                    <option value="배송일">배송일</option>
-                    <option value="요청일">요청일</option>
+                    <option value="도면">도면</option>
+                    <option value="자재리스트">자재리스트</option>
+                    <option value="견적">견적</option>
+                    <option value="기타">기타</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    시공일 (마감일) <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="date"
                     required
                     value={workForm.deliveryDate}
                     onChange={(e) => setWorkForm({ ...workForm, deliveryDate: e.target.value })}
-                    className="flex-1 px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 font-mono"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 font-mono font-bold"
                   />
                 </div>
-              </div>
-            </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                프로젝트 / 업무명 <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="예: 반포 래미안 104동 주방 아일랜드 제작"
-                value={workForm.title}
-                onChange={(e) => setWorkForm({ ...workForm, title: e.target.value })}
-                className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">우선순위</label>
+                  <select
+                    value={workForm.priority}
+                    onChange={(e) =>
+                      setWorkForm({ ...workForm, priority: e.target.value as Priority })
+                    }
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold"
+                  >
+                    <option value="긴급">긴급 (Urgent)</option>
+                    <option value="높음">높음 (High)</option>
+                    <option value="보통">보통 (Normal)</option>
+                    <option value="낮음">낮음 (Low)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 🎨 도면 프로그램 전달 상세 정보 (타입, 업체명, 주소, 시공일, 현장담당자 연락처, 포스트바, 합판컬러, 도면담당자) */}
+              <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-indigo-950 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-indigo-600" />
+                    <span>🎨 도면 프로그램 전송 정보 설정 (바론웹 전달)</span>
+                  </span>
+                  <span className="text-[11px] font-bold text-indigo-600 bg-white px-2 py-0.5 rounded-full border border-indigo-200">
+                    로그인 담당자 자동 기입됨
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* 현장 담당자 연락처 (업체로부터 받은 연락처) */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      업체 현장 담당자 연락처 <span className="text-indigo-600 font-normal">(도면 전송용)</span>
+                    </label>
+                    <div className="relative">
+                      <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        placeholder="예: 010-1234-5678 (현장 소장님)"
+                        value={workForm.siteContactPhone}
+                        onChange={(e) => setWorkForm({ ...workForm, siteContactPhone: e.target.value })}
+                        className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 도면 담당자 (로그인한 사람) */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      도면 담당자 <span className="text-indigo-600 font-normal">(로그인 계정 자동)</span>
+                    </label>
+                    <div className="relative">
+                      <UserCheck className="w-3.5 h-3.5 text-indigo-600 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        value={workForm.drawingAssignee}
+                        onChange={(e) => setWorkForm({ ...workForm, drawingAssignee: e.target.value })}
+                        className="w-full pl-8 pr-3 py-1.5 text-xs border border-indigo-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-indigo-950"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {/* 포스트바 컬러 */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      포스트바 컬러 <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Palette className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        placeholder="예: 흑니켈, 실버, 골드..."
+                        value={workForm.postColor}
+                        onChange={(e) => setWorkForm({ ...workForm, postColor: e.target.value })}
+                        className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 mt-1.5">
+                      {["흑니켈", "실버", "골드", "화이트", "블랙"].map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setWorkForm({ ...workForm, postColor: c })}
+                          className={cn(
+                            "px-2 py-0.5 rounded text-[10px] font-bold border transition cursor-pointer",
+                            workForm.postColor === c
+                              ? "bg-indigo-600 text-white border-indigo-600"
+                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                          )}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 합판 컬러 / 합판 종류 */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      합판 컬러 (합판 종류) <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Layers className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        placeholder="예: PET 18T 화이트, 내츄럴 옥..."
+                        value={workForm.boardColor}
+                        onChange={(e) => setWorkForm({ ...workForm, boardColor: e.target.value })}
+                        className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 mt-1.5">
+                      {["PET 18T 화이트", "내츄럴 옥", "딥오크", "화이트 LPM"].map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setWorkForm({ ...workForm, boardColor: c })}
+                          className={cn(
+                            "px-2 py-0.5 rounded text-[10px] font-bold border transition cursor-pointer",
+                            workForm.boardColor === c
+                              ? "bg-indigo-600 text-white border-indigo-600"
+                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                          )}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Material Order Section */}
+              <MaterialOrderManager
+                orders={workForm.materialOrders}
+                onChange={(updated) => setWorkForm({ ...workForm, materialOrders: updated })}
               />
-            </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">업무 구분</label>
-                <select
-                  value={workForm.category}
-                  onChange={(e) =>
-                    setWorkForm({ ...workForm, category: e.target.value as WorkItem["category"] })
-                  }
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="제작">제작 (Manufacturing)</option>
-                  <option value="실측">실측 (Measuring)</option>
-                  <option value="시공">시공 (Installation)</option>
-                  <option value="설계">설계 (CAD/Design)</option>
-                  <option value="납품">납품 (Delivery)</option>
-                  <option value="기타">기타 (Etc)</option>
-                </select>
-              </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">담당자</label>
-                <input
-                  type="text"
-                  required
-                  value={workForm.assignee}
-                  onChange={(e) => setWorkForm({ ...workForm, assignee: e.target.value })}
+                <label className="block text-xs font-bold text-slate-700 mb-1">작업 메모 / 비고</label>
+                <textarea
+                  rows={3}
+                  placeholder="특이사항, 하드웨어 사양, 세부 지시사항 입력..."
+                  value={workForm.notes}
+                  onChange={(e) => setWorkForm({ ...workForm, notes: e.target.value })}
                   className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">우선순위</label>
-                <select
-                  value={workForm.priority}
-                  onChange={(e) =>
-                    setWorkForm({ ...workForm, priority: e.target.value as Priority })
-                  }
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="긴급">긴급 (Urgent)</option>
-                  <option value="높음">높음 (High)</option>
-                  <option value="보통">보통 (Normal)</option>
-                  <option value="낮음">낮음 (Low)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">시작일</label>
-                <input
-                  type="date"
-                  value={workForm.startDate}
-                  onChange={(e) => setWorkForm({ ...workForm, startDate: e.target.value })}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">마감일</label>
-                <input
-                  type="date"
-                  value={workForm.dueDate}
-                  onChange={(e) => setWorkForm({ ...workForm, dueDate: e.target.value })}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">작업 메모 / 비고</label>
-              <textarea
-                rows={3}
-                placeholder="특이사항, 하드웨어 사양, 세부 지시사항 입력..."
-                value={workForm.notes}
-                onChange={(e) => setWorkForm({ ...workForm, notes: e.target.value })}
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+            {/* Sticky Always Visible Footer */}
+            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 shrink-0 sticky bottom-0 z-10 shadow-md">
               <button
                 type="button"
                 onClick={() => setQuickModalType(null)}
-                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-200 transition cursor-pointer"
               >
-                취소
+                취소 (닫기)
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-xs font-bold shadow-md shadow-blue-500/20 transition cursor-pointer"
+                className="px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-md shadow-blue-500/20 transition cursor-pointer"
               >
-                업무 등록하기
+                + 업무 등록하기
               </button>
             </div>
           </form>

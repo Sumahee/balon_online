@@ -9,11 +9,13 @@ import {
   Check,
   RotateCcw,
   Sparkles,
-  Info,
-  Sliders,
   Settings2,
   Box,
   Eye,
+  Grid,
+  Maximize2,
+  Compass,
+  LayoutGrid,
 } from "lucide-react";
 import { DrawerCalcInput, DrawerCalcResult } from "@/types";
 import { calculateDrawer } from "@/lib/drawerEngine";
@@ -30,6 +32,7 @@ const PRESETS: { label: string; values: DrawerCalcInput }[] = [
       drawerCount: 3,
       railType: "undermount",
       marginGap: 3,
+      hasGrain: true,
     },
   },
   {
@@ -42,6 +45,7 @@ const PRESETS: { label: string; values: DrawerCalcInput }[] = [
       drawerCount: 2,
       railType: "undermount",
       marginGap: 3,
+      hasGrain: true,
     },
   },
   {
@@ -54,6 +58,7 @@ const PRESETS: { label: string; values: DrawerCalcInput }[] = [
       drawerCount: 4,
       railType: "ball3stage",
       marginGap: 2.5,
+      hasGrain: false,
     },
   },
 ];
@@ -67,6 +72,7 @@ export default function DrawerAutomationPage() {
     drawerCount: 3,
     railType: "undermount",
     marginGap: 3,
+    hasGrain: true,
   });
 
   const [copied, setCopied] = useState(false);
@@ -77,11 +83,16 @@ export default function DrawerAutomationPage() {
     return calculateDrawer(inputs);
   }, [inputs]);
 
+  const totalSheetsNeeded = useMemo(() => {
+    return result.sheetEstimates.reduce((sum, item) => sum + item.sheetCount, 0);
+  }, [result]);
+
   const handleCopyClipboard = () => {
     const textLines = [
-      `=== [BARON INT] 서랍장 부재 재단 및 부속 산출표 ===`,
+      `=== [BARON INT] 서랍장 부재 재단 및 부속/원장 산출표 ===`,
       `캐비닛 외경: ${inputs.cabinetWidth} x ${inputs.cabinetHeight} x ${inputs.cabinetDepth} mm (${inputs.boardThickness}T, ${inputs.drawerCount}단)`,
       `적용 레일: ${result.railSpec.name}`,
+      `결 구 뷴: ${inputs.hasGrain !== false ? "결 있음 (90° 회전 금지)" : "결 없음 (90° 회전 최적화 가능)"}`,
       ``,
       `[재단 부재 목록]`,
       `부재명\t수량\t가로(W)\t세로/깊이(D)\t두께(T)\t자재/특이사항`,
@@ -89,6 +100,13 @@ export default function DrawerAutomationPage() {
         (p) =>
           `${p.name}\t${p.count}개\t${p.width}mm\t${p.depth}mm\t${p.thickness}T\t${p.material} (${p.notes})`
       ),
+      ``,
+      `[4×8 표준 원장(1220×2440mm) 소요량]`,
+      ...result.sheetEstimates.map(
+        (s) =>
+          `${s.thickness}T (${s.materialName}): 총 ${s.sheetCount}장 | 순부재면적: ${s.totalPartsArea}m² | 수율: ${s.efficiency}% (로스: ${s.lossPercentage}%)`
+      ),
+      `>> 총 필요 4x8 원장: ${totalSheetsNeeded}장`,
       ``,
       `[소요 하드웨어]`,
       ...result.hardware.map((h) => `${h.name}: ${h.count}개 (${h.notes})`),
@@ -119,7 +137,7 @@ export default function DrawerAutomationPage() {
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                가구 외경 및 판재 규격을 입력하면 레일 표준 규격, 판재 정밀 절단 치수, 부속 목록을 자동 계산합니다.
+                가구 외경 및 판재 규격을 입력하면 레일 표준 규격, 판재 정밀 절단 치수, 4×8 원장 소요 장수(결 유무 반영) 및 부속 목록을 자동 계산합니다.
               </p>
             </div>
           </div>
@@ -180,6 +198,7 @@ export default function DrawerAutomationPage() {
                   drawerCount: 3,
                   railType: "undermount",
                   marginGap: 3,
+                  hasGrain: true,
                 })
               }
               className="text-slate-400 hover:text-slate-600 p-1"
@@ -349,6 +368,52 @@ export default function DrawerAutomationPage() {
                     </div>
                   </div>
                 </label>
+              </div>
+            </div>
+
+            {/* Grain Alignment Toggle (원장 결 방향 유무) */}
+            <div>
+              <label className="block font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <Compass className="w-3.5 h-3.5 text-amber-600" />
+                  원장 무늬 결 (Wood Grain)
+                </span>
+                <span className="text-[10px] text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded">
+                  4×8 배치 영향
+                </span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setInputs({ ...inputs, hasGrain: true })}
+                  className={cn(
+                    "p-2.5 text-left rounded-xl border transition cursor-pointer",
+                    inputs.hasGrain !== false
+                      ? "bg-amber-500 text-white border-amber-600 shadow-xs"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                  )}
+                >
+                  <div className="font-bold text-xs">결 있음 (고정)</div>
+                  <div className={cn("text-[10px] mt-0.5", inputs.hasGrain !== false ? "text-amber-100" : "text-slate-400")}>
+                    90° 회전 금지 (결방향 보존)
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setInputs({ ...inputs, hasGrain: false })}
+                  className={cn(
+                    "p-2.5 text-left rounded-xl border transition cursor-pointer",
+                    inputs.hasGrain === false
+                      ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                  )}
+                >
+                  <div className="font-bold text-xs">결 없음 (무결)</div>
+                  <div className={cn("text-[10px] mt-0.5", inputs.hasGrain === false ? "text-emerald-100" : "text-slate-400")}>
+                    90° 회전 최적화 허용
+                  </div>
+                </button>
               </div>
             </div>
 
@@ -604,6 +669,267 @@ export default function DrawerAutomationPage() {
             </div>
           </div>
 
+          {/* NEW: 4x8 Full Sheet Calculation Card (원장 소요 장수 및 톱질 횟수 산출) */}
+          <div className="bg-gradient-to-br from-amber-500/5 via-white to-amber-500/10 p-5 rounded-2xl border border-amber-200/80 shadow-2xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-amber-200/50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-amber-500 text-white shadow-xs">
+                  <Grid className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                    <span>4×8 원장 소요 장수 & 톱질 최적화 재단 (Standard 4×8 Full Sheet)</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    기본 규격 <strong>1,220mm × 2,440mm (2.98m²)</strong> 원장 기준 | 톱날 낭비 유격 <strong>4mm</strong> 반영
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs">
+                <span className="font-medium text-slate-600">결 설정:</span>
+                <span
+                  className={cn(
+                    "px-2.5 py-1 rounded-full font-bold text-xs border shadow-2xs",
+                    inputs.hasGrain !== false
+                      ? "bg-amber-100 text-amber-900 border-amber-300"
+                      : "bg-emerald-100 text-emerald-900 border-emerald-300"
+                  )}
+                >
+                  {inputs.hasGrain !== false ? "결 있음 (회전 불가)" : "결 없음 (90° 회전배치)"}
+                </span>
+              </div>
+            </div>
+
+            {/* Total Summary Banner */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white p-3.5 rounded-xl border border-amber-100 shadow-2xs">
+                <span className="text-[11px] font-bold text-slate-500 block">총 소요 원장 수량</span>
+                <span className="text-2xl font-black text-amber-600 font-mono mt-0.5 block">
+                  {totalSheetsNeeded} <span className="text-sm font-bold text-slate-700">장</span>
+                </span>
+              </div>
+
+              {result.sheetEstimates.map((item, idx) => (
+                <div key={idx} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-500">{item.thickness}T 판재</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">
+                      {item.materialName}
+                    </span>
+                  </div>
+                  <span className="text-xl font-bold text-slate-900 font-mono mt-1 block">
+                    {item.sheetCount} <span className="text-xs font-semibold text-slate-500">장</span>
+                  </span>
+                  <div className="flex justify-between items-center text-[10px] text-slate-400 mt-1">
+                    <span>수율 {item.efficiency}%</span>
+                    <span className="text-amber-700 font-semibold">톱질 {item.totalSawCuts}회</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Detailed Table per Thickness Sheet */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden text-xs">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 text-[11px]">
+                  <tr>
+                    <th className="py-2.5 px-3">두께 / 자재명</th>
+                    <th className="py-2.5 px-3">부재 조각 수</th>
+                    <th className="py-2.5 px-3">순 부재 면적</th>
+                    <th className="py-2.5 px-3">원장 소요 수량</th>
+                    <th className="py-2.5 px-3">최소 톱질 횟수 (절단)</th>
+                    <th className="py-2.5 px-3">자재 수율 (Yield)</th>
+                    <th className="py-2.5 px-3">스크랩/로스율</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {result.sheetEstimates.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-amber-50/30 transition">
+                      <td className="py-2.5 px-3 font-bold text-slate-900">
+                        {item.thickness}T <span className="font-normal text-slate-500 text-[11px]">({item.materialName})</span>
+                      </td>
+                      <td className="py-2.5 px-3 font-mono font-bold text-slate-700">{item.partsCount} 조각</td>
+                      <td className="py-2.5 px-3 font-mono text-slate-700">{item.totalPartsArea} m²</td>
+                      <td className="py-2.5 px-3 font-mono font-black text-amber-700">{item.sheetCount} 장 (4×8)</td>
+                      <td className="py-2.5 px-3 font-mono font-bold text-blue-600">
+                        총 {item.totalSawCuts}회 절단
+                      </td>
+                      <td className="py-2.5 px-3 font-mono font-bold text-emerald-600">{item.efficiency}%</td>
+                      <td className="py-2.5 px-3 font-mono text-amber-600">{item.lossPercentage}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* NEW: 2D Sheet Cutting Pattern Diagrams Section (원장별 2D 부재 재단 배치도) */}
+            <div className="pt-4 border-t border-amber-200/60 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <LayoutGrid className="w-4.5 h-4.5 text-amber-600" />
+                  <h4 className="font-bold text-sm text-slate-900">
+                    원장별 2D 톱질 최소화 재단 배치도 (Minimum Saw Pass Maps)
+                  </h4>
+                </div>
+                <div className="flex items-center gap-3 text-[11px]">
+                  <div className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                    <span className="text-slate-600 font-medium">18T 골조</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                    <span className="text-slate-600 font-medium">서랍 앞판</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <span className="text-slate-600 font-medium">15T 박스</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+                    <span className="text-slate-600 font-medium">9T 밑판</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid of 2D 4x8 Sheet Layout Maps */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {result.sheetEstimates.flatMap((item) =>
+                  item.sheets.map((sheet, sIdx) => (
+                    <div
+                      key={`${item.thickness}-${sIdx}`}
+                      className="bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-sm space-y-3 text-white"
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                        <div>
+                          <div className="font-bold text-xs flex items-center gap-1.5 text-amber-400">
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 font-mono text-[10px]">
+                              {item.thickness}T
+                            </span>
+                            <span>
+                              원장 #{sheet.sheetIndex} ({item.materialName})
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            배치: <strong className="text-white">{sheet.placedPieces.length}개 조각</strong>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] font-extrabold px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded">
+                            ✂️ 톱질 {sheet.totalSawCuts}회 (1차 {sheet.stripCount}회 + 2차 {sheet.crossCutCount}회)
+                          </div>
+                          <div className="text-[9px] text-slate-400 mt-0.5">
+                            수율 {item.efficiency}%
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SVG 2D Full Sheet Canvas */}
+                      <div className="w-full h-80 bg-slate-950 rounded-lg p-2.5 flex items-center justify-center relative overflow-hidden">
+                        <div className="absolute top-2 left-2 text-[9px] text-slate-400 font-mono">
+                          Sheet: 1220 × 2440 mm | Kerf: 4mm | 통재단 정렬
+                        </div>
+                        <svg
+                          viewBox="0 0 1220 2440"
+                          className="w-full h-full max-h-76"
+                          style={{ overflow: "visible" }}
+                        >
+                          {/* Outer 4x8 Full Sheet Board Frame */}
+                          <rect
+                            x="0"
+                            y="0"
+                            width="1220"
+                            height="2440"
+                            fill="#1e293b"
+                            stroke="#475569"
+                            strokeWidth="14"
+                            rx="16"
+                          />
+
+                          {/* Horizontal Grid Guide Lines */}
+                          {Array.from({ length: 7 }).map((_, gi) => (
+                            <line
+                              key={gi}
+                              x1="0"
+                              y1={(gi + 1) * 300}
+                              x2="1220"
+                              y2={(gi + 1) * 300}
+                              stroke="#334155"
+                              strokeWidth="2"
+                              strokeDasharray="12 12"
+                            />
+                          ))}
+
+                          {/* Render Placed Cut Pieces */}
+                          {sheet.placedPieces.map((piece, pIdx) => {
+                            const isFront = piece.name.includes("앞판");
+                            const isOuterFrame = item.thickness === 18 && !isFront;
+                            const isBox = item.thickness === 15 && !isFront;
+
+                            const fillColor = isFront
+                              ? "#3b82f6"
+                              : isOuterFrame
+                              ? "#f59e0b"
+                              : isBox
+                              ? "#10b981"
+                              : "#8b5cf6";
+
+                            return (
+                              <g key={pIdx}>
+                                <rect
+                                  x={piece.x + 3}
+                                  y={piece.y + 3}
+                                  width={Math.max(10, piece.pw - 6)}
+                                  height={Math.max(10, piece.ph - 6)}
+                                  fill={fillColor}
+                                  fillOpacity="0.88"
+                                  stroke="#ffffff"
+                                  strokeWidth="6"
+                                  rx="10"
+                                />
+                                {piece.ph > 90 && (
+                                  <text
+                                    x={piece.x + piece.pw / 2}
+                                    y={piece.y + piece.ph / 2 - 12}
+                                    fill="#ffffff"
+                                    fontSize={piece.ph > 200 ? "36" : "26"}
+                                    fontWeight="900"
+                                    textAnchor="middle"
+                                  >
+                                    {piece.name}
+                                  </text>
+                                )}
+                                {piece.ph > 140 && (
+                                  <text
+                                    x={piece.x + piece.pw / 2}
+                                    y={piece.y + piece.ph / 2 + 26}
+                                    fill="#f8fafc"
+                                    fontSize={piece.ph > 200 ? "30" : "22"}
+                                    fontWeight="bold"
+                                    textAnchor="middle"
+                                  >
+                                    {piece.width} × {piece.depth}mm {piece.rotated ? "(🔄90°)" : ""}
+                                  </text>
+                                )}
+                              </g>
+                            );
+                          })}
+                        </svg>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 flex items-center gap-1.5 pt-1">
+              <Maximize2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span>
+                <strong>톱질 최소화 통재단 가이드:</strong> 높이(Depth/Height)가 같은 부재를 1차 일직선 띠 재단(Strip Cut)으로 묶어 재단 횟수를 최대로 줄였습니다. 판재 톱 작업 시 1차 띠 재단 후 2차 부재 분할 재단이 순차 진행됩니다.
+              </span>
+            </p>
+          </div>
+
           {/* Cutting List Table (재단 치수표) */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
@@ -684,3 +1010,4 @@ export default function DrawerAutomationPage() {
     </div>
   );
 }
+

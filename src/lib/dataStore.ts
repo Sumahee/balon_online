@@ -13,31 +13,29 @@ export const initialWorkItems: WorkItem[] = [
     type: "work",
     title: "반포 래미안 원베일리 104동 맞춤 주방가구 제작",
     clientName: "(주)디자인에이치 인테리어",
+    region: "반포",
     cardType: "도면",
     deadlineType: "시공일",
-    deliveryDate: "2026-09-12", // 2 days away -> Urgent deadline!
+    deliveryDate: "2026-09-12",
     category: "제작",
     assignee: "김진우 실장",
     priority: "긴급",
-    status: "공장", // 공장에서 자재 준비 중
+    status: "공장",
     progress: 75,
     startDate: "2026-09-02",
     dueDate: "2026-09-12",
     notes: "아일랜드 상판 세라믹 인조대리석 타공 일정 확인 및 댐핑 언더레일 12세트 투입",
+    materialOrderNeeded: "18T PET 합판 12장, 세라믹 상판 1장, 언더레일 12세트",
+    materialOrderStatus: "발주필요",
+    materialOrders: [
+      { id: "mo-1", name: "18T PET 합판 12장", isOrdered: true },
+      { id: "mo-2", name: "세라믹 상판 1장", isOrdered: false },
+      { id: "mo-3", name: "언더레일 12세트", isOrdered: false },
+    ],
     description: `[현장 시공 개요]
 - 현장: 서울시 서초구 반포 래미안 원베일리 104동 1201호
 - 주문 업체: (주)디자인에이치 인테리어 (현장소장: 이민혁 팀장)
-- 주요 공정: 3200mm 아일랜드 싱크대 및 PET 슈퍼매트 화이트 키큰장 제작
-
-[자재 및 하드웨어 준비 사항]
-1. 몸통: 18T E0 등급 친환경 방습 PB 화이트
-2. 도어: 18T 슈퍼매트 솔리드 웜화이트 (PET-MW01)
-3. 레일: 오스트리아 블룸(Blum) 언더레일 댐핑형 450mm 12세트 전량 투입
-4. 아일랜드 상판: 이태리 포세린 12T 세라믹 타공 및 하부 보강 완료
-
-[오피스 인계 사항]
-- CAD 상세 단면도 및 재단 리스트업 완료하여 공장 반장님께 인계함.
-- 싱크볼 및 인덕션 실물 치수 감리 완료.`,
+- 주요 공정: 3200mm 아일랜드 싱크대 및 PET 슈퍼매트 화이트 키큰장 제작`,
     attachments: [
       {
         id: "att-1",
@@ -64,6 +62,22 @@ export const initialWorkItems: WorkItem[] = [
         uploadedAt: "2026-09-03",
       },
     ],
+    comments: [
+      {
+        id: "cmt-1",
+        workItemId: "work-1",
+        author: "이민혁 현장소장 ((주)디자인에이치)",
+        content: "반포 현장 아일랜드 싱크볼 위치 변경 건 도면 수정 완료되었습니다. 검토 부탁드립니다.",
+        createdAt: "2026-09-07T10:15:00Z",
+      },
+      {
+        id: "cmt-2",
+        workItemId: "work-1",
+        author: "김진우 실장 (바론 INT)",
+        content: "도면 수치 3200mm 최종 확인했습니다. 공장 자재 절단 재단 착수합니다.",
+        createdAt: "2026-09-07T14:30:00Z",
+      },
+    ],
     createdAt: "2026-09-01T09:00:00Z",
   },
   {
@@ -71,22 +85,21 @@ export const initialWorkItems: WorkItem[] = [
     type: "work",
     title: "성수동 크리에이티브 오피스 라운지 수납장 실측 및 설계",
     clientName: "공간디자인 림",
+    region: "성수",
     cardType: "자재리스트",
     deadlineType: "배송일",
     deliveryDate: "2026-09-15",
     category: "설계",
     assignee: "이민아 팀장",
     priority: "높음",
-    status: "오피스", // 오피스에서 도면작업 및 택배 리스트업 중
+    status: "오피스",
     progress: 45,
     startDate: "2026-09-06",
     dueDate: "2026-09-18",
     notes: "현장 레이저 레벨 실측 완료, 곡면 벽체 곡률 보정 도면 작성 중",
     description: `[오피스 설계 및 자재 리스트업 현황]
 - 고객사: 공간디자인 림 (성수동 공유오피스 라운지 인테리어)
-- 곡면 벽체 R값 실측치 반영하여 벤딩 합판 및 특수 힌지 발주 필요
-- 택배 리스트업 품목: 독일 헤펠레 터치 래치 16개, LED T5 3000K 바 8세트 택배 수령 대기 중
-- 도면 승인 완료되는 즉시 공장 재단 쏘 팀으로 DXF 도면 파일 넘길 예정`,
+- 곡면 벽체 R값 실측치 반영하여 벤딩 합판 및 특수 힌지 발주 필요`,
     attachments: [
       {
         id: "att-4",
@@ -96,13 +109,14 @@ export const initialWorkItems: WorkItem[] = [
         size: "4.5 MB",
         uploadedAt: "2026-09-08",
       },
+    ],
+    comments: [
       {
-        id: "att-5",
-        name: "택배발송_하드웨어부속목록.pdf",
-        url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-        fileType: "pdf",
-        size: "820 KB",
-        uploadedAt: "2026-09-09",
+        id: "cmt-3",
+        workItemId: "work-2",
+        author: "이민아 팀장 (바론 INT)",
+        content: "성수동 곡면 R값 3500mm 반영 도면 오피스 공유 완료했습니다.",
+        createdAt: "2026-09-08T16:00:00Z",
       },
     ],
     createdAt: "2026-09-05T14:30:00Z",
@@ -112,31 +126,23 @@ export const initialWorkItems: WorkItem[] = [
     type: "work",
     title: "한남동 고급 빌라 마스터룸 붙박이장/드레스룸 현장 시공",
     clientName: "바른건축디자인",
+    region: "한남",
     cardType: "도면",
     deadlineType: "시공일",
-    deliveryDate: "2026-09-13", // 3 days away -> Urgent deadline!
+    deliveryDate: "2026-09-13",
     category: "시공",
     assignee: "박성훈 반장",
     priority: "긴급",
-    status: "대기", // 발주 접수 및 To-Do 대기
+    status: "대기",
     progress: 10,
     startDate: "2026-09-10",
     dueDate: "2026-09-13",
     notes: "PET 무광 매트 화이트 도어 + 알루미늄 프레임 조명 매립형 선반 시공",
     description: `[작업 의뢰 사항]
 - 한남동 유엔빌리지 빌라 3층 마스터룸
-- 천장고 2,650mm 초고장 붙박이장으로 상부 서라운딩 최소화(20mm) 시공 요망
-- 오피스에서 1차 실측데이터 검토 후 도면화 착수 예정`,
-    attachments: [
-      {
-        id: "att-6",
-        name: "한남동_현장실측_스케치.pdf",
-        url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-        fileType: "pdf",
-        size: "2.1 MB",
-        uploadedAt: "2026-09-09",
-      },
-    ],
+- 천장고 2,650mm 초고장 붙박이장 시공`,
+    attachments: [],
+    comments: [],
     createdAt: "2026-09-07T11:00:00Z",
   },
   {
@@ -144,30 +150,22 @@ export const initialWorkItems: WorkItem[] = [
     type: "work",
     title: "판교 테크노밸리 디자인 스튜디오 서랍장 및 회의테이블 납품",
     clientName: "아틀리에 수",
+    region: "판교",
     cardType: "견적",
     deadlineType: "배송일",
     deliveryDate: "2026-09-08",
     category: "납품",
     assignee: "최영호 대리",
     priority: "보통",
-    status: "준비완료", // 공장 자재 및 완제품 준비 완료!
+    status: "준비완료",
     progress: 100,
     startDate: "2026-08-25",
     dueDate: "2026-09-08",
     notes: "3단 볼레일 8세트 서랍장 검수 통과 및 현장 인도 서명 완료",
     description: `[출고 및 준비 완료 보고]
-- 공장 조립 및 보양 포장 완료
-- 화물 배송 차량 배차 완료 (9/8 오전 9시 도착 납품)`,
-    attachments: [
-      {
-        id: "att-7",
-        name: "출고검수_납품확인서.pdf",
-        url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-        fileType: "pdf",
-        size: "650 KB",
-        uploadedAt: "2026-09-07",
-      },
-    ],
+- 공장 조립 및 보양 포장 완료`,
+    attachments: [],
+    comments: [],
     createdAt: "2026-08-24T16:00:00Z",
   },
   {
@@ -175,30 +173,22 @@ export const initialWorkItems: WorkItem[] = [
     type: "work",
     title: "용산 한남 더힐 복층 펜트하우스 신발장 및 현관 벤치 제작",
     clientName: "(주)이안인테리어",
+    region: "한남",
     cardType: "자재리스트",
     deadlineType: "시공일",
     deliveryDate: "2026-09-22",
     category: "제작",
     assignee: "김진우 실장",
     priority: "보통",
-    status: "공장", // 공장 자재 준비
+    status: "공장",
     progress: 60,
     startDate: "2026-09-04",
     dueDate: "2026-09-25",
     notes: "천연 무늬목 오크 마감재 오일 스테인 건조 중",
     description: `[공장 진행 현황]
-- 오피스에서 넘겨받은 자재 리스트대로 19T 천연 오크 무늬목 보드 재단 완료
-- 도장 부스에서 친환경 오일스테인 2차 도포 후 자연 건조 중`,
-    attachments: [
-      {
-        id: "att-8",
-        name: "한남더힐_현관벤치_제작도면.pdf",
-        url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-        fileType: "pdf",
-        size: "3.1 MB",
-        uploadedAt: "2026-09-04",
-      },
-    ],
+- 19T 천연 오크 무늬목 보드 재단 완료`,
+    attachments: [],
+    comments: [],
     createdAt: "2026-09-03T10:20:00Z",
   },
   {
@@ -206,21 +196,22 @@ export const initialWorkItems: WorkItem[] = [
     type: "work",
     title: "분당 정자동 파크뷰 거실 월플렉스 실측 미팅",
     clientName: "스튜디오 모던",
+    region: "분당",
     cardType: "기타",
     deadlineType: "요청일",
     deliveryDate: "2026-09-16",
     category: "실측",
     assignee: "정우석 주임",
     priority: "보통",
-    status: "오피스", // 오피스 단계
+    status: "오피스",
     progress: 30,
     startDate: "2026-09-10",
     dueDate: "2026-09-16",
     notes: "인테리어 디자이너 현장 감리 일정과 동시 미팅 예정",
     description: `[오피스 미팅 사전 준비]
-- 75인치 TV 매립 규격 및 사운드바 오픈장 치수 사전 취합
-- 도면 초안 작성 중`,
+- 75인치 TV 매립 규격 사전 취합`,
     attachments: [],
+    comments: [],
     createdAt: "2026-09-09T17:00:00Z",
   },
 ];

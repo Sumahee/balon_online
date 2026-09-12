@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   ClipboardList,
+  Calendar,
   Wrench,
   Images,
   Calculator,
@@ -26,6 +27,13 @@ const NAV_ITEMS = [
     path: "/",
     icon: LayoutDashboard,
     badgeKey: null,
+  },
+  {
+    name: "일정 캘린더",
+    path: "/calendar",
+    icon: Calendar,
+    badgeKey: "workCount" as const,
+    highlight: true,
   },
   {
     name: "업무 게시판",
@@ -50,7 +58,6 @@ const NAV_ITEMS = [
     path: "/drawer",
     icon: Calculator,
     badgeKey: null,
-    highlight: true,
   },
   {
     name: "합판 자재 샘플",

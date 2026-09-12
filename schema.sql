@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS work_items (
     type TEXT DEFAULT 'work',
     title TEXT NOT NULL,
     client_name TEXT NOT NULL,                     -- 의뢰 업체명 (예: (주)디자인에이치)
+    region TEXT DEFAULT '반포',                     -- 시공/현장 지역 (예: 반포, 일산, 서초 등)
     card_type TEXT NOT NULL DEFAULT '도면',         -- 도면, 자재리스트, 견적, 기타
     deadline_type TEXT NOT NULL DEFAULT '시공일',   -- 시공일, 배송일, 요청일
     delivery_date TEXT NOT NULL,                   -- 시공/배송/요청 마감 예정일 (YYYY-MM-DD)
@@ -21,6 +22,16 @@ CREATE TABLE IF NOT EXISTS work_items (
     notes TEXT,                                    -- 요약 비고
     description TEXT,                              -- 게시판 형식의 상세 작업 지시 및 사양 본문
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 1-1. 업무 및 일정 댓글 테이블 (work_item_comments)
+CREATE TABLE IF NOT EXISTS work_item_comments (
+    id TEXT PRIMARY KEY,
+    work_item_id TEXT NOT NULL,                    -- 연관 work_items ID
+    author TEXT NOT NULL,                          -- 작성자 (예: 바론 INT 오피스, 김철수 기사)
+    content TEXT NOT NULL,                         -- 댓글 본문
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (work_item_id) REFERENCES work_items(id) ON DELETE CASCADE
 );
 
 -- 2. 업무 첨부파일 및 도면 테이블 (attachments)
@@ -89,9 +100,35 @@ CREATE TABLE IF NOT EXISTS materials (
     in_stock INTEGER NOT NULL DEFAULT 1            -- 재고 유무 (1: 보유, 0: 발주필요)
 );
 
+-- 7. 바론 온라인 ↔ 바론 웹 연동 도면 작업 요청 브릿지 테이블 (drawing_requests)
+CREATE TABLE IF NOT EXISTS drawing_requests (
+    id TEXT PRIMARY KEY,                           -- 요청 고유 ID (예: req_1726100000)
+    work_item_id TEXT NOT NULL,                    -- 연관 work_items ID
+    client_name TEXT NOT NULL,                     -- 발주/의뢰 업체명
+    site_address TEXT,                             -- 현장 주소
+    delivery_date TEXT,                            -- 시공/마감 예정일 (YYYY-MM-DD)
+    contact_name TEXT,                             -- 현장 담당자 이름
+    contact_phone TEXT,                            -- 현장 담당자 연락처
+    title TEXT NOT NULL,                           -- 도면 작업 제목
+    description TEXT,                              -- 요청 상세 내용 및 작업 지시 비고
+    status TEXT NOT NULL DEFAULT 'pending',        -- 상태: pending(대기/신규), in_progress(도면작업중), review_pending(컨펌대기), confirmed(완료/승인), cancelled(취소)
+    
+    -- 완료 시 바론웹에서 채워주는 결과 피드백 필드
+    blueprint_id INTEGER,                          -- 바론웹 생성 BLUEPRINTS.id
+    result_pdf_url TEXT,                           -- 완료된 도면 PDF URL
+    result_thumbnail_url TEXT,                     -- 완료된 도면 썸네일 URL
+    
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (work_item_id) REFERENCES work_items(id) ON DELETE CASCADE
+);
+
 -- 인덱스 생성 (조회 속도 최적화)
 CREATE INDEX IF NOT EXISTS idx_work_items_status ON work_items(status);
 CREATE INDEX IF NOT EXISTS idx_work_items_delivery_date ON work_items(delivery_date);
 CREATE INDEX IF NOT EXISTS idx_attachments_work_id ON attachments(work_item_id);
 CREATE INDEX IF NOT EXISTS idx_as_items_status ON as_items(result_status);
 CREATE INDEX IF NOT EXISTS idx_gallery_images_folder ON gallery_images(folder_id);
+CREATE INDEX IF NOT EXISTS idx_drawing_requests_status ON drawing_requests(status);
+CREATE INDEX IF NOT EXISTS idx_drawing_requests_work ON drawing_requests(work_item_id);
+

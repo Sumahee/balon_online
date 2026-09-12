@@ -38,6 +38,11 @@ interface DataContextType {
   addImage: (img: Omit<GalleryImage, "id" | "createdAt">) => Promise<void>;
   deleteImage: (id: string) => Promise<void>;
   addMaterial: (mat: Omit<MaterialSample, "id">) => Promise<void>;
+  addComment: (workItemId: string, author: string, content: string, images?: string[]) => Promise<void>;
+  deleteComment: (workItemId: string, commentId: string) => Promise<void>;
+  deleteCommentImage: (workItemId: string, commentId: string, imageUrl: string) => Promise<void>;
+  deletePhotoFromWorkItem: (workItemId: string, photoUrlOrId: string) => Promise<void>;
+  uploadConstructionPhoto: (workItemId: string, fileName: string, fileUrl: string, size?: string) => Promise<void>;
   quickModalType: "work" | "as" | null;
   setQuickModalType: (type: "work" | "as" | null) => void;
 }
@@ -106,7 +111,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     };
     setWorkItems((prev) => [newItem, ...prev]);
 
-    // Async sync to server API
     fetch("/api/posts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -145,6 +149,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       nextProgress = Math.max(item.progress, 70);
     } else if (item.status === "공장") {
       nextStatus = "준비완료";
+      nextProgress = 90;
+    } else if (item.status === "준비완료") {
+      nextStatus = "시공완료";
       nextProgress = 100;
     } else {
       nextStatus = "대기";
@@ -269,6 +276,195 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }).catch(() => {});
   };
 
+  // Add Comment to Work Item (with optional photos & auto-gallery sync)
+  const addComment = async (
+    workItemId: string,
+    author: string,
+    content: string,
+    imagesParam?: string[]
+  ) => {
+    const newComment = {
+      id: `cmt-${Date.now()}`,
+      workItemId,
+      author,
+      content,
+      createdAt: new Date().toISOString(),
+      images: imagesParam && imagesParam.length > 0 ? imagesParam : undefined,
+    };
+
+    const targetItem = workItems.find((w) => w.id === workItemId);
+
+    setWorkItems((prev) =>
+      prev.map((item) => {
+        if (item.id === workItemId) {
+          const currentComments = item.comments || [];
+          return { ...item, comments: [...currentComments, newComment] };
+        }
+        return item;
+      })
+    );
+
+    // Auto-sync comment images to Gallery repository for searching & management!
+    if (imagesParam && imagesParam.length > 0 && targetItem) {
+      const regionTag = targetItem.region || "반포";
+      const clientTag = targetItem.clientName;
+      const today = new Date().toISOString().split("T")[0];
+
+      imagesParam.forEach((imgUrl, i) => {
+        const newGalleryImage: GalleryImage = {
+          id: `img-cmt-${Date.now()}-${i}`,
+          folderId: "folder-1",
+          title: `${targetItem.title} - 댓글 사진`,
+          url: imgUrl,
+          siteName: `${regionTag} ${targetItem.title} (${clientTag})`,
+          tags: [regionTag, clientTag, "댓글사진", "시공사진", today],
+          dimensions: "1920 x 1080",
+          size: "1.5 MB",
+          createdAt: today,
+        };
+
+        setImages((prev) => [newGalleryImage, ...prev]);
+
+        setFolders((prev) =>
+          prev.map((f) => {
+            if (f.id === "folder-1" || f.id === "folder-all") {
+              return { ...f, itemCount: f.itemCount + 1 };
+            }
+            return f;
+          })
+        );
+      });
+    }
+
+    fetch("/api/comments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workItemId, author, content, images: imagesParam }),
+    }).catch(() => {});
+  };
+
+  const deleteComment = async (workItemId: string, commentId: string) => {
+    setWorkItems((prev) =>
+      prev.map((item) => {
+        if (item.id === workItemId) {
+          return {
+            ...item,
+            comments: (item.comments || []).filter((c) => c.id !== commentId),
+          };
+        }
+        return item;
+      })
+    );
+  };
+
+  const deleteCommentImage = async (workItemId: string, commentId: string, imageUrl: string) => {
+    setWorkItems((prev) =>
+      prev.map((item) => {
+        if (item.id === workItemId) {
+          return {
+            ...item,
+            comments: (item.comments || []).map((c) => {
+              if (c.id === commentId) {
+                return {
+                  ...c,
+                  images: (c.images || []).filter((img) => img !== imageUrl),
+                };
+              }
+              return c;
+            }),
+          };
+        }
+        return item;
+      })
+    );
+  };
+
+  const deletePhotoFromWorkItem = async (workItemId: string, photoUrlOrId: string) => {
+    setWorkItems((prev) =>
+      prev.map((item) => {
+        if (item.id === workItemId) {
+          const updatedAtts = (item.attachments || []).filter(
+            (a) => a.id !== photoUrlOrId && a.url !== photoUrlOrId
+          );
+          const updatedCmts = (item.comments || []).map((c) => ({
+            ...c,
+            images: (c.images || []).filter((img) => img !== photoUrlOrId),
+          }));
+          return {
+            ...item,
+            attachments: updatedAtts,
+            comments: updatedCmts,
+          };
+        }
+        return item;
+      })
+    );
+  };
+
+  // Upload Construction Photo & Auto Sync to Gallery with Smart Tags
+  const uploadConstructionPhoto = async (
+    workItemId: string,
+    fileName: string,
+    fileUrl: string,
+    size: string = "2.5 MB"
+  ) => {
+    const targetItem = workItems.find((w) => w.id === workItemId);
+    const today = new Date().toISOString().split("T")[0];
+
+    const newAttachment = {
+      id: `att-${Date.now()}`,
+      name: fileName,
+      url: fileUrl,
+      fileType: "image" as const,
+      size,
+      uploadedAt: today,
+    };
+
+    // 1. Add attachment to work item
+    setWorkItems((prev) =>
+      prev.map((item) => {
+        if (item.id === workItemId) {
+          return {
+            ...item,
+            attachments: [newAttachment, ...item.attachments],
+          };
+        }
+        return item;
+      })
+    );
+
+    // 2. Automatically generate smart tags & sync to Gallery!
+    if (targetItem) {
+      const regionTag = targetItem.region || "반포";
+      const clientTag = targetItem.clientName;
+      const categoryTag = targetItem.category || "주방가구";
+      const tags = [regionTag, clientTag, categoryTag, "시공완료 사진", "도면연동", today];
+
+      const newGalleryImage: GalleryImage = {
+        id: `img-${Date.now()}`,
+        folderId: "folder-1", // 2026 시공 현장 폴더
+        title: `${targetItem.title} - 시공 완료`,
+        url: fileUrl,
+        siteName: `${regionTag} ${targetItem.title} (${clientTag})`,
+        tags,
+        dimensions: "2400 x 1800",
+        size,
+        createdAt: today,
+      };
+
+      setImages((prev) => [newGalleryImage, ...prev]);
+
+      setFolders((prev) =>
+        prev.map((f) => {
+          if (f.id === "folder-1" || f.id === "folder-all") {
+            return { ...f, itemCount: f.itemCount + 1 };
+          }
+          return f;
+        })
+      );
+    }
+  };
+
   const metrics = getDashboardMetrics(workItems, asItems);
 
   return (
@@ -293,6 +489,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         addImage,
         deleteImage,
         addMaterial,
+        addComment,
+        deleteComment,
+        deleteCommentImage,
+        deletePhotoFromWorkItem,
+        uploadConstructionPhoto,
         quickModalType,
         setQuickModalType,
       }}
