@@ -45,49 +45,77 @@ interface DataContextType {
   uploadConstructionPhoto: (workItemId: string, fileName: string, fileUrl: string, size?: string) => Promise<void>;
   quickModalType: "work" | "as" | null;
   setQuickModalType: (type: "work" | "as" | null) => void;
+  clearAllData: () => void;
+  resetToSampleData: () => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
-  WORK: "baron_work_items_v1",
-  AS: "baron_as_items_v1",
-  FOLDERS: "baron_folders_v1",
-  IMAGES: "baron_images_v1",
-  MATERIALS: "baron_materials_v1",
+  WORK: "baron_work_items_v3",
+  AS: "baron_as_items_v3",
+  FOLDERS: "baron_folders_v3",
+  IMAGES: "baron_images_v3",
+  MATERIALS: "baron_materials_v3",
 };
 
 export const DataProvider = ({ children }: { children: ReactNode }) => {
-  const [workItems, setWorkItems] = useState<WorkItem[]>(initialWorkItems);
-  const [asItems, setAsItems] = useState<AsItem[]>(initialAsItems);
-  const [folders, setFolders] = useState<GalleryFolder[]>(initialFolders);
-  const [images, setImages] = useState<GalleryImage[]>(initialImages);
-  const [materials, setMaterials] = useState<MaterialSample[]>(initialMaterials);
+  const [workItems, setWorkItems] = useState<WorkItem[]>([]);
+  const [asItems, setAsItems] = useState<AsItem[]>([]);
+  const [folders, setFolders] = useState<GalleryFolder[]>([]);
+  const [images, setImages] = useState<GalleryImage[]>([]);
+  const [materials, setMaterials] = useState<MaterialSample[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [quickModalType, setQuickModalType] = useState<"work" | "as" | null>(null);
 
-  // Initialize from LocalStorage or API
+  // Initialize: Purge old dummy data from localStorage & Fetch live from Turso DB
   useEffect(() => {
+    // 1. Force purge any legacy dummy data from localStorage
     try {
-      const savedWork = localStorage.getItem(STORAGE_KEYS.WORK);
-      const savedAs = localStorage.getItem(STORAGE_KEYS.AS);
-      const savedFolders = localStorage.getItem(STORAGE_KEYS.FOLDERS);
-      const savedImages = localStorage.getItem(STORAGE_KEYS.IMAGES);
-      const savedMaterials = localStorage.getItem(STORAGE_KEYS.MATERIALS);
+      localStorage.removeItem("baron_work_items_v1");
+      localStorage.removeItem("baron_as_items_v1");
+      localStorage.removeItem("baron_folders_v1");
+      localStorage.removeItem("baron_images_v1");
+      localStorage.removeItem("baron_materials_v1");
+      localStorage.removeItem("baron_work_items_v2");
+      localStorage.removeItem("baron_as_items_v2");
+    } catch (e) {}
 
-      if (savedWork) setWorkItems(JSON.parse(savedWork));
-      if (savedAs) setAsItems(JSON.parse(savedAs));
-      if (savedFolders) setFolders(JSON.parse(savedFolders));
-      if (savedImages) setImages(JSON.parse(savedImages));
-      if (savedMaterials) setMaterials(JSON.parse(savedMaterials));
-    } catch (e) {
-      console.warn("LocalStorage access failed, using memory state", e);
-    } finally {
-      setIsLoading(false);
-    }
+    // 2. Fetch live data directly from Turso DB APIs
+    const loadLiveDbData = async () => {
+      setIsLoading(true);
+      try {
+        const [workRes, asRes] = await Promise.all([
+          fetch("/api/posts?type=work")
+            .then((r) => r.json())
+            .catch(() => ({ success: false, data: [] })),
+          fetch("/api/posts?type=as")
+            .then((r) => r.json())
+            .catch(() => ({ success: false, data: [] })),
+        ]);
+
+        if (workRes.success && Array.isArray(workRes.data)) {
+          setWorkItems(workRes.data);
+        } else {
+          setWorkItems([]);
+        }
+
+        if (asRes.success && Array.isArray(asRes.data)) {
+          setAsItems(asRes.data);
+        } else {
+          setAsItems([]);
+        }
+      } catch (err) {
+        console.error("Failed to load initial data from DB API:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadLiveDbData();
   }, []);
 
-  // Sync to LocalStorage on change
+  // Sync to LocalStorage as auxiliary cache
   useEffect(() => {
     if (!isLoading) {
       try {
@@ -102,11 +130,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [workItems, asItems, folders, images, materials, isLoading]);
 
-  // Actions
+  // Actions: Live write to Turso DB + State update
   const addWorkItem = async (item: Omit<WorkItem, "id" | "createdAt">) => {
+    const newItemId = `work-${Date.now()}`;
     const newItem: WorkItem = {
       ...item,
-      id: `work-${Date.now()}`,
+      id: newItemId,
       createdAt: new Date().toISOString(),
     };
     setWorkItems((prev) => [newItem, ...prev]);
@@ -114,7 +143,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     fetch("/api/posts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...item, type: "work" }),
+      body: JSON.stringify({ id: newItemId, ...item, type: "work" }),
     }).catch((e) => console.log("Server sync notice:", e));
   };
 
@@ -162,9 +191,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addAsItem = async (item: Omit<AsItem, "id" | "createdAt">) => {
+    const newItemId = `as-${Date.now()}`;
     const newItem: AsItem = {
       ...item,
-      id: `as-${Date.now()}`,
+      id: newItemId,
       createdAt: new Date().toISOString(),
     };
     setAsItems((prev) => [newItem, ...prev]);
@@ -172,7 +202,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     fetch("/api/posts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...item, type: "as" }),
+      body: JSON.stringify({ id: newItemId, ...item, type: "as" }),
     }).catch(() => {});
   };
 
@@ -465,6 +495,36 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const clearAllData = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.WORK);
+      localStorage.removeItem(STORAGE_KEYS.AS);
+      localStorage.removeItem(STORAGE_KEYS.FOLDERS);
+      localStorage.removeItem(STORAGE_KEYS.IMAGES);
+      localStorage.removeItem(STORAGE_KEYS.MATERIALS);
+    } catch (e) {}
+    setWorkItems([]);
+    setAsItems([]);
+    setFolders([]);
+    setImages([]);
+    setMaterials([]);
+  };
+
+  const resetToSampleData = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.WORK);
+      localStorage.removeItem(STORAGE_KEYS.AS);
+      localStorage.removeItem(STORAGE_KEYS.FOLDERS);
+      localStorage.removeItem(STORAGE_KEYS.IMAGES);
+      localStorage.removeItem(STORAGE_KEYS.MATERIALS);
+    } catch (e) {}
+    setWorkItems(initialWorkItems);
+    setAsItems(initialAsItems);
+    setFolders(initialFolders);
+    setImages(initialImages);
+    setMaterials(initialMaterials);
+  };
+
   const metrics = getDashboardMetrics(workItems, asItems);
 
   return (
@@ -496,6 +556,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         uploadConstructionPhoto,
         quickModalType,
         setQuickModalType,
+        clearAllData,
+        resetToSampleData,
       }}
     >
       {children}

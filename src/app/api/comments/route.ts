@@ -11,8 +11,8 @@ export async function GET(request: Request) {
   }
 
   const result = await executeQuery(
-    `SELECT id, work_item_id as workItemId, author, content, created_at as createdAt 
-     FROM work_item_comments 
+    `SELECT id, work_item_id as workItemId, author, content, images, created_at as createdAt 
+     FROM bo_work_item_comments 
      WHERE work_item_id = ? 
      ORDER BY created_at ASC`,
     [workItemId]
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { workItemId, author, content } = body;
+    const { workItemId, author, content, images } = body;
 
     if (!workItemId || !content) {
       return NextResponse.json(
@@ -41,11 +41,12 @@ export async function POST(request: Request) {
     const commentId = `cmt-${Date.now()}`;
     const authorName = author || "바론 INT 담당자";
     const now = new Date().toISOString();
+    const imagesStr = images ? (Array.isArray(images) ? JSON.stringify(images) : String(images)) : null;
 
     const result = await executeQuery(
-      `INSERT INTO work_item_comments (id, work_item_id, author, content, created_at) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [commentId, workItemId, authorName, content, now]
+      `INSERT INTO bo_work_item_comments (id, work_item_id, author, content, images, created_at) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [commentId, workItemId, authorName, content, imagesStr, now]
     );
 
     return NextResponse.json({
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
         workItemId,
         author: authorName,
         content,
+        images: images || [],
         createdAt: now,
       },
     });

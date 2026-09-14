@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from "react";
 import { X, Plus, Wrench, Calendar, MapPin, Building, User, FileText, Phone, Palette, Layers, UserCheck, Sparkles } from "lucide-react";
 import { useData } from "@/context/DataContext";
-import { Priority, WorkItem, CardType, DeadlineType, ClientInfo, UserInfo, MaterialOrderItem, DrawingType } from "@/types";
+import { Priority, WorkItem, CardType, DeadlineType, ClientInfo, UserInfo, MaterialOrderItem, DrawingType, AttachmentItem } from "@/types";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
+import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
 import { cn } from "@/lib/utils";
 
 export function QuickModals() {
@@ -48,6 +49,8 @@ export function QuickModals() {
     drawingAssignee: string;
     priority: Priority;
     notes: string;
+    description: string;
+    attachments: AttachmentItem[];
     materialOrders: MaterialOrderItem[];
   }>({
     clientName: "",
@@ -62,6 +65,8 @@ export function QuickModals() {
     drawingAssignee: "김진우 실장 (로그인 유저)",
     priority: "보통",
     notes: "",
+    description: "",
+    attachments: [],
     materialOrders: [],
   });
 
@@ -125,11 +130,12 @@ export function QuickModals() {
       progress: 0,
       startDate: todayStr, // 등록일이 시작일
       dueDate: workForm.deliveryDate, // 시공일이 마감일
-      notes: workForm.notes,
+      notes: workForm.description || workForm.notes,
+      description: workForm.description || workForm.notes,
       materialOrders: workForm.materialOrders,
       materialOrderNeeded: workForm.materialOrders.map((o) => o.name).join(", "),
       materialOrderStatus: finalOrderStatus,
-      attachments: [],
+      attachments: workForm.attachments,
     });
 
     setWorkForm({
@@ -145,6 +151,8 @@ export function QuickModals() {
       drawingAssignee: "김진우 실장 (로그인 유저)",
       priority: "보통",
       notes: "",
+      description: "",
+      attachments: [],
       materialOrders: [],
     });
 
@@ -479,13 +487,15 @@ export function QuickModals() {
 
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">작업 메모 / 비고</label>
-                <textarea
-                  rows={3}
-                  placeholder="특이사항, 하드웨어 사양, 세부 지시사항 입력..."
-                  value={workForm.notes}
-                  onChange={(e) => setWorkForm({ ...workForm, notes: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <label className="block text-xs font-bold text-slate-800 mb-1">
+                  작업 내용 및 첨부 파일 (도면 / 이미지 / PDF) <span className="text-slate-400 font-normal">(파일 드래그&드롭, 이미지 미리보기, PDF 즉시 열기)</span>
+                </label>
+                <UnifiedBoardEditor
+                  description={workForm.description}
+                  onChangeDescription={(val) => setWorkForm({ ...workForm, description: val, notes: val })}
+                  attachments={workForm.attachments}
+                  onChangeAttachments={(items) => setWorkForm({ ...workForm, attachments: items })}
+                  placeholder="작업 내용, 상세 사양, 현장 지시사항 등을 자유롭게 작성하세요... 파일이나 사진을 이 영역으로 드래그 & 드롭하여 바로 첨부할 수 있습니다."
                 />
               </div>
             </div>

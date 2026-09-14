@@ -87,11 +87,19 @@ Vercel에 배포할 때도 대시보드에서 동일하게 환경 변수를 등�
 
 ## 5. 생성되는 테이블 구조 요약 ([schema.sql](file:///g:/balon_online/schema.sql))
 
-| 테이블명 | 용도 | 주요 컬럼 |
-| :--- | :--- | :--- |
-| `work_items` | 공정 관리 & 칸반 카드 | `id`, `title`, `client_name`, `delivery_date`, `status`(대기/오피스/공장/준비완료), `description` 등 |
-| `attachments` | 도면 PDF 및 첨부파일 | `id`, `work_item_id`, `name`, `url`, `file_type`, `size` |
-| `as_items` | 현장 A/S 접수 및 조치 | `id`, `client_name`, `construct_date`, `site_address`, `reason`, `result_status` 등 |
-| `gallery_folders` | 갤러리 폴더 계층 | `id`, `name`, `description`, `item_count` |
-| `gallery_images` | 시공 사진 아카이브 | `id`, `folder_id`, `title`, `url`, `site_name`, `tags` |
-| `materials` | 원자재 샘플 라이브러리 | `id`, `name`, `category`, `code`, `thickness`, `finish`, `in_stock` |
+> **보안 및 격리 원칙**:
+> - 기존 `baron_web` 테이블(`clients`, `blueprints`, `users` 등)은 **절대 수정/삭제하지 않습니다.**
+> - `clients` 테이블은 **오직 조회(Read-Only)** 용도로만 참조하여 거래처 자동완성에 사용됩니다.
+> - 바론 온라인 전용 데이터는 접두어 `bo_`가 붙은 독립 테이블에 안전하게 격리 저장됩니다.
+
+| 테이블명 | 구분 | 용도 | 주요 컬럼 |
+| :--- | :--- | :--- | :--- |
+| `clients` | **기존 (Read-Only)** | 거래처/고객사 목록 조회 | `id`, `name`, `company_address`, `office_phone` 등 |
+| `bo_work_items` | **신규 (바론온라인)** | 공정 관리 & 칸반 카드 | `id`, `title`, `client_name`, `delivery_date`, `status`, `drawing_type` 등 |
+| `bo_work_item_comments` | **신규 (바론온라인)** | 업무/일정 댓글 & 사진 | `id`, `work_item_id`, `author`, `content`, `images` |
+| `bo_attachments` | **신규 (바론온라인)** | 도면 PDF 및 첨부파일 | `id`, `work_item_id`, `name`, `url`, `file_type`, `size` |
+| `bo_as_items` | **신규 (바론온라인)** | 현장 A/S 접수 및 조치 | `id`, `client_name`, `construct_date`, `site_address`, `reason`, `result_status` 등 |
+| `bo_gallery_folders` | **신규 (바론온라인)** | 갤러리 폴더 계층 | `id`, `name`, `description`, `item_count` |
+| `bo_gallery_images` | **신규 (바론온라인)** | 시공 사진 아카이브 | `id`, `folder_id`, `title`, `url`, `site_name`, `tags` |
+| `bo_materials` | **신규 (바론온라인)** | 원자재 샘플 라이브러리 | `id`, `name`, `category`, `code`, `thickness`, `finish`, `in_stock` |
+| `drawing_requests` | **신규 (연동 브릿지)** | 바론 온라인 ↔ 바론 웹 도면 요청 브릿지 | `id`, `work_item_id`, `client_name`, `status`, `blueprint_id`, `result_pdf_url` |

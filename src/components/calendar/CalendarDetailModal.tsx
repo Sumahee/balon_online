@@ -26,9 +26,10 @@ import {
   UploadCloud,
 } from "lucide-react";
 
-import { WorkItem } from "@/types";
+import { WorkItem, ClientInfo, DrawingType, WorkStatus, Priority, AttachmentItem } from "@/types";
 import { useData } from "@/context/DataContext";
 import { cn } from "@/lib/utils";
+import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
 
 interface CalendarDetailModalProps {
   item: WorkItem;
@@ -43,20 +44,44 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
 
   const [activeTab, setActiveTab] = useState<"blueprint" | "comments" | "photos">("blueprint");
   
-  // Date & Schedule edit state
-  const [isEditingDate, setIsEditingDate] = useState(false);
+  // Full Edit Mode state (Title, Client, Address, DrawingType, DeadlineType, DeliveryDate, Region, Status, Priority, Description, Attachments)
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [clientsList, setClientsList] = useState<ClientInfo[]>([]);
 
   const initialParts = (liveItem.deliveryDate || "2026-09-15").split("-");
   const [editYear, setEditYear] = useState<number>(parseInt(initialParts[0]) || 2026);
   const [editMonth, setEditMonth] = useState<number>(parseInt(initialParts[1]) || 9);
   const [editDay, setEditDay] = useState<number>(parseInt(initialParts[2]) || 15);
 
+  const [editTitle, setEditTitle] = useState(liveItem.title || "");
+  const [editClientName, setEditClientName] = useState(liveItem.clientName || "");
+  const [editSiteAddress, setEditSiteAddress] = useState(liveItem.siteAddress || "");
+  const [editDrawingType, setEditDrawingType] = useState<DrawingType>(liveItem.drawingType || "천정형");
   const [editDeadlineType, setEditDeadlineType] = useState<"시공일" | "배송일" | "요청일">(
     liveItem.deadlineType || "시공일"
   );
   const [editRegion, setEditRegion] = useState(liveItem.region || "반포");
-  const [editStatus, setEditStatus] = useState(liveItem.status);
+  const [editStatus, setEditStatus] = useState<WorkStatus>(liveItem.status || "대기");
+  const [editPriority, setEditPriority] = useState<Priority>(liveItem.priority || "보통");
+  const [editCategory, setEditCategory] = useState<string>(liveItem.category || "제작");
+  const [editDescription, setEditDescription] = useState(liveItem.description || liveItem.notes || "");
+  const [editAttachments, setEditAttachments] = useState<AttachmentItem[]>(liveItem.attachments || []);
+
+  const [isEditingDate, setIsEditingDate] = useState(false);
   const [saveNotice, setSaveNotice] = useState("");
+
+  // Load live clients list for autocomplete
+  React.useEffect(() => {
+    fetch("/api/clients")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.clients)) {
+          setClientsList(data.clients);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Comment state
   const [authorName, setAuthorName] = useState("바론 INT 오피스");
@@ -218,6 +243,56 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
     setTimeout(() => setSaveNotice(""), 4000);
   };
 
+  const handleOpenEditMode = () => {
+    setEditTitle(liveItem.title || "");
+    setEditClientName(liveItem.clientName || "");
+    setEditSiteAddress(liveItem.siteAddress || "");
+    setEditDrawingType(liveItem.drawingType || "천정형");
+    setEditDeadlineType(liveItem.deadlineType || "시공일");
+    setEditRegion(liveItem.region || "반포");
+    setEditStatus(liveItem.status || "대기");
+    setEditPriority(liveItem.priority || "보통");
+    setEditCategory(liveItem.category || "제작");
+    setEditDescription(liveItem.description || liveItem.notes || "");
+    setEditAttachments(liveItem.attachments || []);
+
+    const parts = (liveItem.deliveryDate || "2026-09-15").split("-");
+    setEditYear(parseInt(parts[0]) || 2026);
+    setEditMonth(parseInt(parts[1]) || 9);
+    setEditDay(parseInt(parts[2]) || 15);
+
+    setIsEditMode(true);
+  };
+
+  const handleSaveAllEdits = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsSaving(true);
+    const finalDateStr = `${editYear}-${String(editMonth).padStart(2, "0")}-${String(editDay).padStart(2, "0")}`;
+
+    await updateWorkItem(liveItem.id, {
+      title: editTitle.trim() || liveItem.title,
+      clientName: editClientName.trim() || liveItem.clientName,
+      siteAddress: editSiteAddress.trim(),
+      drawingType: editDrawingType,
+      deadlineType: editDeadlineType,
+      deliveryDate: finalDateStr,
+      dueDate: finalDateStr,
+      region: editRegion,
+      status: editStatus,
+      priority: editPriority,
+      category: editCategory as any,
+      description: editDescription,
+      notes: editDescription,
+      attachments: editAttachments,
+    });
+
+    setIsSaving(false);
+    setIsEditMode(false);
+    setIsEditingDate(false);
+    setSaveNotice("✨ 모든 수정 내용(제목, 업체, 현장, 도면타입, 일정, 본문, 첨부파일)이 저장되었습니다!");
+    setTimeout(() => setSaveNotice(""), 4000);
+  };
+
   const handleSaveScheduleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     const finalDateStr = `${editYear}-${String(editMonth).padStart(2, "0")}-${String(editDay).padStart(2, "0")}`;
@@ -294,18 +369,18 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
             <div>
               <div className="flex items-center gap-2">
                 <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-extrabold text-[11px] border border-blue-500/30">
-                  {item.deadlineType || "시공일"}
+                  {liveItem.deadlineType || "시공일"}
                 </span>
                 <span className="font-extrabold text-white text-base">
-                  {item.clientName} {item.siteAddress || item.region} ({item.drawingType || "옴니버스"})
+                  {liveItem.clientName} {liveItem.siteAddress || liveItem.region} ({liveItem.drawingType || "천정형"})
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2 font-mono">
-                <span>시공 마감: <strong>{item.deliveryDate}</strong></span>
+                <span>시공 마감: <strong>{liveItem.deliveryDate}</strong></span>
                 <span>•</span>
-                <span>지역: <strong>{item.region || "서초동"}</strong></span>
+                <span>지역: <strong>{liveItem.region || "서초동"}</strong></span>
                 <span>•</span>
-                <span>상태: <strong className="text-blue-300">{item.status}</strong></span>
+                <span>상태: <strong className="text-blue-300">{liveItem.status}</strong></span>
               </p>
             </div>
           </div>
@@ -333,7 +408,7 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
               )}
             >
               <FileText className="w-3.5 h-3.5 text-blue-600" />
-              <span>완료 도면 ({docAttachments.length})</span>
+              <span>작업 내용/도면 ({docAttachments.length})</span>
             </button>
             <button
               onClick={() => {
@@ -380,34 +455,130 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
             </button>
 
             <button
-              onClick={() => setIsEditingDate(!isEditingDate)}
-              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              onClick={isEditMode ? handleSaveAllEdits : handleOpenEditMode}
+              disabled={isSaving}
+              className={cn(
+                "px-3.5 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs text-xs",
+                isEditMode
+                  ? "bg-blue-600 hover:bg-blue-700 text-white ring-2 ring-blue-300"
+                  : "bg-slate-900 hover:bg-slate-800 text-white"
+              )}
             >
-              <CalendarIcon className="w-3.5 h-3.5 text-amber-400" />
-              <span>{isEditingDate ? "일정 수정 닫기" : "📅 일정 변경"}</span>
+              {isEditMode ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-200" />
+                  <span>{isSaving ? "저장 중..." : "💾 수정 완료 및 저장"}</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>✏️ 전체 내용 수정</span>
+                </>
+              )}
             </button>
+
+            {isEditMode && (
+              <button
+                type="button"
+                onClick={() => setIsEditMode(false)}
+                className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold transition text-xs cursor-pointer"
+              >
+                취소
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Schedule Extension/Modification Banner Form */}
-        {isEditingDate && (
-          <form onSubmit={handleSaveScheduleEdit} className="bg-amber-50 p-4 border-b border-amber-200 space-y-3 shrink-0 animate-in slide-in-from-top-2 text-xs">
+        {/* Full Edit Mode Form */}
+        {isEditMode && (
+          <form onSubmit={handleSaveAllEdits} className="bg-blue-50/70 p-4 border-b border-blue-200 space-y-3 shrink-0 animate-in slide-in-from-top-2 text-xs">
             <div className="flex items-center justify-between">
-              <span className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-amber-600" />
-                현장 시공일 / 배송 요청일 변경 (연기 및 조율)
+              <span className="font-extrabold text-blue-950 text-xs flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-blue-600" />
+                전체 정보 수정 모드 (제목, 업체명, 주소, 일정, 도면타입 등)
               </span>
-              <span className="text-[11px] text-amber-800 font-bold">
-                현재 일정: {item.deliveryDate} ({item.deadlineType})
+              <span className="text-[11px] text-blue-700 font-bold">
+                수정 후 [전체 변경사항 저장]을 누르면 즉시 DB에 영구 반영됩니다.
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-3 rounded-xl border border-amber-200">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-white p-3.5 rounded-xl border border-blue-200">
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">프로젝트 제목</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+              </div>
+
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">구분</label>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">의뢰 업체명</label>
+                <input
+                  type="text"
+                  list="cal-detail-clients"
+                  value={editClientName}
+                  onChange={(e) => setEditClientName(e.target.value)}
+                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+                <datalist id="cal-detail-clients">
+                  {clientsList.map((c) => (
+                    <option key={c.id} value={c.name} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">현장 상세 주소</label>
+                <input
+                  type="text"
+                  value={editSiteAddress}
+                  onChange={(e) => setEditSiteAddress(e.target.value)}
+                  placeholder="예: 반포동 104동"
+                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-medium text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">시공/현장 지역</label>
+                <select
+                  value={editRegion}
+                  onChange={(e) => setEditRegion(e.target.value)}
+                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                >
+                  {REGIONS_LIST.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">도면 타입</label>
+                <div className="grid grid-cols-4 gap-1">
+                  {(["천정형", "에보라", "옴니버스", "기타"] as const).map((dt) => (
+                    <button
+                      key={dt}
+                      type="button"
+                      onClick={() => setEditDrawingType(dt)}
+                      className={cn(
+                        "py-1.5 rounded-lg text-[10px] font-extrabold border transition cursor-pointer text-center",
+                        editDrawingType === dt
+                          ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
+                          : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                      )}
+                    >
+                      {dt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">마감 구분</label>
                 <select
                   value={editDeadlineType}
-                  onChange={(e) => setEditDeadlineType(e.target.value as "시공일" | "배송일" | "요청일")}
+                  onChange={(e) => setEditDeadlineType(e.target.value as any)}
                   className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
                 >
                   <option value="시공일">시공일</option>
@@ -417,12 +588,12 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">연도 / 월</label>
-                <div className="flex gap-1">
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">연도 / 월 / 일</label>
+                <div className="grid grid-cols-3 gap-1">
                   <select
                     value={editYear}
                     onChange={(e) => setEditYear(parseInt(e.target.value))}
-                    className="w-1/2 p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                    className="p-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
                   >
                     {YEARS_OPTIONS.map((y) => (
                       <option key={y} value={y}>{y}년</option>
@@ -431,54 +602,55 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
                   <select
                     value={editMonth}
                     onChange={(e) => setEditMonth(parseInt(e.target.value))}
-                    className="w-1/2 p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                    className="p-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
                   >
                     {MONTHS_OPTIONS.map((m) => (
                       <option key={m} value={m}>{m}월</option>
+                    ))}
+                  </select>
+                  <select
+                    value={editDay}
+                    onChange={(e) => setEditDay(parseInt(e.target.value))}
+                    className="p-1.5 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
+                  >
+                    {DAYS_OPTIONS.map((d) => (
+                      <option key={d} value={d}>{d}일</option>
                     ))}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">일 선택</label>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">업무 상태</label>
                 <select
-                  value={editDay}
-                  onChange={(e) => setEditDay(parseInt(e.target.value))}
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value as any)}
                   className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
                 >
-                  {DAYS_OPTIONS.map((d) => (
-                    <option key={d} value={d}>{d}일</option>
-                  ))}
+                  <option value="대기">대기</option>
+                  <option value="오피스">오피스</option>
+                  <option value="공장">공장</option>
+                  <option value="준비완료">준비완료</option>
+                  <option value="시공완료">시공완료</option>
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">현장 지역</label>
-                <input
-                  type="text"
-                  value={editRegion}
-                  onChange={(e) => setEditRegion(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-xs"
-                  placeholder="반포, 서초, 성수 등"
-                />
               </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => setIsEditingDate(false)}
-                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg transition"
+                onClick={() => setIsEditMode(false)}
+                className="px-3.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg transition"
               >
-                취소
+                수정 취소
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-lg transition flex items-center gap-1 shadow-xs"
+                disabled={isSaving}
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-lg transition flex items-center gap-1 shadow-xs"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>변경사항 저장</span>
+                <span>{isSaving ? "저장 중..." : "전체 변경사항 저장"}</span>
               </button>
             </div>
           </form>
@@ -493,98 +665,33 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
 
         {/* Modal Main Scrollable Content (Single Continuous SNS Post Feed) */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* SECTION 1: BLUEPRINT & SPECS */}
-          <div id="cal-sec-blueprint" className="space-y-4 text-xs">
-            {/* Attached Blueprint Files List (Documents Only) */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
-                <Paperclip className="w-4 h-4 text-blue-600" />
-                <span>완료 도면 및 첨부 문서 ({docAttachments.length}개)</span>
+          {/* SECTION 1: UNIFIED BOARD (TEXT + ATTACHMENTS + IMAGES + PDFS) */}
+          <div id="cal-sec-blueprint" className="space-y-3 text-xs">
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-blue-600" />
+                <span>작업 내용 및 첨부 도면/파일</span>
               </h3>
-
-              {docAttachments.length === 0 ? (
-                <div className="p-4 bg-white rounded-lg border border-dashed text-center text-slate-400 text-xs">
-                  등록된 도면/문서 파일이 없습니다.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {docAttachments.map((att) => (
-                    <div
-                      key={att.id}
-                      className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between hover:border-blue-300 transition"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="p-2 rounded bg-rose-50 text-rose-600 font-bold text-[10px]">
-                          {att.fileType === "pdf" ? "PDF" : "DOC"}
-                        </div>
-                        <div className="min-w-0">
-                          <span className="font-bold text-slate-800 block truncate" title={att.name}>
-                            {att.name}
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            {att.size} | {att.uploadedAt}
-                          </span>
-                        </div>
-                      </div>
-
-                      <a
-                        href={att.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-2.5 py-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold flex items-center gap-1 shrink-0 transition"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>확인</span>
-                      </a>
-                    </div>
-                  ))}
-                </div>
+              {!isEditMode && (
+                <button
+                  type="button"
+                  onClick={handleOpenEditMode}
+                  className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg font-bold text-xs flex items-center gap-1 cursor-pointer transition"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                  <span>내용 수정 및 파일 추가</span>
+                </button>
               )}
             </div>
 
-            {/* Embedded PDF/Blueprint Viewer Simulation */}
-            <div className="bg-slate-900 text-white p-4 rounded-xl space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <span className="font-bold text-xs flex items-center gap-1.5 text-blue-400">
-                  <FileText className="w-4 h-4" />
-                  도면 실시간 미리보기 (Live Blueprint Reader)
-                </span>
-                <span className="text-[10px] text-slate-400">Scale: 1:1 CAD Engine</span>
-              </div>
-
-              <div className="h-48 sm:h-56 bg-slate-950 rounded-lg border border-slate-800 p-4 flex flex-col items-center justify-center relative overflow-hidden text-center space-y-2">
-                <div className="w-12 h-12 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
-                  <FileText className="w-6 h-6 animate-pulse" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-white text-sm">
-                    {docAttachments[0]?.name || "도면 설계안"}
-                  </h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    현장: {item.region || "반포"} | 업체: {item.clientName} | 담당: {item.assignee}
-                  </p>
-                </div>
-                {docAttachments[0] && (
-                  <a
-                    href={docAttachments[0].url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition inline-flex items-center gap-1.5 shadow-sm mt-2"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>전체 도면 PDF 다운로드/열기</span>
-                  </a>
-                )}
-              </div>
-            </div>
-
-            {/* Specification Text */}
-            <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-2 text-xs">
-              <h3 className="font-bold text-slate-900">상세 현장 작업지시 및 비고</h3>
-              <p className="text-slate-600 leading-relaxed whitespace-pre-line bg-slate-50 p-3 rounded-lg border border-slate-100">
-                {item.description || item.notes || "특이사항 없음"}
-              </p>
-            </div>
+            <UnifiedBoardEditor
+              description={isEditMode ? editDescription : (liveItem.description || liveItem.notes || "")}
+              onChangeDescription={setEditDescription}
+              attachments={isEditMode ? editAttachments : (liveItem.attachments || [])}
+              onChangeAttachments={setEditAttachments}
+              readOnly={!isEditMode}
+              placeholder="작업 지시사항, 상세 사양, 현장 메모를 입력하세요... 파일이나 도면, 사진을 여기에 바로 끌어다 놓으시면 됩니다."
+            />
           </div>
 
           {/* SECTION 2: ATTACHED PHOTOS FEED & MULTI-PHOTO UPLOAD */}
@@ -891,14 +998,27 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
         {/* Footer */}
         <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-between text-xs shrink-0">
           <span className="text-slate-500 font-medium">
-            작성일: {new Date(item.createdAt).toLocaleDateString()}
+            작성일: {new Date(liveItem.createdAt).toLocaleDateString()}
           </span>
-          <button
-            onClick={onClose}
-            className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition cursor-pointer"
-          >
-            닫기
-          </button>
+          <div className="flex items-center gap-2">
+            {isEditMode && (
+              <button
+                type="button"
+                onClick={handleSaveAllEdits}
+                disabled={isSaving}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl transition cursor-pointer shadow-md flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{isSaving ? "저장 중..." : "전체 변경사항 저장"}</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition cursor-pointer"
+            >
+              닫기
+            </button>
+          </div>
         </div>
       </div>
 

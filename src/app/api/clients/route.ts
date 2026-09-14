@@ -9,6 +9,10 @@ const mockClients: ClientInfo[] = [
   { id: 4, name: "더바른 가구디자인", officePhone: "02-333-2211", companyAddress: "서울시 마포구 월드컵북로 88", ceoName: "박바른" },
 ];
 
+/**
+ * GET /api/clients
+ * 기존 Turso DB의 clients 테이블에서 클라이언트 목록을 READ-ONLY(조회 전용)로 가져옵니다.
+ */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search");
@@ -21,7 +25,7 @@ export async function GET(request: Request) {
       sql += " WHERE name LIKE ? OR business_number LIKE ?";
       args.push(`%${search}%`, `%${search}%`);
     }
-    sql += " ORDER BY name ASC LIMIT 50";
+    sql += " ORDER BY name ASC LIMIT 100";
 
     const res = await executeQuery(sql, args);
     if (res.success && res.rows) {
@@ -37,7 +41,7 @@ export async function GET(request: Request) {
         billEmail: row.bill_email ? String(row.bill_email) : undefined,
         officePhone: row.office_phone ? String(row.office_phone) : undefined,
       }));
-      return NextResponse.json({ success: true, clients });
+      return NextResponse.json({ success: true, clients, count: clients.length, isDb: true });
     }
   }
 
@@ -47,32 +51,19 @@ export async function GET(request: Request) {
     const queryLower = search.toLowerCase();
     filtered = mockClients.filter((c) => c.name.toLowerCase().includes(queryLower));
   }
-  return NextResponse.json({ success: true, clients: filtered, isMock: !db });
+  return NextResponse.json({ success: true, clients: filtered, count: filtered.length, isMock: true });
 }
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { name, companyAddress, businessNumber, ceoName, officePhone } = body;
-
-    if (!name) {
-      return NextResponse.json({ success: false, error: "name is required" }, { status: 400 });
-    }
-
-    if (db) {
-      const sql = `
-        INSERT INTO clients (name, company_address, business_number, ceo_name, office_phone)
-        VALUES (?, ?, ?, ?, ?)
-      `;
-      const args = [name, companyAddress || "", businessNumber || "", ceoName || "", officePhone || ""];
-      const res = await executeQuery(sql, args);
-      if (res.success) {
-        return NextResponse.json({ success: true, message: "Client added to clients table" });
-      }
-    }
-
-    return NextResponse.json({ success: true, message: "Mock client added" });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
-  }
+/**
+ * POST /api/clients
+ * 주의: 기존 DB의 clients 테이블은 READ-ONLY 정책이 적용되어 있습니다.
+ */
+export async function POST() {
+  return NextResponse.json(
+    {
+      success: false,
+      message: "보안 정책: 기존 데이터베이스의 clients 테이블은 바론 온라인에서 읽기 전용(Read-Only)으로만 사용됩니다.",
+    },
+    { status: 403 }
+  );
 }

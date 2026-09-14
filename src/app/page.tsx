@@ -87,7 +87,11 @@ export default function DashboardPage() {
             <span className="text-xs text-slate-400 font-medium">건 진행 관리 중</span>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-            <span>제작 3 / 시공 1 / 설계 1</span>
+            <span>
+              제작 {workItems.filter((w) => w.category === "제작").length} / 시공{" "}
+              {workItems.filter((w) => w.category === "시공").length} / 설계{" "}
+              {workItems.filter((w) => w.category === "설계").length}
+            </span>
             <Link href="/work" className="text-blue-600 hover:underline flex items-center gap-0.5">
               목록보기 <ArrowUpRight className="w-3 h-3" />
             </Link>

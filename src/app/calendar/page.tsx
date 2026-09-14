@@ -18,22 +18,25 @@ import {
   Camera,
 } from "lucide-react";
 import { useData } from "@/context/DataContext";
-import { WorkItem } from "@/types";
+import { WorkItem, AttachmentItem, ClientInfo, DrawingType } from "@/types";
 import { cn } from "@/lib/utils";
 import { CalendarDetailModal } from "@/components/calendar/CalendarDetailModal";
+import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
 
 const REGIONS = ["전체", "반포", "일산", "서초", "한남", "성수", "판교", "분당"];
 
 // Helper to extract clean vendor name & ~동 / ~구 location
 function getCalendarCardLabel(item: WorkItem) {
-  const cleanClient = item.clientName.replace(/\(주\)/g, "").replace(/인테리어/g, "").trim() || item.clientName;
+  const rawClient = item?.clientName || "(주)바론 협력사";
+  const cleanClient =
+    rawClient.replace(/\(주\)/g, "").replace(/인테리어/g, "").trim() || rawClient;
 
   let location = "";
-  const fullStr = `${item.siteAddress || ""} ${item.title || ""}`;
+  const fullStr = `${item?.siteAddress || ""} ${item?.title || ""}`;
   const match = fullStr.match(/([가-힣]{2,8}(?:동|구))/);
   if (match && match[1]) {
     location = match[1];
-  } else if (item.region) {
+  } else if (item?.region) {
     location = item.region.endsWith("동") || item.region.endsWith("구") ? item.region : `${item.region}동`;
   } else {
     location = "서초동";
@@ -44,10 +47,11 @@ function getCalendarCardLabel(item: WorkItem) {
 
 // Helper to get Drawing Type
 function getDrawingType(item: WorkItem): "천정형" | "에보라" | "옴니버스" | "기타" {
-  if (item.drawingType) return item.drawingType;
-  if (item.title.includes("천정형")) return "천정형";
-  if (item.title.includes("에보라")) return "에보라";
-  if (item.title.includes("옴니버스")) return "옴니버스";
+  if (item?.drawingType) return item.drawingType;
+  const title = item?.title || "";
+  if (title.includes("천정형")) return "천정형";
+  if (title.includes("에보라")) return "에보라";
+  if (title.includes("옴니버스")) return "옴니버스";
   return "천정형";
 }
 
@@ -95,22 +99,47 @@ export default function CalendarPage() {
   // New item modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
-  const [newClient, setNewClient] = useState("(주)디자인에이치");
+  const [newClient, setNewClient] = useState("");
+  const [newSiteAddress, setNewSiteAddress] = useState("");
   const [newRegion, setNewRegion] = useState("반포");
   const [newDate, setNewDate] = useState("2026-09-15");
+  const [newDrawingType, setNewDrawingType] = useState<DrawingType>("옴니버스");
   const [newDeadlineType, setNewDeadlineType] = useState<"시공일" | "배송일" | "요청일">("시공일");
   const [newCategory, setNewCategory] = useState<"제작" | "실측" | "시공" | "설계" | "납품" | "기타">("시공");
+  const [newDescription, setNewDescription] = useState("");
+  const [newAttachments, setNewAttachments] = useState<AttachmentItem[]>([]);
+  const [clientsList, setClientsList] = useState<ClientInfo[]>([]);
+
+  // Load live clients list from shared DB (READ-ONLY)
+  React.useEffect(() => {
+    fetch("/api/clients")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.clients)) {
+          setClientsList(data.clients);
+          if (!newClient && data.clients.length > 0) {
+            setNewClient(data.clients[0].name);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Filtered work items
   const filteredItems = useMemo(() => {
     return workItems.filter((item) => {
+      if (!item) return false;
+      const title = item.title || "";
+      const clientName = item.clientName || "";
+      const region = item.region || "";
+
       const matchRegion =
-        selectedRegion === "전체" || item.region === selectedRegion || item.title.includes(selectedRegion);
+        selectedRegion === "전체" || region === selectedRegion || title.includes(selectedRegion);
       const matchQuery =
         !searchQuery.trim() ||
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.region && item.region.includes(searchQuery));
+        title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        region.includes(searchQuery);
       return matchRegion && matchQuery;
     });
   }, [workItems, selectedRegion, searchQuery]);
@@ -165,11 +194,16 @@ export default function CalendarPage() {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
+    const safeClient = newClient.trim() || "(주)바론 협력업체";
+    const todayStr = new Date().toISOString().split("T")[0];
+
     await addWorkItem({
       type: "work",
       title: newTitle.trim(),
-      clientName: newClient,
+      clientName: safeClient,
+      siteAddress: newSiteAddress.trim(),
       region: newRegion,
+      drawingType: newDrawingType,
       cardType: "도면",
       deadlineType: newDeadlineType,
       deliveryDate: newDate,
@@ -178,14 +212,18 @@ export default function CalendarPage() {
       priority: "높음",
       status: "대기",
       progress: 0,
-      startDate: newDate,
+      startDate: todayStr,
       dueDate: newDate,
       notes: `${newRegion} 현장 ${newDeadlineType} 일정 등록`,
-      attachments: [],
+      description: newDescription,
+      attachments: newAttachments,
     });
 
     setIsAddModalOpen(false);
     setNewTitle("");
+    setNewSiteAddress("");
+    setNewDescription("");
+    setNewAttachments([]);
   };
 
   return (
@@ -335,9 +373,9 @@ export default function CalendarPage() {
           {/* Calendar Grid (6 Rows x 7 Cols) */}
           <div className="grid grid-cols-7 divide-x divide-y divide-slate-200 text-xs">
             {calendarDays.map((day, idx) => {
-              // Find matching items for this date
+              // Find matching items for this date (Only on deadline / delivery date)
               const dayItems = filteredItems.filter(
-                (item) => item.deliveryDate === day.dateStr || item.startDate === day.dateStr
+                (item) => (item.deliveryDate || item.dueDate) === day.dateStr
               );
 
               const isSunday = idx % 7 === 0;
@@ -423,43 +461,67 @@ export default function CalendarPage() {
 
       {/* NEW SCHEDULE EVENT MODAL */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-2xl border border-slate-200 shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+          <div className="bg-white w-full max-w-3xl rounded-2xl border border-slate-200 shadow-2xl p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
                 <CalendarIcon className="w-5 h-5 text-blue-600" />
-                <span>신규 일정 등록 (Flow Schedule)</span>
+                <span>신규 일정 및 업무 등록 (Schedule & Work Task)</span>
               </h3>
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1"
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleCreateSchedule} className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">프로젝트 제목 및 현장</label>
-                <input
-                  type="text"
-                  required
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="예: 반포자이 102동 주방 아일랜드 서랍장 시공"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
+            <form onSubmit={handleCreateSchedule} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">의뢰 업체명</label>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    프로젝트 제목 <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="text"
                     required
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    placeholder="예: 반포자이 102동 주방 아일랜드 서랍장 시공"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    의뢰 업체명 <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    list="calendar-clients-datalist"
                     value={newClient}
                     onChange={(e) => setNewClient(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium"
+                    placeholder="업체명 선택 또는 직접 입력"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                  <datalist id="calendar-clients-datalist">
+                    {clientsList.map((c) => (
+                      <option key={c.id} value={c.name} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">현장 상세 주소</label>
+                  <input
+                    type="text"
+                    value={newSiteAddress}
+                    onChange={(e) => setNewSiteAddress(e.target.value)}
+                    placeholder="예: 서초구 반포동 128"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
 
@@ -476,6 +538,27 @@ export default function CalendarPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">도면 타입</label>
+                  <div className="grid grid-cols-4 gap-1">
+                    {(["천정형", "에보라", "옴니버스", "기타"] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setNewDrawingType(t)}
+                        className={cn(
+                          "py-2 rounded-lg text-[11px] font-extrabold border transition cursor-pointer text-center",
+                          newDrawingType === t
+                            ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        )}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -546,7 +629,7 @@ export default function CalendarPage() {
                   <select
                     value={newDeadlineType}
                     onChange={(e) => setNewDeadlineType(e.target.value as any)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold"
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
                   >
                     <option value="시공일">시공일</option>
                     <option value="배송일">배송일</option>
@@ -555,17 +638,31 @@ export default function CalendarPage() {
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              {/* UNIFIED BOARD EDITOR (텍스트 + 이미지 + 파일 통합) */}
+              <div>
+                <label className="font-bold text-slate-800 block mb-1">
+                  작업 내용 및 첨부 도면/파일 <span className="text-slate-400 font-normal">(파일 드래그&드롭, 이미지 미리보기, PDF 즉시 열기)</span>
+                </label>
+                <UnifiedBoardEditor
+                  description={newDescription}
+                  onChangeDescription={setNewDescription}
+                  attachments={newAttachments}
+                  onChangeAttachments={setNewAttachments}
+                  placeholder="작업 지시사항, 상세 사양, 현장 메모를 입력하세요... 파일이나 도면, 사진을 여기에 바로 끌어다 놓으시면 됩니다."
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition"
                 >
                   취소
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-md"
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-md transition"
                 >
                   일정 추가 등록
                 </button>
