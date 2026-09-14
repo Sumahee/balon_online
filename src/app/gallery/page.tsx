@@ -16,6 +16,11 @@ import {
   Plus,
   Building,
   Image as ImageIcon,
+  Search,
+  Filter,
+  Sparkles,
+  SlidersHorizontal,
+  Check,
 } from "lucide-react";
 import { useData } from "@/context/DataContext";
 import { GalleryImage, GalleryFolder } from "@/types";
@@ -27,6 +32,13 @@ export default function GalleryPage() {
   const [selectedFolderId, setSelectedFolderId] = useState<string>("folder-all");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
+  // Search & Attribute Filters
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedType, setSelectedType] = useState<string>("all");
+  const [selectedColor, setSelectedColor] = useState<string>("all");
+  const [hasMirror, setHasMirror] = useState<boolean | null>(null);
+  const [hasDrawer, setHasDrawer] = useState<boolean | null>(null);
+
   // Folder creation modal
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
@@ -37,14 +49,60 @@ export default function GalleryPage() {
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadSiteName, setUploadSiteName] = useState("");
-  const [uploadTags, setUploadTags] = useState("");
+  const [uploadCategory, setUploadCategory] = useState("주방가구");
+  const [uploadColor, setUploadColor] = useState("화이트");
+  const [uploadHasMirror, setUploadHasMirror] = useState(false);
+  const [uploadHasDrawer, setUploadHasDrawer] = useState(true);
+  const [uploadCustomTags, setUploadCustomTags] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Filtered images
-  const filteredImages =
-    selectedFolderId === "folder-all"
-      ? images
-      : images.filter((img) => img.folderId === selectedFolderId);
+  // Filter types & colors
+  const TYPES = ["전체", "주방가구", "아일랜드", "붙박이장", "수납장", "신발장", "기타"];
+  const COLORS = ["전체", "화이트", "그레이", "우드/원목", "다크/블랙", "세라믹"];
+
+  // Filtered images with Tag & Attribute Search
+  const filteredImages = images.filter((img) => {
+    // Folder filter
+    if (selectedFolderId !== "folder-all" && img.folderId !== selectedFolderId) {
+      return false;
+    }
+
+    // Text search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchTitle = img.title.toLowerCase().includes(q);
+      const matchSite = img.siteName?.toLowerCase().includes(q) || false;
+      const matchTags = img.tags.some((t) => t.toLowerCase().includes(q));
+      if (!matchTitle && !matchSite && !matchTags) return false;
+    }
+
+    // Type filter
+    if (selectedType !== "all" && selectedType !== "전체") {
+      const matchType = img.tags.includes(selectedType) || img.title.includes(selectedType);
+      if (!matchType) return false;
+    }
+
+    // Color filter
+    if (selectedColor !== "all" && selectedColor !== "전체") {
+      const colorKey = selectedColor.split("/")[0];
+      const matchColor = img.tags.some((t) => t.includes(colorKey)) || img.title.includes(colorKey);
+      if (!matchColor) return false;
+    }
+
+    // Mirror filter
+    if (hasMirror === true) {
+      const matchMirror = img.tags.some((t) => t.includes("거울")) || img.title.includes("거울");
+      if (!matchMirror) return false;
+    }
+
+    // Drawer filter
+    if (hasDrawer === true) {
+      const matchDrawer = img.tags.some((t) => t.includes("서랍")) || img.title.includes("서랍");
+      if (!matchDrawer) return false;
+    }
+
+    return true;
+  });
 
   const activeFolder = folders.find((f) => f.id === selectedFolderId);
 
@@ -88,17 +146,32 @@ export default function GalleryPage() {
       return;
     }
 
-    const targetFolder = selectedFolderId === "folder-all" ? "folder-1" : selectedFolderId;
-    const tagsArray = uploadTags
-      ? uploadTags.split(",").map((t) => t.trim()).filter(Boolean)
-      : ["현장시공", "바론"];
+    // Auto folder classification: Match category to existing folder or use selected
+    let targetFolderId = selectedFolderId === "folder-all" ? "folder-1" : selectedFolderId;
+    const matchedFolder = folders.find((f) => f.name.includes(uploadCategory));
+    if (matchedFolder) {
+      targetFolderId = matchedFolder.id;
+    }
+
+    // Auto-generate tags based on drawing/item attributes
+    const autoTags: string[] = [
+      uploadCategory,
+      uploadColor,
+      uploadHasMirror ? "거울포함" : "거울없음",
+      uploadHasDrawer ? "서랍장포함" : "서랍장없음",
+    ];
+
+    if (uploadCustomTags) {
+      const extra = uploadCustomTags.split(",").map((t) => t.trim()).filter(Boolean);
+      autoTags.push(...extra);
+    }
 
     await addImage({
-      folderId: targetFolder,
+      folderId: targetFolderId,
       title: uploadTitle,
       url: uploadPreview,
       siteName: uploadSiteName || "바론 INT 시공 현장",
-      tags: tagsArray,
+      tags: Array.from(new Set(autoTags)),
       dimensions: "2400 x 1600",
       size: "2.4 MB",
     });
@@ -106,7 +179,7 @@ export default function GalleryPage() {
     setUploadPreview(null);
     setUploadTitle("");
     setUploadSiteName("");
-    setUploadTags("");
+    setUploadCustomTags("");
     setShowUploadModal(false);
   };
 
@@ -132,16 +205,19 @@ export default function GalleryPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
         <div>
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-xs">
               <Images className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-900">
-                바론 이미지 모음 (Gallery Archive)
+              <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                <span>시공 사진 아카이브 & 스마트 태그 검색</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                  자동 태그 분류
+                </span>
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                현장 시공 실적, 디테일 마감 사진, 자재 레퍼런스를 폴더별로 아카이빙합니다.
+                현장 시공 사진, 컬러/타입별 자재 마감, 거울/서랍장 옵션 태그 기반 스마트 탐색
               </p>
             </div>
           </div>
@@ -161,10 +237,112 @@ export default function GalleryPage() {
             className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition flex items-center gap-1.5 cursor-pointer"
           >
             <UploadCloud className="w-4 h-4" />
-            <span>사진 업로드</span>
+            <span>사진 업로드 (자동 태그)</span>
           </button>
         </div>
       </div>
+
+      {/* 🔍 Smart Tag & Attribute Search Toolbar */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs space-y-3">
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          {/* Text & Tag Search Bar */}
+          <div className="relative flex-1 w-full">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+            <input
+              type="text"
+              placeholder="태그(#반포, #일산, #화이트, #서랍장), 현장명, 프로젝트 제목으로 검색..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-9 py-2 text-xs sm:text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/50"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-2.5 p-0.5 text-slate-400 hover:text-slate-600 rounded-full"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Quick Toggle Filter Buttons: Mirror & Drawer */}
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+            <button
+              onClick={() => setHasMirror((prev) => (prev === true ? null : true))}
+              className={cn(
+                "px-3 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer shrink-0",
+                hasMirror === true
+                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                  : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+              )}
+            >
+              <span>🪞 거울 포함</span>
+              {hasMirror === true && <Check className="w-3.5 h-3.5" />}
+            </button>
+
+            <button
+              onClick={() => setHasDrawer((prev) => (prev === true ? null : true))}
+              className={cn(
+                "px-3 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer shrink-0",
+                hasDrawer === true
+                  ? "bg-amber-500 text-slate-950 border-amber-500 shadow-xs"
+                  : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+              )}
+            >
+              <span>🗄️ 서랍장 포함</span>
+              {hasDrawer === true && <Check className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Type & Color Sub-Filter Bar */}
+        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+          {/* Type Filter */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-bold text-slate-400 shrink-0">타입:</span>
+            {TYPES.map((type) => {
+              const isSel = (type === "전체" && selectedType === "all") || selectedType === type;
+              return (
+                <button
+                  key={type}
+                  onClick={() => setSelectedType(type === "전체" ? "all" : type)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg font-bold transition cursor-pointer text-xs",
+                    isSel
+                      ? "bg-blue-600 text-white shadow-2xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
+                  )}
+                >
+                  {type}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Color Filter */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-bold text-slate-400 shrink-0">컬러:</span>
+            {COLORS.map((col) => {
+              const isSel = (col === "전체" && selectedColor === "all") || selectedColor === col;
+              return (
+                <button
+                  key={col}
+                  onClick={() => setSelectedColor(col === "전체" ? "all" : col)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg font-bold transition cursor-pointer text-xs",
+                    isSel
+                      ? "bg-slate-900 text-white shadow-2xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
+                  )}
+                >
+                  {col}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
 
       {/* Folder Tabs / Hierarchy Selector */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -512,45 +690,110 @@ export default function GalleryPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">저장할 폴더</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    가구 분류 (자동 폴더 분류)
+                  </label>
                   <select
-                    value={selectedFolderId === "folder-all" ? "folder-1" : selectedFolderId}
-                    onChange={(e) => setSelectedFolderId(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"
+                    value={uploadCategory}
+                    onChange={(e) => setUploadCategory(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
                   >
-                    {folders
-                      .filter((f) => f.id !== "folder-all")
-                      .map((f) => (
-                        <option key={f.id} value={f.id}>
-                          {f.name}
-                        </option>
-                      ))}
+                    <option value="주방가구">주방가구</option>
+                    <option value="아일랜드">아일랜드</option>
+                    <option value="붙박이장">붙박이장</option>
+                    <option value="수납장">수납장</option>
+                    <option value="신발장">신발장</option>
+                    <option value="기타">기타</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">시공 현장명</label>
-                  <input
-                    type="text"
-                    placeholder="예: 서초구 반포 래미안 104동"
-                    value={uploadSiteName}
-                    onChange={(e) => setUploadSiteName(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <label className="block text-xs font-bold text-slate-700 mb-1">대표 컬러 / 마감</label>
+                  <select
+                    value={uploadColor}
+                    onChange={(e) => setUploadColor(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                  >
+                    <option value="화이트">화이트</option>
+                    <option value="그레이">그레이 / 샌드</option>
+                    <option value="우드">우드 / 원목</option>
+                    <option value="다크">다크 / 블랙</option>
+                    <option value="세라믹">세라믹 / 스톤</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Feature Options: Mirror & Drawer */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <span className="block text-xs font-bold text-slate-700">도면 사양 및 옵션 체크:</span>
+                <div className="flex items-center gap-4 text-xs">
+                  <label className="flex items-center gap-1.5 font-bold text-slate-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={uploadHasMirror}
+                      onChange={(e) => setUploadHasMirror(e.target.checked)}
+                      className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
+                    />
+                    <span>🪞 거울도어 포함</span>
+                  </label>
+
+                  <label className="flex items-center gap-1.5 font-bold text-slate-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={uploadHasDrawer}
+                      onChange={(e) => setUploadHasDrawer(e.target.checked)}
+                      className="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 cursor-pointer"
+                    />
+                    <span>🗄️ 서랍장 포함</span>
+                  </label>
                 </div>
               </div>
 
               <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">시공 현장명</label>
+                <input
+                  type="text"
+                  placeholder="예: 서초구 반포 래미안 104동"
+                  value={uploadSiteName}
+                  onChange={(e) => setUploadSiteName(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  태그 입력 (쉼표 구분)
+                  추가 커스텀 태그 (쉼표 구분)
                 </label>
                 <input
                   type="text"
-                  placeholder="예: 주방가구, 언더레일, 댐핑, 세라믹"
-                  value={uploadTags}
-                  onChange={(e) => setUploadTags(e.target.value)}
+                  placeholder="예: 댐핑언더레일, 세라믹상판, 아일랜드"
+                  value={uploadCustomTags}
+                  onChange={(e) => setUploadCustomTags(e.target.value)}
                   className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+
+              {/* Auto Generated Tags Live Preview */}
+              <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl space-y-1.5">
+                <span className="text-[11px] font-bold text-blue-900 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                  <span>자동 생성 태그 미리보기:</span>
+                </span>
+                <div className="flex flex-wrap gap-1 text-[10px]">
+                  <span className="bg-blue-600 text-white font-bold px-2 py-0.5 rounded">#{uploadCategory}</span>
+                  <span className="bg-slate-800 text-white font-bold px-2 py-0.5 rounded">#{uploadColor}</span>
+                  <span className={cn("font-bold px-2 py-0.5 rounded", uploadHasMirror ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-600")}>
+                    #{uploadHasMirror ? "거울포함" : "거울없음"}
+                  </span>
+                  <span className={cn("font-bold px-2 py-0.5 rounded", uploadHasDrawer ? "bg-amber-500 text-slate-950" : "bg-slate-200 text-slate-600")}>
+                    #{uploadHasDrawer ? "서랍장포함" : "서랍장없음"}
+                  </span>
+                  {uploadCustomTags.split(",").map((t) => t.trim()).filter(Boolean).map((t, idx) => (
+                    <span key={idx} className="bg-slate-200 text-slate-800 font-bold px-2 py-0.5 rounded">
+                      #{t}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
@@ -565,13 +808,14 @@ export default function GalleryPage() {
                   type="submit"
                   className="px-5 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 shadow-xs cursor-pointer"
                 >
-                  아카이브 등록
+                  사진 아카이빙 등록
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
     </div>
   );
 }

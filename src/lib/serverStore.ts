@@ -4,6 +4,7 @@ import {
   GalleryFolder,
   GalleryImage,
   MaterialSample,
+  DrawingRequest,
 } from "@/types";
 import {
   initialWorkItems,
@@ -150,9 +151,43 @@ class ServerStore {
     this.materials = [newMat, ...this.materials];
     return newMat;
   }
+
+
+  // Drawing Requests
+  private drawingRequests: DrawingRequest[] = [];
+
+  getDrawingRequests(workItemId?: string): DrawingRequest[] {
+    if (workItemId) {
+      return this.drawingRequests.filter((r) => r.workItemId === workItemId);
+    }
+    return this.drawingRequests;
+  }
+
+  addDrawingRequest(req: Omit<DrawingRequest, "id" | "createdAt" | "updatedAt">): DrawingRequest {
+    const newReq: DrawingRequest = {
+      ...req,
+      id: `req-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.drawingRequests = [newReq, ...this.drawingRequests];
+    return newReq;
+  }
+
+  updateDrawingRequest(id: string, updates: Partial<DrawingRequest>): DrawingRequest | null {
+    const index = this.drawingRequests.findIndex((r) => r.id === id);
+    if (index === -1) return null;
+    this.drawingRequests[index] = {
+      ...this.drawingRequests[index],
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    return this.drawingRequests[index];
+  }
 }
 
 // Global singleton instance
 const globalForStore = globalThis as unknown as { serverStore?: ServerStore };
 export const serverStore = globalForStore.serverStore ?? new ServerStore();
 if (process.env.NODE_ENV !== "production") globalForStore.serverStore = serverStore;
+

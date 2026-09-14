@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
         (item) =>
           item.title.toLowerCase().includes(query) ||
           item.assignee.toLowerCase().includes(query) ||
-          item.category.toLowerCase().includes(query)
+          (item.category || "").toLowerCase().includes(query)
       );
     }
     return NextResponse.json({ success: true, count: items.length, data: items });

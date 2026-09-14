@@ -24,7 +24,7 @@ import { KanbanBoard } from "@/components/dashboard/KanbanBoard";
 
 export default function DashboardPage() {
   const { workItems, asItems, metrics, setQuickModalType } = useData();
-  const [activeTab, setActiveTab] = useState<"both" | "gantt" | "kanban">("both");
+  const [showGantt, setShowGantt] = useState(false);
 
   const urgentAsList = asItems.filter(
     (item) => item.priority === "긴급" && item.resultStatus !== "완료"
@@ -191,72 +191,63 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* View Mode Selector Tabs */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab("both")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-              activeTab === "both"
-                ? "bg-slate-900 text-white shadow-xs"
-                : "text-slate-600 hover:bg-slate-200/60"
-            }`}
-          >
-            통합 보기 (간트 + 칸반)
-          </button>
-          <button
-            onClick={() => setActiveTab("gantt")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-              activeTab === "gantt"
-                ? "bg-slate-900 text-white shadow-xs"
-                : "text-slate-600 hover:bg-slate-200/60"
-            }`}
-          >
-            <CalendarDays className="w-3.5 h-3.5" />
-            <span>간트차트 타임라인</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("kanban")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-              activeTab === "kanban"
-                ? "bg-slate-900 text-white shadow-xs"
-                : "text-slate-600 hover:bg-slate-200/60"
-            }`}
-          >
-            <ListTodo className="w-3.5 h-3.5" />
-            <span>칸반 상태 보드</span>
-          </button>
-        </div>
-
-        <Link
-          href="/work"
-          className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
-        >
-          <span>업무 전체 관리</span>
-          <ChevronRight className="w-3.5 h-3.5" />
-        </Link>
-      </div>
-
-      {/* Gantt Chart Section */}
-      {(activeTab === "both" || activeTab === "gantt") && (
-        <section className="space-y-3">
-          <GanttChart items={workItems} />
-        </section>
-      )}
-
-      {/* Kanban Board Section */}
-      {(activeTab === "both" || activeTab === "kanban") && (
-        <section className="space-y-3 pt-2">
-          <div className="flex items-center justify-between">
+      {/* Kanban Board Section (Primary & Top View) */}
+      <section className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
+          <div className="flex items-center gap-2">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <ListTodo className="w-5 h-5 text-blue-600" />
-              <span>진행 상태별 작업 칸반 (Kanban Cards)</span>
+              <span>현장 공정 칸반 보드 (Kanban Cards)</span>
             </h3>
-            <span className="text-xs text-slate-500">
-              카드의 버튼을 클릭하여 대기 → 진행 → 완료 상태를 실시간 변경할 수 있습니다.
+            <span className="text-xs text-slate-500 hidden md:inline">
+              (상태 클릭/드래그하여 대기 → 진행 → 시공 완료 관리)
             </span>
           </div>
-          <KanbanBoard items={workItems} />
+
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setShowGantt(!showGantt)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                showGantt
+                  ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                  : "bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200"
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5 text-indigo-500" />
+              <span>간트 차트 {showGantt ? "접기 ✕" : "보기 (옵션)"}</span>
+            </button>
+
+            <Link
+              href="/work"
+              className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 shrink-0"
+            >
+              <span>업무 전체 관리</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+
+        <KanbanBoard items={workItems} />
+      </section>
+
+      {/* Optional Gantt Chart Section (Shown only when turned on) */}
+      {showGantt && (
+        <section className="space-y-3 pt-2 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between bg-indigo-50/70 p-3.5 rounded-xl border border-indigo-100">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="w-4 h-4 text-indigo-600" />
+              <h3 className="text-xs sm:text-sm font-bold text-indigo-950">
+                전체 현장 공정 타임라인 (간트 차트 옵션)
+              </h3>
+            </div>
+            <button
+              onClick={() => setShowGantt(false)}
+              className="text-xs text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer px-2 py-1 bg-white rounded-md border border-indigo-200 shadow-2xs"
+            >
+              차트 접기 ✕
+            </button>
+          </div>
+          <GanttChart items={workItems} />
         </section>
       )}
 
