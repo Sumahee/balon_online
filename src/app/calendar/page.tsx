@@ -453,14 +453,14 @@ export default function CalendarPage() {
                   key={idx}
                   onClick={handleCellClick}
                   className={cn(
-                    "min-h-[130px] p-2 flex flex-col justify-between transition group hover:bg-blue-50/40 cursor-pointer relative select-none",
+                    "min-h-[140px] sm:min-h-[160px] lg:min-h-[180px] xl:min-h-[200px] p-2 sm:p-2.5 flex flex-col justify-between transition group hover:bg-blue-50/40 cursor-pointer relative select-none",
                     day.isCurrentMonth ? "bg-white" : "bg-slate-50/70 text-slate-400"
                   )}
                 >
                   <div className="flex items-center justify-between font-mono font-bold mb-1">
                     <span
                       className={cn(
-                        "text-xs px-2 py-0.5 rounded-full flex items-center gap-1",
+                        "text-xs sm:text-sm px-2 py-0.5 rounded-full flex items-center gap-1",
                         isSunday
                           ? "text-rose-600 font-extrabold"
                           : isSaturday
@@ -472,14 +472,14 @@ export default function CalendarPage() {
                     </span>
 
                     {dayEvents.length > 0 && (
-                      <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                      <span className="text-[10px] sm:text-xs font-extrabold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
                         {dayEvents.length}건
                       </span>
                     )}
                   </div>
 
                   {/* Day Event List Cards (Work & A/S) */}
-                  <div className="flex-1 space-y-1.5 overflow-y-auto max-h-28 scrollbar-thin">
+                  <div className="flex-1 space-y-1.5 overflow-y-auto max-h-36 sm:max-h-44 lg:max-h-56 scrollbar-thin">
                     {dayEvents.map((evt) => {
                       if (evt.type === "as" && evt.originalAsItem) {
                         const asItem = evt.originalAsItem;
