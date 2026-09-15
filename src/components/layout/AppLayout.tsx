@@ -1,6 +1,7 @@
 "use client";
 
 import React, { ReactNode } from "react";
+import { AuthProvider } from "@/context/AuthContext";
 import { DataProvider } from "@/context/DataContext";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
@@ -8,7 +9,8 @@ import { QuickModals } from "@/components/layout/QuickModals";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   return (
-    <DataProvider>
+    <AuthProvider>
+      <DataProvider>
       <div className="min-h-screen bg-slate-50 flex">
         {/* Left Fixed Sidebar */}
         <Sidebar />
@@ -32,6 +34,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         {/* Global Quick Action Modals */}
         <QuickModals />
       </div>
-    </DataProvider>
+      </DataProvider>
+    </AuthProvider>
   );
 }

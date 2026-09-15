@@ -37,6 +37,7 @@ import {
 
 import { WorkItem, WorkStatus, AttachmentItem, Priority, CardType, DeadlineType, DrawingRequest, DrawingType, ClientInfo, POST_BAR_COLORS } from "@/types";
 import { useData } from "@/context/DataContext";
+import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
 import { getMaterialOrders } from "@/lib/materialUtils";
@@ -49,6 +50,7 @@ interface TaskDetailModalProps {
 
 export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
   const { workItems, updateWorkItem, addComment, deleteComment, deleteCommentImage, deletePhotoFromWorkItem } = useData();
+  const { user } = useAuth();
 
   // Reactive subscription to live item in DataContext
   const liveItem = item ? (workItems.find((w) => w.id === item.id) || item) : null;
@@ -76,7 +78,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
   const [editSiteContactPhone, setEditSiteContactPhone] = useState(liveItem?.siteContactPhone || "");
   const [editPostColor, setEditPostColor] = useState(liveItem?.postColor || "11 다크그레이");
   const [editBoardColor, setEditBoardColor] = useState(liveItem?.boardColor || "PET 18T 화이트");
-  const [editDrawingAssignee, setEditDrawingAssignee] = useState(liveItem?.drawingAssignee || liveItem?.assignee || "김진우 실장");
+  const [editDrawingAssignee, setEditDrawingAssignee] = useState(user?.name || liveItem?.drawingAssignee || liveItem?.assignee || "김진우 실장");
   const [clientsList, setClientsList] = useState<ClientInfo[]>([]);
 
   // Load clients list for autocomplete datalist
@@ -280,7 +282,15 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
   const handleSendDrawingRequest = async () => {
     if (!liveItem) return;
     setIsSendingReq(true);
+    const assignedUser = user?.name || editDrawingAssignee || liveItem.drawingAssignee || liveItem.assignee || "바론 담당자";
+
     try {
+      // Auto assign logged-in user to this work item on drawing action
+      await updateWorkItem(liveItem.id, {
+        drawingAssignee: assignedUser,
+        assignee: assignedUser,
+      });
+
       const res = await fetch("/api/drawing-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -293,7 +303,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
           contactPhone: editSiteContactPhone || liveItem.siteContactPhone || "010-미입력", // 업체로부터 받은 현장 담당자 연락처
           postColor: editPostColor || liveItem.postColor || "11 다크그레이",
           boardColor: editBoardColor || liveItem.boardColor || "PET 18T 화이트",
-          drawingAssignee: editDrawingAssignee || liveItem.drawingAssignee || liveItem.assignee || "김진우 실장 (로그인 유저)",
+          drawingAssignee: assignedUser,
           title: liveItem.title,
           description: description || liveItem.description || liveItem.notes,
         }),
@@ -301,7 +311,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
       const data = await res.json();
       if (data.success && data.request) {
         setDrawingReq(data.request);
-        setReqToast("바론웹으로 도면 작업 요청 정보가 전송되었습니다! 🚀 (도면 정보 8종 자동 전달됨)");
+        setReqToast(`바론웹으로 도면 작업 요청이 전송되었습니다! 🚀 (담당자: ${assignedUser} 자동 배정 완료)`);
         setTimeout(() => setReqToast(null), 4500);
       }
     } catch (err) {

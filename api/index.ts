@@ -10,6 +10,7 @@ import * as materialsHandler from "@/lib/api-handlers/materials";
 import * as dashboardHandler from "@/lib/api-handlers/dashboard";
 import * as usersHandler from "@/lib/api-handlers/users";
 import * as drawerHandler from "@/lib/api-handlers/drawer";
+import * as authHandler from "@/lib/api-handlers/auth";
 
 /**
  * ⚡ [Vercel 최상단 가상 API 서버 통합 핸들러]
@@ -61,6 +62,8 @@ export async function GET(request: NextRequest, context?: RouteContext) {
         return await dashboardHandler.GET();
       case "users":
         return await usersHandler.GET();
+      case "auth":
+        return await authHandler.VERIFY(request);
       case "":
         return NextResponse.json({
           success: true,
@@ -110,6 +113,8 @@ export async function POST(request: NextRequest, context?: RouteContext) {
         return await galleryHandler.POST(request);
       case "materials":
         return await materialsHandler.POST(request);
+      case "auth":
+        return await authHandler.LOGIN(request);
       case "drawer":
         if (subPath === "calculate" || !subPath) {
           return await drawerHandler.POST(request);

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useData } from "@/context/DataContext";
+import { useAuth } from "@/context/AuthContext";
 import { TaskDetailModal } from "@/components/dashboard/TaskDetailModal";
 
 interface KanbanBoardProps {
@@ -29,6 +30,7 @@ interface KanbanBoardProps {
 
 export function KanbanBoard({ items }: KanbanBoardProps) {
   const { advanceWorkStatus, updateWorkItem, setQuickModalType } = useData();
+  const { user } = useAuth();
   const [selectedTask, setSelectedTask] = useState<WorkItem | null>(null);
   const [mobileActiveTab, setMobileActiveTab] = useState<WorkStatus | "전체">("전체");
 
@@ -375,7 +377,18 @@ export function KanbanBoard({ items }: KanbanBoardProps) {
                         >
                           {col.status === "대기" && (
                             <button
-                              onClick={() => advanceWorkStatus(task.id)}
+                              onClick={() => {
+                                if (user?.name) {
+                                  updateWorkItem(task.id, {
+                                    status: "오피스",
+                                    progress: 40,
+                                    assignee: user.name,
+                                    drawingAssignee: user.name,
+                                  });
+                                } else {
+                                  advanceWorkStatus(task.id);
+                                }
+                              }}
                               className="w-full py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
                             >
                               <span>오피스 인계 (도면작업)</span>

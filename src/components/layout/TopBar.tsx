@@ -10,9 +10,13 @@ import {
   Calendar,
   X,
   ExternalLink,
+  User as UserIcon,
+  LogOut,
+  LogIn,
 } from "lucide-react";
 import Link from "next/link";
 import { useData } from "@/context/DataContext";
+import { useAuth } from "@/context/AuthContext";
 
 const PAGE_TITLES: Record<string, { title: string; subtitle: string; category: string }> = {
   "/": {
@@ -50,6 +54,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle: string; category: s
 export function TopBar() {
   const pathname = usePathname();
   const { metrics, asItems, setQuickModalType } = useData();
+  const { user, logout } = useAuth();
   const [showAlertMenu, setShowAlertMenu] = useState(false);
 
   const pageInfo = PAGE_TITLES[pathname] || {
@@ -161,14 +166,33 @@ export function TopBar() {
           <span>새 업무 등록</span>
         </button>
 
-        {/* Quick Action Button: A/S 접수 */}
-        <button
-          onClick={() => setQuickModalType("as")}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
-        >
-          <Wrench className="w-3.5 h-3.5" />
-          <span>A/S 접수</span>
-        </button>
+        {/* User Auth Profile Badge & Action */}
+        {user ? (
+          <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+            <div className="hidden md:flex flex-col items-end text-xs">
+              <span className="font-bold text-slate-800 leading-tight">{user.name}</span>
+              <span className="text-[10px] text-blue-600 font-medium">{user.role}</span>
+            </div>
+            <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+              {user.name.slice(0, 1)}
+            </div>
+            <button
+              onClick={logout}
+              title="로그아웃"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <Link
+            href="/login"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-xs font-semibold shadow-xs transition active:scale-95"
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            <span>직원 로그인</span>
+          </Link>
+        )}
       </div>
     </header>
   );

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Plus, Wrench, Calendar, MapPin, Building, User, FileText, Phone, Palette, Layers, UserCheck, Sparkles } from "lucide-react";
 import { useData } from "@/context/DataContext";
+import { useAuth } from "@/context/AuthContext";
 import { Priority, WorkItem, CardType, DeadlineType, ClientInfo, UserInfo, MaterialOrderItem, DrawingType, AttachmentItem, POST_BAR_COLORS } from "@/types";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
 import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
@@ -10,10 +11,17 @@ import { cn } from "@/lib/utils";
 
 export function QuickModals() {
   const { quickModalType, setQuickModalType, addWorkItem, addAsItem } = useData();
+  const { user } = useAuth();
 
   // Dynamic Client and Staff lists loaded from shared DB
   const [clientsList, setClientsList] = useState<ClientInfo[]>([]);
   const [staffList, setStaffList] = useState<UserInfo[]>([]);
+
+  useEffect(() => {
+    if (user?.name) {
+      setWorkForm((prev) => ({ ...prev, drawingAssignee: user.name }));
+    }
+  }, [user?.name]);
 
   useEffect(() => {
     fetch("/api/clients")
