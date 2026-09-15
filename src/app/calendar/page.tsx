@@ -110,6 +110,7 @@ export default function CalendarPage() {
   // Selected item for Detail Modal
   const [selectedItem, setSelectedItem] = useState<WorkItem | null>(null);
   const [selectedAsItem, setSelectedAsItem] = useState<AsItem | null>(null);
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
 
   // New item modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -828,15 +829,23 @@ export default function CalendarPage() {
               {/* 조치 결과 사진 갤러리 */}
               {((selectedAsItem.resultPhotos && selectedAsItem.resultPhotos.length > 0) || (selectedAsItem.images && selectedAsItem.images.length > 0)) && (
                 <div>
-                  <span className="font-bold text-slate-700 block mb-1.5">📷 현장 조치 사진 ({(selectedAsItem.resultPhotos || selectedAsItem.images || []).length}장)</span>
+                  <span className="font-bold text-slate-700 block mb-1.5">📷 현장 조치 사진 ({(selectedAsItem.resultPhotos || selectedAsItem.images || []).length}장) - 클릭 시 크게 보기</span>
                   <div className="flex flex-wrap gap-2">
                     {(selectedAsItem.resultPhotos || selectedAsItem.images || []).map((imgUrl: string, idx: number) => (
-                      <img
+                      <div
                         key={idx}
-                        src={imgUrl}
-                        alt={`조치사진 #${idx + 1}`}
-                        className="w-20 h-20 rounded-xl border border-slate-200 object-cover shadow-2xs hover:scale-105 transition"
-                      />
+                        onClick={() => setPreviewPhotoUrl(imgUrl)}
+                        className="w-20 h-20 rounded-xl border border-slate-200 overflow-hidden relative group cursor-pointer shadow-2xs hover:scale-105 transition"
+                      >
+                        <img
+                          src={imgUrl}
+                          alt={`조치사진 #${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-white">
+                          <Sparkles className="w-4 h-4 text-white" />
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -851,6 +860,28 @@ export default function CalendarPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Photo Lightbox Modal for Calendar View */}
+      {previewPhotoUrl && (
+        <div
+          onClick={() => setPreviewPhotoUrl(null)}
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in"
+        >
+          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center">
+            <img
+              src={previewPhotoUrl}
+              alt="조치 사진 크게 보기"
+              className="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl border border-slate-700"
+            />
+            <button
+              onClick={() => setPreviewPhotoUrl(null)}
+              className="absolute top-4 right-4 p-2 bg-slate-900/90 text-white hover:bg-slate-800 rounded-full transition cursor-pointer"
+            >
+              ✕
+            </button>
           </div>
         </div>
       )}
