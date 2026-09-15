@@ -11,8 +11,15 @@ import { createClient, Client } from "@libsql/client";
  * 안전한 인메모리 / 로컬 Fallback 상태로 동작합니다.
  */
 
-const url = process.env.TURSO_DATABASE_URL;
-const authToken = process.env.TURSO_AUTH_TOKEN;
+const url =
+  process.env.TURSO_DATABASE_URL ||
+  process.env.VITE_TURSO_DATABASE_URL ||
+  process.env.NEXT_PUBLIC_TURSO_DATABASE_URL;
+
+const authToken =
+  process.env.TURSO_AUTH_TOKEN ||
+  process.env.VITE_TURSO_AUTH_TOKEN ||
+  process.env.NEXT_PUBLIC_TURSO_AUTH_TOKEN;
 
 let client: Client | null = null;
 

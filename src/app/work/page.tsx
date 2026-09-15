@@ -19,7 +19,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useData } from "@/context/DataContext";
-import { WorkItem, Priority, WorkStatus, MaterialOrderItem } from "@/types";
+import { WorkItem, Priority, WorkStatus, MaterialOrderItem, POST_BAR_COLORS } from "@/types";
 import { cn } from "@/lib/utils";
 import { KanbanBoard } from "@/components/dashboard/KanbanBoard";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
@@ -553,13 +553,17 @@ export default function WorkBoardPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">포스트바 컬러</label>
-                      <input
-                        type="text"
-                        placeholder="예: 흑니켈, 실버, 골드..."
-                        value={editingItem.postColor || "흑니켈"}
+                      <select
+                        value={editingItem.postColor || "11 다크그레이"}
                         onChange={(e) => setEditingItem({ ...editingItem, postColor: e.target.value })}
-                        className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg font-bold"
-                      />
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold bg-white"
+                      >
+                        {POST_BAR_COLORS.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">합판 컬러 (종류)</label>

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Plus, Wrench, Calendar, MapPin, Building, User, FileText, Phone, Palette, Layers, UserCheck, Sparkles } from "lucide-react";
 import { useData } from "@/context/DataContext";
-import { Priority, WorkItem, CardType, DeadlineType, ClientInfo, UserInfo, MaterialOrderItem, DrawingType, AttachmentItem } from "@/types";
+import { Priority, WorkItem, CardType, DeadlineType, ClientInfo, UserInfo, MaterialOrderItem, DrawingType, AttachmentItem, POST_BAR_COLORS } from "@/types";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
 import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
 import { cn } from "@/lib/utils";
@@ -60,7 +60,7 @@ export function QuickModals() {
     deadlineType: "시공일",
     deliveryDate: new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0],
     siteContactPhone: "",
-    postColor: "흑니켈",
+    postColor: "11 다크그레이",
     boardColor: "PET 18T 화이트",
     drawingAssignee: "김진우 실장 (로그인 유저)",
     priority: "보통",
@@ -146,7 +146,7 @@ export function QuickModals() {
       deadlineType: "시공일",
       deliveryDate: new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0],
       siteContactPhone: "",
-      postColor: "흑니켈",
+      postColor: "11 다크그레이",
       boardColor: "PET 18T 화이트",
       drawingAssignee: "김진우 실장 (로그인 유저)",
       priority: "보통",
@@ -418,14 +418,14 @@ export function QuickModals() {
                       <Palette className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                       <input
                         type="text"
-                        placeholder="예: 흑니켈, 실버, 골드..."
+                        placeholder="예: 11 다크그레이, 12 화이트, 13 실버..."
                         value={workForm.postColor}
                         onChange={(e) => setWorkForm({ ...workForm, postColor: e.target.value })}
                         className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900"
                       />
                     </div>
-                    <div className="flex items-center gap-1 mt-1.5">
-                      {["흑니켈", "실버", "골드", "화이트", "블랙"].map((c) => (
+                    <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                      {POST_BAR_COLORS.map((c) => (
                         <button
                           key={c}
                           type="button"

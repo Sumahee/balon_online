@@ -35,7 +35,7 @@ import {
   Camera,
 } from "lucide-react";
 
-import { WorkItem, WorkStatus, AttachmentItem, Priority, CardType, DeadlineType, DrawingRequest } from "@/types";
+import { WorkItem, WorkStatus, AttachmentItem, Priority, CardType, DeadlineType, DrawingRequest, DrawingType, ClientInfo, POST_BAR_COLORS } from "@/types";
 import { useData } from "@/context/DataContext";
 import { cn } from "@/lib/utils";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
@@ -66,6 +66,75 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
   const [drawingReq, setDrawingReq] = useState<DrawingRequest | null>(null);
   const [isSendingReq, setIsSendingReq] = useState(false);
   const [reqToast, setReqToast] = useState<string | null>(null);
+
+  // 8 Specs Editable States (도면 전송 사양 8종 수정 상태)
+  const [isEditingSpecs, setIsEditingSpecs] = useState(false);
+  const [editDrawingType, setEditDrawingType] = useState<DrawingType>(liveItem?.drawingType || "옴니버스");
+  const [editClientName, setEditClientName] = useState(liveItem?.clientName || "");
+  const [editSiteAddress, setEditSiteAddress] = useState(liveItem?.siteAddress || "");
+  const [editDeliveryDate, setEditDeliveryDate] = useState(liveItem?.deliveryDate || liveItem?.dueDate || "");
+  const [editSiteContactPhone, setEditSiteContactPhone] = useState(liveItem?.siteContactPhone || "");
+  const [editPostColor, setEditPostColor] = useState(liveItem?.postColor || "11 다크그레이");
+  const [editBoardColor, setEditBoardColor] = useState(liveItem?.boardColor || "PET 18T 화이트");
+  const [editDrawingAssignee, setEditDrawingAssignee] = useState(liveItem?.drawingAssignee || liveItem?.assignee || "김진우 실장");
+  const [clientsList, setClientsList] = useState<ClientInfo[]>([]);
+
+  // Load clients list for autocomplete datalist
+  React.useEffect(() => {
+    fetch("/api/clients")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.clients)) {
+          setClientsList(data.clients);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Sync edit states whenever liveItem updates
+  React.useEffect(() => {
+    if (liveItem) {
+      setEditDrawingType(liveItem.drawingType || "옴니버스");
+      setEditClientName(liveItem.clientName || "");
+      setEditSiteAddress(liveItem.siteAddress || "");
+      setEditDeliveryDate(liveItem.deliveryDate || liveItem.dueDate || "");
+      setEditSiteContactPhone(liveItem.siteContactPhone || "");
+      setEditPostColor(liveItem.postColor || "11 다크그레이");
+      setEditBoardColor(liveItem.boardColor || "PET 18T 화이트");
+      setEditDrawingAssignee(liveItem.drawingAssignee || liveItem.assignee || "김진우 실장");
+    }
+  }, [
+    liveItem?.id,
+    liveItem?.drawingType,
+    liveItem?.clientName,
+    liveItem?.siteAddress,
+    liveItem?.deliveryDate,
+    liveItem?.dueDate,
+    liveItem?.siteContactPhone,
+    liveItem?.postColor,
+    liveItem?.boardColor,
+    liveItem?.drawingAssignee,
+    liveItem?.assignee,
+  ]);
+
+  const handleSaveSpecs = async () => {
+    if (!liveItem) return;
+    await updateWorkItem(liveItem.id, {
+      drawingType: editDrawingType,
+      clientName: editClientName.trim() || liveItem.clientName,
+      siteAddress: editSiteAddress.trim(),
+      deliveryDate: editDeliveryDate,
+      dueDate: editDeliveryDate,
+      siteContactPhone: editSiteContactPhone.trim(),
+      postColor: editPostColor,
+      boardColor: editBoardColor.trim(),
+      drawingAssignee: editDrawingAssignee,
+      assignee: editDrawingAssignee,
+    });
+    setIsEditingSpecs(false);
+    setReqToast("도면 전송 8종 사양 정보가 실시간 저장되었습니다! ✨");
+    setTimeout(() => setReqToast(null), 3000);
+  };
 
   // PDF Viewer Modal
   const [activePdfUrl, setActivePdfUrl] = useState<string | null>(null);
@@ -209,24 +278,24 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
   if (!item) return null;
 
   const handleSendDrawingRequest = async () => {
-    if (!item) return;
+    if (!liveItem) return;
     setIsSendingReq(true);
     try {
       const res = await fetch("/api/drawing-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          workItemId: item.id,
-          drawingType: item.drawingType || "옴니버스",
-          clientName: item.clientName,
-          siteAddress: item.siteAddress || "미지정 현장",
-          deliveryDate: item.deliveryDate || item.dueDate,
-          contactPhone: item.siteContactPhone || "010-미입력", // 업체로부터 받은 현장 담당자 연락처
-          postColor: item.postColor || "흑니켈",
-          boardColor: item.boardColor || "PET 18T 화이트",
-          drawingAssignee: item.drawingAssignee || item.assignee || "김진우 실장 (로그인 유저)",
-          title: item.title,
-          description: description || item.description || item.notes,
+          workItemId: liveItem.id,
+          drawingType: editDrawingType || liveItem.drawingType || "옴니버스",
+          clientName: editClientName || liveItem.clientName,
+          siteAddress: editSiteAddress || liveItem.siteAddress || "미지정 현장",
+          deliveryDate: editDeliveryDate || liveItem.deliveryDate || liveItem.dueDate,
+          contactPhone: editSiteContactPhone || liveItem.siteContactPhone || "010-미입력", // 업체로부터 받은 현장 담당자 연락처
+          postColor: editPostColor || liveItem.postColor || "11 다크그레이",
+          boardColor: editBoardColor || liveItem.boardColor || "PET 18T 화이트",
+          drawingAssignee: editDrawingAssignee || liveItem.drawingAssignee || liveItem.assignee || "김진우 실장 (로그인 유저)",
+          title: liveItem.title,
+          description: description || liveItem.description || liveItem.notes,
         }),
       });
       const data = await res.json();
@@ -701,46 +770,283 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                 </button>
               </div>
 
-              {/* 📋 도면 프로그램 전송 8개 필수 데이터 요약 표 */}
-              <div className="p-3.5 bg-white/90 rounded-xl border border-indigo-100 text-xs space-y-2">
-                <div className="flex items-center justify-between font-extrabold text-slate-900 border-b border-indigo-50 pb-2">
-                  <span>📋 도면 프로그램 전송 정보 (8종 사양)</span>
-                  <span className="text-[11px] font-bold text-indigo-600">도면 담당자: {item.drawingAssignee || item.assignee || "김진우 실장 (로그인)"}</span>
+              {/* 📋 도면 프로그램 전송 8개 필수 데이터 사양 카드 (실시간 수정 지원) */}
+              <div className={cn(
+                "p-4 rounded-2xl border transition-all text-xs space-y-3",
+                isEditingSpecs
+                  ? "bg-white border-2 border-indigo-400 shadow-md ring-4 ring-indigo-500/10"
+                  : "bg-white/90 border border-indigo-100 shadow-2xs"
+              )}>
+                <div className="flex items-center justify-between font-extrabold text-slate-900 border-b border-indigo-100 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">📋 도면 프로그램 전송 정보 (8종 사양)</span>
+                    {isEditingSpecs ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-extrabold border border-amber-300 animate-pulse">
+                        ✏️ 사양 정보 수정 중
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                        도면 담당자: {liveItem?.drawingAssignee || liveItem?.assignee || "김진우 실장"}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    {isEditingSpecs ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleSaveSpecs}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
+                          <span>사양 저장</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (liveItem) {
+                              setEditDrawingType(liveItem.drawingType || "옴니버스");
+                              setEditClientName(liveItem.clientName || "");
+                              setEditSiteAddress(liveItem.siteAddress || "");
+                              setEditDeliveryDate(liveItem.deliveryDate || liveItem.dueDate || "");
+                              setEditSiteContactPhone(liveItem.siteContactPhone || "");
+                              setEditPostColor(liveItem.postColor || "11 다크그레이");
+                              setEditBoardColor(liveItem.boardColor || "PET 18T 화이트");
+                              setEditDrawingAssignee(liveItem.drawingAssignee || liveItem.assignee || "김진우 실장");
+                            }
+                            setIsEditingSpecs(false);
+                          }}
+                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                        >
+                          취소
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingSpecs(true)}
+                        className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer hover:shadow-2xs"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>✏️ 사양 수정</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-                  <div className="p-2 bg-slate-50 rounded-lg">
-                    <span className="text-slate-400 block text-[10px] font-bold">도면 타입</span>
-                    <span className="font-extrabold text-slate-900">{item.drawingType || "옴니버스"}</span>
+
+                {isEditingSpecs ? (
+                  /* ✏️ EDIT MODE FORM GRID */
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-[11px] animate-in fade-in duration-200">
+                    {/* 1. 도면 타입 */}
+                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
+                      <label className="text-slate-600 block text-[10px] font-bold mb-1">도면 타입</label>
+                      <select
+                        value={editDrawingType}
+                        onChange={(e) => setEditDrawingType(e.target.value as DrawingType)}
+                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-extrabold text-indigo-900 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      >
+                        <option value="천정형">천정형</option>
+                        <option value="에보라">에보라</option>
+                        <option value="옴니버스">옴니버스</option>
+                        <option value="기타">기타</option>
+                      </select>
+                    </div>
+
+                    {/* 2. 업체명 */}
+                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
+                      <label className="text-slate-600 block text-[10px] font-bold mb-1">업체명</label>
+                      <input
+                        type="text"
+                        list="task-detail-clients-list"
+                        value={editClientName}
+                        onChange={(e) => setEditClientName(e.target.value)}
+                        placeholder="업체명 선택/입력"
+                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-bold text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      />
+                      <datalist id="task-detail-clients-list">
+                        {clientsList.map((c) => (
+                          <option key={c.id} value={c.name} />
+                        ))}
+                      </datalist>
+                    </div>
+
+                    {/* 3. 현장 주소 */}
+                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
+                      <label className="text-slate-600 block text-[10px] font-bold mb-1">현장 상세 주소</label>
+                      <input
+                        type="text"
+                        value={editSiteAddress}
+                        onChange={(e) => setEditSiteAddress(e.target.value)}
+                        placeholder="예: 반포동 104동"
+                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-bold text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* 4. 시공일 */}
+                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
+                      <label className="text-slate-600 block text-[10px] font-bold mb-1">시공일 (마감일)</label>
+                      <input
+                        type="date"
+                        value={editDeliveryDate}
+                        onChange={(e) => setEditDeliveryDate(e.target.value)}
+                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-bold text-indigo-700 font-mono text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* 5. 현장 담당자 연락처 */}
+                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
+                      <label className="text-slate-600 block text-[10px] font-bold mb-1">현장 담당자 연락처</label>
+                      <input
+                        type="text"
+                        value={editSiteContactPhone}
+                        onChange={(e) => setEditSiteContactPhone(e.target.value)}
+                        placeholder="010-0000-0000"
+                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-bold text-slate-900 font-mono text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* 6. 포스트바 컬러 */}
+                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
+                      <label className="text-slate-600 block text-[10px] font-bold mb-1">포스트바 컬러</label>
+                      <select
+                        value={editPostColor}
+                        onChange={(e) => setEditPostColor(e.target.value)}
+                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-bold text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      >
+                        {POST_BAR_COLORS.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* 7. 합판 컬러 (종류) */}
+                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
+                      <label className="text-slate-600 block text-[10px] font-bold mb-1">합판 컬러 (종류)</label>
+                      <input
+                        type="text"
+                        value={editBoardColor}
+                        onChange={(e) => setEditBoardColor(e.target.value)}
+                        placeholder="예: PET 18T 화이트"
+                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-bold text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* 8. 도면 담당자 */}
+                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
+                      <label className="text-slate-600 block text-[10px] font-bold mb-1">도면 담당자</label>
+                      <select
+                        value={editDrawingAssignee}
+                        onChange={(e) => setEditDrawingAssignee(e.target.value)}
+                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-bold text-indigo-700 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      >
+                        <option value="김진우 실장">김진우 실장</option>
+                        <option value="이민아 팀장">이민아 팀장</option>
+                        <option value="박상현 대리">박상현 대리</option>
+                        <option value="정성훈 과장">정성훈 과장</option>
+                      </select>
+                    </div>
                   </div>
-                  <div className="p-2 bg-slate-50 rounded-lg">
-                    <span className="text-slate-400 block text-[10px] font-bold">업체명</span>
-                    <span className="font-extrabold text-slate-900 truncate block">{item.clientName}</span>
+                ) : (
+                  /* 👁️ VIEW MODE GRID (Clickable to Edit) */
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                    <div
+                      onClick={() => setIsEditingSpecs(true)}
+                      className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
+                      title="클릭하여 도면 타입 수정"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 block text-[10px] font-bold">도면 타입</span>
+                        <span className="text-[10px] text-indigo-500 opacity-0 group-hover:opacity-100 font-bold transition">✏️</span>
+                      </div>
+                      <span className="font-extrabold text-slate-900 mt-0.5 block">{liveItem?.drawingType || "옴니버스"}</span>
+                    </div>
+
+                    <div
+                      onClick={() => setIsEditingSpecs(true)}
+                      className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
+                      title="클릭하여 업체명 수정"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 block text-[10px] font-bold">업체명</span>
+                        <span className="text-[10px] text-indigo-500 opacity-0 group-hover:opacity-100 font-bold transition">✏️</span>
+                      </div>
+                      <span className="font-extrabold text-slate-900 truncate block mt-0.5">{liveItem?.clientName}</span>
+                    </div>
+
+                    <div
+                      onClick={() => setIsEditingSpecs(true)}
+                      className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
+                      title="클릭하여 현장 주소 수정"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 block text-[10px] font-bold">현장 주소</span>
+                        <span className="text-[10px] text-indigo-500 opacity-0 group-hover:opacity-100 font-bold transition">✏️</span>
+                      </div>
+                      <span className="font-extrabold text-slate-900 truncate block mt-0.5">{liveItem?.siteAddress || "미지정"}</span>
+                    </div>
+
+                    <div
+                      onClick={() => setIsEditingSpecs(true)}
+                      className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
+                      title="클릭하여 시공일 수정"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 block text-[10px] font-bold">시공일</span>
+                        <span className="text-[10px] text-indigo-500 opacity-0 group-hover:opacity-100 font-bold transition">✏️</span>
+                      </div>
+                      <span className="font-extrabold text-indigo-700 font-mono mt-0.5 block">{liveItem?.deliveryDate || liveItem?.dueDate}</span>
+                    </div>
+
+                    <div
+                      onClick={() => setIsEditingSpecs(true)}
+                      className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
+                      title="클릭하여 현장 담당자 연락처 수정"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 block text-[10px] font-bold">현장 담당자 연락처</span>
+                        <span className="text-[10px] text-indigo-500 opacity-0 group-hover:opacity-100 font-bold transition">✏️</span>
+                      </div>
+                      <span className="font-extrabold text-slate-900 font-mono truncate block mt-0.5">{liveItem?.siteContactPhone || "미입력"}</span>
+                    </div>
+
+                    <div
+                      onClick={() => setIsEditingSpecs(true)}
+                      className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
+                      title="클릭하여 포스트바 컬러 수정"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 block text-[10px] font-bold">포스트바 컬러</span>
+                        <span className="text-[10px] text-indigo-500 opacity-0 group-hover:opacity-100 font-bold transition">✏️</span>
+                      </div>
+                      <span className="font-extrabold text-slate-900 mt-0.5 block">{liveItem?.postColor || "11 다크그레이"}</span>
+                    </div>
+
+                    <div
+                      onClick={() => setIsEditingSpecs(true)}
+                      className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
+                      title="클릭하여 합판 컬러 수정"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 block text-[10px] font-bold">합판 컬러 (종류)</span>
+                        <span className="text-[10px] text-indigo-500 opacity-0 group-hover:opacity-100 font-bold transition">✏️</span>
+                      </div>
+                      <span className="font-extrabold text-slate-900 truncate block mt-0.5">{liveItem?.boardColor || "PET 18T 화이트"}</span>
+                    </div>
+
+                    <div
+                      onClick={() => setIsEditingSpecs(true)}
+                      className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
+                      title="클릭하여 도면 담당자 수정"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 block text-[10px] font-bold">도면 담당자</span>
+                        <span className="text-[10px] text-indigo-500 opacity-0 group-hover:opacity-100 font-bold transition">✏️</span>
+                      </div>
+                      <span className="font-extrabold text-indigo-700 truncate block mt-0.5">{liveItem?.drawingAssignee || liveItem?.assignee}</span>
+                    </div>
                   </div>
-                  <div className="p-2 bg-slate-50 rounded-lg">
-                    <span className="text-slate-400 block text-[10px] font-bold">현장 주소</span>
-                    <span className="font-extrabold text-slate-900 truncate block">{item.siteAddress || "미지정"}</span>
-                  </div>
-                  <div className="p-2 bg-slate-50 rounded-lg">
-                    <span className="text-slate-400 block text-[10px] font-bold">시공일</span>
-                    <span className="font-extrabold text-indigo-700 font-mono">{item.deliveryDate || item.dueDate}</span>
-                  </div>
-                  <div className="p-2 bg-slate-50 rounded-lg">
-                    <span className="text-slate-400 block text-[10px] font-bold">현장 담당자 연락처</span>
-                    <span className="font-extrabold text-slate-900 font-mono truncate block">{item.siteContactPhone || "미입력"}</span>
-                  </div>
-                  <div className="p-2 bg-slate-50 rounded-lg">
-                    <span className="text-slate-400 block text-[10px] font-bold">포스트바 컬러</span>
-                    <span className="font-extrabold text-slate-900">{item.postColor || "흑니켈"}</span>
-                  </div>
-                  <div className="p-2 bg-slate-50 rounded-lg">
-                    <span className="text-slate-400 block text-[10px] font-bold">합판 컬러 (종류)</span>
-                    <span className="font-extrabold text-slate-900 truncate block">{item.boardColor || "PET 18T 화이트"}</span>
-                  </div>
-                  <div className="p-2 bg-slate-50 rounded-lg">
-                    <span className="text-slate-400 block text-[10px] font-bold">도면 담당자</span>
-                    <span className="font-extrabold text-indigo-700 truncate block">{item.drawingAssignee || item.assignee}</span>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Toast Message */}

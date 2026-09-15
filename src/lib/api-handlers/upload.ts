@@ -28,21 +28,26 @@ export async function POST(request: Request) {
       const baseName = path.basename(originalName, ext).replace(/[^\w\d가-힣-_]/g, "_");
       const uniqueName = `${Date.now()}_${baseName}${ext}`;
 
-      const uploadDir = path.join(process.cwd(), "public", "uploads");
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-
-      const filePath = path.join(uploadDir, uniqueName);
-      fs.writeFileSync(filePath, buffer);
-
-      const fileUrl = `/uploads/${uniqueName}`;
-      const fileSizeMb = (file.size / (1024 * 1024)).toFixed(2);
-      const sizeStr = file.size > 1024 * 1024 ? `${fileSizeMb} MB` : `${Math.round(file.size / 1024)} KB`;
-
       const isImage = file.type.startsWith("image/") || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(originalName);
       const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(originalName);
       const fileType = isPdf ? "pdf" : isImage ? "image" : "file";
+
+      let fileUrl = `/uploads/${uniqueName}`;
+      try {
+        const uploadDir = path.join(process.cwd(), "public", "uploads");
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        const filePath = path.join(uploadDir, uniqueName);
+        fs.writeFileSync(filePath, buffer);
+      } catch (fsErr) {
+        // Fallback for Vercel Serverless read-only filesystem
+        console.warn("[Upload] Local filesystem write failed (Serverless mode), using Base64 Data URL fallback:", fsErr);
+        const mimeType = file.type || (isPdf ? "application/pdf" : isImage ? "image/jpeg" : "application/octet-stream");
+        fileUrl = `data:${mimeType};base64,${buffer.toString("base64")}`;
+      }
+      const fileSizeMb = (file.size / (1024 * 1024)).toFixed(2);
+      const sizeStr = file.size > 1024 * 1024 ? `${fileSizeMb} MB` : `${Math.round(file.size / 1024)} KB`;
 
       return NextResponse.json({
         success: true,

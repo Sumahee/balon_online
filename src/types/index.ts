@@ -6,6 +6,17 @@ export type DeadlineType = '시공일' | '배송일' | '요청일';
 export type MaterialOrderStatus = '발주불필요' | '발주필요' | '발주완료';
 export type DrawingType = '천정형' | '에보라' | '옴니버스' | '기타';
 
+export const POST_BAR_COLORS = [
+  "11 다크그레이",
+  "12 화이트",
+  "13 실버",
+  "14 블랙",
+  "15 로즈골드",
+  "16 골드",
+] as const;
+
+export type PostBarColor = (typeof POST_BAR_COLORS)[number];
+
 export interface MaterialOrderItem {
   id: string;
   name: string; // e.g. "18T PET 합판 10장", "강화유리 2장"
