@@ -110,6 +110,7 @@ export default function CalendarPage() {
   // Selected item for Detail Modal
   const [selectedItem, setSelectedItem] = useState<WorkItem | null>(null);
   const [selectedAsItem, setSelectedAsItem] = useState<AsItem | null>(null);
+  const [selectedDayEvents, setSelectedDayEvents] = useState<{ dateStr: string; events: CalendarEvent[] } | null>(null);
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
 
   // New item modal state
@@ -478,9 +479,9 @@ export default function CalendarPage() {
                     )}
                   </div>
 
-                  {/* Day Event List Cards (Work & A/S) */}
-                  <div className="flex-1 space-y-1.5 overflow-y-auto max-h-36 sm:max-h-44 lg:max-h-56 scrollbar-thin">
-                    {dayEvents.map((evt) => {
+                  {/* Day Event List Cards (Work & A/S - 1줄 콤팩트 스타일) */}
+                  <div className="flex-1 space-y-1 overflow-y-auto max-h-36 sm:max-h-44 lg:max-h-56 scrollbar-none">
+                    {dayEvents.slice(0, 4).map((evt) => {
                       if (evt.type === "as" && evt.originalAsItem) {
                         const asItem = evt.originalAsItem;
                         return (
@@ -490,20 +491,15 @@ export default function CalendarPage() {
                               e.stopPropagation();
                               setSelectedAsItem(asItem);
                             }}
-                            className="p-1.5 rounded-lg border-2 border-rose-400 bg-rose-50/90 text-rose-950 font-extrabold text-[11px] leading-tight cursor-pointer transition shadow-2xs hover:scale-[1.02] space-y-1"
+                            className="flex items-center gap-1.5 px-1.5 py-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-950 border-l-4 border-rose-500 transition cursor-pointer text-[11px] font-bold truncate shadow-2xs group/chip"
+                            title={`[A/S] ${asItem.clientName} - ${asItem.reason}`}
                           >
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="truncate text-xs font-black flex items-center gap-1 text-rose-900">
-                                <span>🛠️</span>
-                                <span className="truncate">{evt.clientName} A/S</span>
-                              </span>
-                              <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-black shrink-0">
-                                {asItem.resultStatus}
-                              </span>
-                            </div>
-                            <div className="text-[10px] text-rose-800 truncate font-semibold">
-                              {asItem.reason}
-                            </div>
+                            <span className="text-[10px] font-extrabold px-1 py-0.2 rounded bg-rose-600 text-white shrink-0">
+                              🛠️ A/S
+                            </span>
+                            <span className="truncate font-bold">
+                              {asItem.clientName}, {asItem.siteAddress.split(" ")[0] || "현장"}
+                            </span>
                           </div>
                         );
                       }
@@ -522,22 +518,29 @@ export default function CalendarPage() {
                               setSelectedItem(item);
                             }}
                             className={cn(
-                              "p-1.5 rounded-lg border-2 text-[11px] leading-tight cursor-pointer transition shadow-2xs hover:scale-[1.02] space-y-1",
+                              "flex items-center justify-between gap-1 px-1.5 py-1 rounded transition cursor-pointer text-[11px] font-bold truncate shadow-2xs border-l-4 group/chip",
                               isCompleted
-                                ? "bg-blue-50/90 border-blue-500 text-blue-950 font-bold"
-                                : "bg-lime-50/80 border-lime-400 text-slate-900 font-bold"
+                                ? "bg-blue-50/90 hover:bg-blue-100 text-blue-950 border-blue-600 font-bold"
+                                : "bg-emerald-50/80 hover:bg-emerald-100 text-slate-900 border-emerald-500 font-bold"
                             )}
+                            title={`[${dType}] ${label}`}
                           >
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="truncate text-xs font-black">{label}</span>
-                              {renderDrawingTypeBadge(dType)}
-                            </div>
-
-                            <div className="flex items-center justify-between text-[9px] text-slate-500 font-medium">
-                              <span className="text-slate-600">[{item.deadlineType}]</span>
-                              {item.comments && item.comments.length > 0 && (
-                                <span className="text-amber-700 font-bold">💬 {item.comments.length}</span>
-                              )}
+                            <div className="flex items-center gap-1.5 min-w-0 truncate">
+                              <span
+                                className={cn(
+                                  "text-[9px] px-1 py-0.2 rounded font-extrabold shrink-0 text-white",
+                                  dType === "천정형"
+                                    ? "bg-emerald-600"
+                                    : dType === "에보라"
+                                    ? "bg-fuchsia-700"
+                                    : dType === "옴니버스"
+                                    ? "bg-purple-600"
+                                    : "bg-slate-600"
+                                )}
+                              >
+                                {dType}
+                              </span>
+                              <span className="truncate font-bold">{label}</span>
                             </div>
                           </div>
                         );
@@ -882,6 +885,93 @@ export default function CalendarPage() {
             >
               ✕
             </button>
+          </div>
+        </div>
+      )}
+      {/* DAY ALL EVENTS POPUP MODAL (+N개 더보기) */}
+      {selectedDayEvents && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white w-full max-w-lg rounded-2xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
+              <div className="flex items-center gap-2 font-bold text-sm">
+                <CalendarIcon className="w-5 h-5 text-blue-400" />
+                <span>{selectedDayEvents.dateStr} 전체 일정 목록 ({selectedDayEvents.events.length}건)</span>
+              </div>
+              <button
+                onClick={() => setSelectedDayEvents(null)}
+                className="text-slate-400 hover:text-white p-1 rounded cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-2.5 overflow-y-auto flex-1">
+              {selectedDayEvents.events.map((evt) => {
+                if (evt.type === "as" && evt.originalAsItem) {
+                  const asItem = evt.originalAsItem;
+                  return (
+                    <div
+                      key={evt.id}
+                      onClick={() => {
+                        setSelectedDayEvents(null);
+                        setSelectedAsItem(asItem);
+                      }}
+                      className="p-3 bg-rose-50 border border-rose-200 hover:bg-rose-100 rounded-xl transition cursor-pointer flex items-center justify-between text-xs"
+                    >
+                      <div>
+                        <div className="flex items-center gap-1.5 font-extrabold text-rose-950">
+                          <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px]">🛠️ A/S</span>
+                          <span>{asItem.clientName} ({asItem.siteAddress})</span>
+                        </div>
+                        <p className="text-slate-600 text-[11px] mt-1 line-clamp-1">{asItem.reason}</p>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-1 rounded bg-white text-rose-700 border border-rose-200 shrink-0">
+                        {asItem.resultStatus}
+                      </span>
+                    </div>
+                  );
+                }
+
+                if (evt.originalWorkItem) {
+                  const item = evt.originalWorkItem;
+                  const label = getCalendarCardLabel(item);
+                  const dType = getDrawingType(item);
+
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        setSelectedDayEvents(null);
+                        setSelectedItem(item);
+                      }}
+                      className="p-3 bg-slate-50 border border-slate-200 hover:bg-blue-50 hover:border-blue-300 rounded-xl transition cursor-pointer flex items-center justify-between text-xs"
+                    >
+                      <div>
+                        <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                          {renderDrawingTypeBadge(dType)}
+                          <span>{label}</span>
+                        </div>
+                        <p className="text-slate-500 text-[11px] mt-1">{item.title}</p>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-1 rounded bg-blue-100 text-blue-800 shrink-0">
+                        {item.status}
+                      </span>
+                    </div>
+                  );
+                }
+
+                return null;
+              })}
+            </div>
+
+            <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={() => setSelectedDayEvents(null)}
+                className="px-5 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl cursor-pointer"
+              >
+                닫기
+              </button>
+            </div>
           </div>
         </div>
       )}
