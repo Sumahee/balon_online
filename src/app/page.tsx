@@ -21,6 +21,7 @@ import {
 import { useData } from "@/context/DataContext";
 import { GanttChart } from "@/components/dashboard/GanttChart";
 import { KanbanBoard } from "@/components/dashboard/KanbanBoard";
+import CalendarPage from "@/app/calendar/page";
 
 export default function DashboardPage() {
   const { workItems, asItems, metrics, setQuickModalType } = useData();
@@ -31,7 +32,14 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="space-y-7">
+    <>
+      {/* Mobile Landing View: Full-Screen Scheduler (lg:hidden) */}
+      <div className="block lg:hidden -m-2 sm:-m-5">
+        <CalendarPage />
+      </div>
+
+      {/* Desktop Landing View: Full Interactive Dashboard (hidden lg:block) */}
+      <div className="hidden lg:block space-y-7">
       {/* Welcome & System Summary Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
         {/* Subtle background decoration */}
@@ -321,5 +329,6 @@ export default function DashboardPage() {
         </Link>
       </div>
     </div>
+    </>
   );
 }

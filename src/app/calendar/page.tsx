@@ -454,7 +454,7 @@ export default function CalendarPage() {
                   key={idx}
                   onClick={handleCellClick}
                   className={cn(
-                    "min-h-[140px] sm:min-h-[160px] lg:min-h-[180px] xl:min-h-[200px] p-2 sm:p-2.5 flex flex-col justify-between transition group hover:bg-blue-50/40 cursor-pointer relative select-none",
+                    "min-h-[95px] sm:min-h-[150px] lg:min-h-[180px] xl:min-h-[200px] p-1 sm:p-2.5 flex flex-col justify-between transition group hover:bg-blue-50/40 cursor-pointer relative select-none",
                     day.isCurrentMonth ? "bg-white" : "bg-slate-50/70 text-slate-400"
                   )}
                 >
