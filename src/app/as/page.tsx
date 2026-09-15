@@ -19,6 +19,12 @@ import {
   Edit2,
   Trash2,
   Filter,
+  Camera,
+  UploadCloud,
+  Eye,
+  Image as ImageIcon,
+  ZoomIn,
+  X,
 } from "lucide-react";
 import { useData } from "@/context/DataContext";
 import { AsItem, AsStatus, Priority } from "@/types";
@@ -36,6 +42,42 @@ export default function AsBoardPage() {
 
   // Edit modal
   const [editingItem, setEditingItem] = useState<AsItem | null>(null);
+
+  // Photo Preview Lightbox
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+
+  const handleResultPhotoUpload = (files: FileList | null) => {
+    if (!files || files.length === 0 || !editingItem) return;
+
+    const newPhotoUrls: string[] = [];
+    let count = 0;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        if (evt.target?.result) {
+          newPhotoUrls.push(evt.target.result as string);
+        }
+        count++;
+        if (count === files.length) {
+          const existing = editingItem.resultPhotos || editingItem.images || [];
+          setEditingItem({
+            ...editingItem,
+            resultPhotos: [...existing, ...newPhotoUrls],
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleRemoveResultPhoto = (index: number) => {
+    if (!editingItem) return;
+    const existing = editingItem.resultPhotos || editingItem.images || [];
+    setEditingItem({
+      ...editingItem,
+      resultPhotos: existing.filter((_: string, i: number) => i !== index),
+    });
+  };
 
   const filteredItems = asItems.filter((item) => {
     const query = searchQuery.toLowerCase();
@@ -304,8 +346,8 @@ export default function AsBoardPage() {
                 </div>
               </div>
 
-              {/* Reason & Resolution Details */}
-              <div className="space-y-1.5 text-xs">
+              {/* Reason & Resolution Details & Photos */}
+              <div className="space-y-2 text-xs">
                 <div>
                   <span className="font-bold text-slate-700">A/S 발생 사유:</span>
                   <p className="text-slate-800 mt-0.5 leading-relaxed bg-amber-50/50 p-2.5 rounded-lg border border-amber-100/80">
@@ -319,6 +361,30 @@ export default function AsBoardPage() {
                     <p className="text-slate-600 mt-0.5 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-200/60">
                       {item.resolutionDetails}
                     </p>
+                  </div>
+                )}
+
+                {/* 조치 결과 현장 사진 갤러리 */}
+                {((item.resultPhotos && item.resultPhotos.length > 0) || (item.images && item.images.length > 0)) && (
+                  <div>
+                    <span className="font-bold text-slate-700 flex items-center gap-1.5 mb-1.5">
+                      <Camera className="w-3.5 h-3.5 text-blue-600" />
+                      <span>조치 결과 현장 사진 ({(item.resultPhotos || item.images || []).length}장):</span>
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {(item.resultPhotos || item.images || []).map((imgUrl: string, idx: number) => (
+                        <div
+                          key={idx}
+                          onClick={() => setPreviewPhotoUrl(imgUrl)}
+                          className="w-16 h-16 rounded-xl border border-slate-200 overflow-hidden relative group cursor-pointer shadow-2xs hover:scale-105 transition"
+                        >
+                          <img src={imgUrl} alt={`조치 사진 #${idx + 1}`} className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-white">
+                            <ZoomIn className="w-4 h-4" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -535,18 +601,53 @@ export default function AsBoardPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  처리 내용 및 조치 결과
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    처리 내용 및 조치 결과
+                  </label>
+                  <label className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 cursor-pointer hover:bg-blue-100 transition">
+                    <Camera className="w-3.5 h-3.5 text-blue-600" />
+                    <span>📷 조치 사진 첨부</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => handleResultPhotoUpload(e.target.files)}
+                    />
+                  </label>
+                </div>
                 <textarea
                   rows={2}
-                  placeholder="예: 힌지 교체 완료, 레일 유격 조정 등"
+                  placeholder="예: 힌지 교체 완료, 레일 유격 조정 등 조치사항 입력..."
                   value={editingItem.resolutionDetails || ""}
                   onChange={(e) =>
                     setEditingItem({ ...editingItem, resolutionDetails: e.target.value })
                   }
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
+
+                {/* 첨부된 조치 결과 사진 썸네일 & 삭제 */}
+                {((editingItem.resultPhotos && editingItem.resultPhotos.length > 0) || (editingItem.images && editingItem.images.length > 0)) && (
+                  <div className="mt-2.5 space-y-1">
+                    <span className="text-[11px] font-bold text-slate-600">첨부된 조치 결과 현장 사진 ({(editingItem.resultPhotos || editingItem.images || []).length}장):</span>
+                    <div className="flex flex-wrap gap-2">
+                      {(editingItem.resultPhotos || editingItem.images || []).map((imgUrl: string, idx: number) => (
+                        <div key={idx} className="w-16 h-16 rounded-xl border border-slate-300 overflow-hidden relative group shadow-2xs">
+                          <img src={imgUrl} alt={`조치사진 #${idx + 1}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveResultPhoto(idx)}
+                            className="absolute top-1 right-1 p-0.5 bg-rose-600 text-white rounded-full opacity-80 hover:opacity-100 transition"
+                            title="사진 삭제"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
@@ -565,6 +666,28 @@ export default function AsBoardPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Photo Lightbox Modal */}
+      {previewPhotoUrl && (
+        <div
+          onClick={() => setPreviewPhotoUrl(null)}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in"
+        >
+          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center">
+            <img
+              src={previewPhotoUrl}
+              alt="조치 사진 확대"
+              className="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl border border-slate-700"
+            />
+            <button
+              onClick={() => setPreviewPhotoUrl(null)}
+              className="absolute top-4 right-4 p-2 bg-slate-900/80 text-white hover:bg-slate-800 rounded-full transition"
+            >
+              <X className="w-6 h-6" />
+            </button>
           </div>
         </div>
       )}

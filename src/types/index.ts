@@ -79,10 +79,13 @@ export interface AsItem {
   type: 'as';
   clientName: string; // 업체명
   constructDate: string; // 시공일
+  asDate?: string; // A/S 방문/조치 예정일 (YYYY-MM-DD, 기본값: constructDate)
   siteAddress: string; // 현장주소
   reason: string; // A/S 발생 사유
   resultStatus: AsStatus; // 접수 / 처리중 / 완료
   resolutionDetails?: string; // 처리내용/조치사항
+  resultPhotos?: string[]; // 조치 결과 현장 사진 URL/Base64 목록
+  images?: string[]; // 조치 결과 현장 사진 목록 (동의어)
   technician?: string; // 담당 기사
   contactPhone?: string; // 연락처
   priority: Priority;
