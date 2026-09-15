@@ -17,6 +17,7 @@ import {
   Sparkles,
   ShieldCheck,
   Building2,
+  ShoppingBag,
 } from "lucide-react";
 import { useData } from "@/context/DataContext";
 import { cn } from "@/lib/utils";
@@ -54,6 +55,12 @@ const NAV_ITEMS = [
     badgeKey: "galleryCount" as const,
   },
   {
+    name: "인터넷 자재구매",
+    path: "/purchases",
+    icon: ShoppingBag,
+    badgeKey: "purchaseCount" as const,
+  },
+  {
     name: "서랍장 자동화",
     path: "/drawer",
     icon: Calculator,
@@ -70,13 +77,14 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { metrics, images } = useData();
+  const { metrics, images, purchaseItems } = useData();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const badgeCounts = {
     workCount: metrics.inProgressTasks,
     asCount: metrics.urgentAsCount,
     galleryCount: images.length,
+    purchaseCount: purchaseItems ? purchaseItems.length : 0,
   };
 
   return (

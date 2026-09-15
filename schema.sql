@@ -134,6 +134,24 @@ CREATE TABLE IF NOT EXISTS drawing_requests (
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 8. 인터넷 자재구매 정보 테이블 (bo_online_purchases)
+CREATE TABLE IF NOT EXISTS bo_online_purchases (
+    id TEXT PRIMARY KEY,
+    mall_name TEXT NOT NULL,                        -- 쇼핑몰업체 (스마트스토어, 쿠팡 등)
+    store_name TEXT NOT NULL,                       -- 상호 (포장자재몰, N테이프 등)
+    item_name TEXT NOT NULL,                        -- 품목 (벤딩끈, 보호테이프 등)
+    size_spec TEXT,                                 -- 사이즈
+    color TEXT,                                     -- 색상
+    quantity INTEGER NOT NULL DEFAULT 1,            -- 수량
+    unit_price TEXT,                                -- 금액/단가 (개당 11,400원 등)
+    total_price INTEGER DEFAULT 0,                  -- 총금액 (숫자)
+    purchase_date TEXT NOT NULL,                    -- 구매날짜 (YYYY-MM-DD)
+    search_keyword TEXT,                            -- 검색방법 (검색어)
+    notes TEXT,                                     -- 기타 비고 (원산지, 박스수량 등)
+    photos TEXT,                                    -- 상품/자재 실물 사진 URL 목록 (JSON 문자열)
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 인덱스 생성 (조회 속도 최적화)
 CREATE INDEX IF NOT EXISTS idx_bo_work_items_status ON bo_work_items(status);
 CREATE INDEX IF NOT EXISTS idx_bo_work_items_delivery_date ON bo_work_items(delivery_date);
@@ -142,3 +160,5 @@ CREATE INDEX IF NOT EXISTS idx_bo_as_items_status ON bo_as_items(result_status);
 CREATE INDEX IF NOT EXISTS idx_bo_gallery_images_folder ON bo_gallery_images(folder_id);
 CREATE INDEX IF NOT EXISTS idx_drawing_requests_status ON drawing_requests(status);
 CREATE INDEX IF NOT EXISTS idx_drawing_requests_work ON drawing_requests(work_item_id);
+CREATE INDEX IF NOT EXISTS idx_bo_online_purchases_date ON bo_online_purchases(purchase_date);
+

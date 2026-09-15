@@ -256,6 +256,23 @@ export interface DrawingRequest {
   updatedAt: string;
 }
 
+export interface OnlinePurchaseItem {
+  id: string;
+  mallName: string; // 쇼핑몰업체 (스마트스토어, 쿠팡 등)
+  storeName: string; // 상호 (포장자재몰, N테이프 등)
+  itemName: string; // 품목 (벤딩끈/pp자동밴드, 보호테이프 등)
+  sizeSpec?: string; // 사이즈 (15mm*750m/6.6kg 등)
+  color?: string; // 색상 (옐로우, 투명, 백색 등)
+  quantity: number; // 수량 (5, 48, 12, 300 등)
+  unitPrice?: string; // 금액/단가 (개당 11,400원 등)
+  totalPrice?: number; // 총금액 계산용
+  purchaseDate: string; // 구매날짜 (YYYY-MM-DD)
+  searchKeyword?: string; // 검색방법 (보호테이프50mm 등)
+  notes?: string; // 기타 (중국산, 박스당16개 등)
+  photos?: string[]; // 상품/자재 실물 사진 URL 목록
+  createdAt: string;
+}
+
 export interface DashboardMetrics {
   totalProjects: number;
   inProgressTasks: number;

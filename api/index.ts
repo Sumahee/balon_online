@@ -11,6 +11,7 @@ import * as dashboardHandler from "@/lib/api-handlers/dashboard";
 import * as usersHandler from "@/lib/api-handlers/users";
 import * as drawerHandler from "@/lib/api-handlers/drawer";
 import * as authHandler from "@/lib/api-handlers/auth";
+import * as purchasesHandler from "@/lib/api-handlers/purchases";
 
 /**
  * ⚡ [Vercel 최상단 가상 API 서버 통합 핸들러]
@@ -64,6 +65,8 @@ export async function GET(request: NextRequest, context?: RouteContext) {
         return await usersHandler.GET();
       case "auth":
         return await authHandler.VERIFY(request);
+      case "purchases":
+        return await purchasesHandler.GET();
       case "":
         return NextResponse.json({
           success: true,
@@ -115,6 +118,8 @@ export async function POST(request: NextRequest, context?: RouteContext) {
         return await materialsHandler.POST(request);
       case "auth":
         return await authHandler.LOGIN(request);
+      case "purchases":
+        return await purchasesHandler.POST(request);
       case "drawer":
         if (subPath === "calculate" || !subPath) {
           return await drawerHandler.POST(request);
@@ -139,6 +144,8 @@ export async function PUT(request: NextRequest, context?: RouteContext) {
     switch (domain) {
       case "posts":
         return await postsHandler.PUT(request);
+      case "purchases":
+        return await purchasesHandler.PUT(request);
       default:
         return NextResponse.json(
           { success: false, message: `PUT method not supported for '/api/${domain}'` },
@@ -179,6 +186,8 @@ export async function DELETE(request: NextRequest, context?: RouteContext) {
         return await postsHandler.DELETE(request);
       case "gallery":
         return await galleryHandler.DELETE(request);
+      case "purchases":
+        return await purchasesHandler.DELETE(request);
       default:
         return NextResponse.json(
           { success: false, message: `DELETE method not supported for '/api/${domain}'` },

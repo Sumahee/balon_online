@@ -8,6 +8,7 @@ import {
   GalleryImage,
   MaterialSample,
   DashboardMetrics,
+  OnlinePurchaseItem,
 } from "@/types";
 import {
   initialWorkItems,
@@ -15,6 +16,7 @@ import {
   initialFolders,
   initialImages,
   initialMaterials,
+  initialPurchaseItems,
   getDashboardMetrics,
 } from "@/lib/dataStore";
 
@@ -24,6 +26,7 @@ interface DataContextType {
   folders: GalleryFolder[];
   images: GalleryImage[];
   materials: MaterialSample[];
+  purchaseItems: OnlinePurchaseItem[];
   metrics: DashboardMetrics;
   isLoading: boolean;
   addWorkItem: (item: Omit<WorkItem, "id" | "createdAt">) => Promise<void>;
@@ -38,6 +41,9 @@ interface DataContextType {
   addImage: (img: Omit<GalleryImage, "id" | "createdAt">) => Promise<void>;
   deleteImage: (id: string) => Promise<void>;
   addMaterial: (mat: Omit<MaterialSample, "id">) => Promise<void>;
+  addPurchaseItem: (item: Omit<OnlinePurchaseItem, "id" | "createdAt">) => Promise<void>;
+  updatePurchaseItem: (id: string, updates: Partial<OnlinePurchaseItem>) => Promise<void>;
+  deletePurchaseItem: (id: string) => Promise<void>;
   addComment: (workItemId: string, author: string, content: string, images?: string[]) => Promise<void>;
   deleteComment: (workItemId: string, commentId: string) => Promise<void>;
   deleteCommentImage: (workItemId: string, commentId: string, imageUrl: string) => Promise<void>;
@@ -65,6 +71,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [folders, setFolders] = useState<GalleryFolder[]>([]);
   const [images, setImages] = useState<GalleryImage[]>([]);
   const [materials, setMaterials] = useState<MaterialSample[]>([]);
+  const [purchaseItems, setPurchaseItems] = useState<OnlinePurchaseItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [quickModalType, setQuickModalType] = useState<"work" | "as" | null>(null);
 
@@ -85,11 +92,14 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const loadLiveDbData = async () => {
       setIsLoading(true);
       try {
-        const [workRes, asRes] = await Promise.all([
+        const [workRes, asRes, purchaseRes] = await Promise.all([
           fetch("/api/posts?type=work")
             .then((r) => r.json())
             .catch(() => ({ success: false, data: [] })),
           fetch("/api/posts?type=as")
+            .then((r) => r.json())
+            .catch(() => ({ success: false, data: [] })),
+          fetch("/api/purchases")
             .then((r) => r.json())
             .catch(() => ({ success: false, data: [] })),
         ]);
@@ -105,8 +115,15 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         } else {
           setAsItems([]);
         }
+
+        if (purchaseRes.success && Array.isArray(purchaseRes.data) && purchaseRes.data.length > 0) {
+          setPurchaseItems(purchaseRes.data);
+        } else {
+          setPurchaseItems(initialPurchaseItems);
+        }
       } catch (err) {
         console.error("Failed to load initial data from DB API:", err);
+        setPurchaseItems(initialPurchaseItems);
       } finally {
         setIsLoading(false);
       }
@@ -304,6 +321,39 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(mat),
     }).catch(() => {});
+  };
+
+  const addPurchaseItem = async (item: Omit<OnlinePurchaseItem, "id" | "createdAt">) => {
+    const newItemId = `purch-${Date.now()}`;
+    const newItem: OnlinePurchaseItem = {
+      ...item,
+      id: newItemId,
+      createdAt: new Date().toISOString().split("T")[0],
+    };
+    setPurchaseItems((prev) => [newItem, ...prev]);
+
+    fetch("/api/purchases", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newItem),
+    }).catch((e) => console.log("Purchase API sync error:", e));
+  };
+
+  const updatePurchaseItem = async (id: string, updates: Partial<OnlinePurchaseItem>) => {
+    setPurchaseItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
+    );
+
+    fetch("/api/purchases", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...updates }),
+    }).catch((e) => console.log("Purchase API sync error:", e));
+  };
+
+  const deletePurchaseItem = async (id: string) => {
+    setPurchaseItems((prev) => prev.filter((item) => item.id !== id));
+    fetch(`/api/purchases?id=${id}`, { method: "DELETE" }).catch(() => {});
   };
 
   // Add Comment to Work Item (with optional photos & auto-gallery sync)
@@ -535,6 +585,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         folders,
         images,
         materials,
+        purchaseItems,
         metrics,
         isLoading,
         addWorkItem,
@@ -549,6 +600,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         addImage,
         deleteImage,
         addMaterial,
+        addPurchaseItem,
+        updatePurchaseItem,
+        deletePurchaseItem,
         addComment,
         deleteComment,
         deleteCommentImage,

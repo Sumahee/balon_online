@@ -39,6 +39,11 @@ const PAGE_TITLES: Record<string, { title: string; subtitle: string; category: s
     subtitle: "현장별·자재별 고화질 시공 사진 및 마감 디테일 아카이빙",
     category: "Gallery Archive",
   },
+  "/purchases": {
+    title: "인터넷 자재구매 목록",
+    subtitle: "온라인 쇼핑몰 자재/부자재 구매 이력, 단가 및 실물 사진 통합 관리",
+    category: "Purchases",
+  },
   "/drawer": {
     title: "서랍장 자동화 계산기",
     subtitle: "가구 외경 치수 기반 부속별 자동 절단 치수 및 부자재 산출",
