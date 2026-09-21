@@ -24,6 +24,7 @@ interface UnifiedBoardEditorProps {
   onChangeAttachments: (items: AttachmentItem[]) => void;
   placeholder?: string;
   readOnly?: boolean;
+  onOpenPdf?: (url: string, name: string) => void;
 }
 
 export function UnifiedBoardEditor({
@@ -33,10 +34,13 @@ export function UnifiedBoardEditor({
   onChangeAttachments,
   placeholder = "작업 내용, 상세 사양, 현장 지시사항 등을 자유롭게 작성하세요...\n(파일이나 사진을 이 영역으로 드래그 & 드롭하여 바로 첨부할 수 있습니다)",
   readOnly = false,
+  onOpenPdf,
 }: UnifiedBoardEditorProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [internalPdfUrl, setInternalPdfUrl] = useState<string | null>(null);
+  const [internalPdfName, setInternalPdfName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Upload handler for single or multiple files
@@ -126,9 +130,16 @@ export function UnifiedBoardEditor({
     onChangeAttachments(attachments.filter((a) => a.id !== id));
   };
 
-  const handleOpenFile = (url: string, fileType: string) => {
-    if (fileType === "image") {
+  const handleOpenFile = (url: string, fileType: string, name?: string) => {
+    if (fileType === "image" || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(name || url)) {
       setPreviewImageUrl(url);
+    } else if (fileType === "pdf" || /\.pdf$/i.test(name || url)) {
+      if (onOpenPdf) {
+        onOpenPdf(url, name || "PDF 첨부 문서");
+      } else {
+        setInternalPdfUrl(url);
+        setInternalPdfName(name || "PDF 첨부 문서");
+      }
     } else {
       window.open(url, "_blank");
     }
@@ -240,7 +251,7 @@ export function UnifiedBoardEditor({
                 return (
                   <div
                     key={att.id}
-                    onClick={() => handleOpenFile(att.url, att.fileType)}
+                    onClick={() => handleOpenFile(att.url, att.fileType, att.name)}
                     className="group rounded-xl border border-slate-200 p-2.5 bg-slate-50 hover:bg-blue-50/50 hover:border-blue-400 transition cursor-pointer flex items-center justify-between gap-2 shadow-2xs"
                   >
                     <div className="flex items-center gap-2 min-w-0">
@@ -336,6 +347,48 @@ export function UnifiedBoardEditor({
               alt="Preview"
               className="max-w-full max-h-[85vh] object-contain rounded-xl mx-auto"
             />
+          </div>
+        </div>
+      )}
+
+      {/* PDF Viewer Popup Modal */}
+      {internalPdfUrl && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-5xl bg-white rounded-2xl shadow-2xl border border-slate-300 overflow-hidden flex flex-col h-[90vh]">
+            <div className="px-5 py-3 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-extrabold px-2 py-0.5 bg-rose-600 rounded">
+                  PDF 뷰어
+                </span>
+                <span className="font-bold text-sm truncate max-w-md">{internalPdfName}</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href={internalPdfUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>새 탭에서 열기</span>
+                </a>
+                <button
+                  onClick={() => setInternalPdfUrl(null)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 bg-slate-100 relative">
+              <iframe
+                src={internalPdfUrl}
+                title={internalPdfName}
+                className="w-full h-full border-none"
+              />
+            </div>
           </div>
         </div>
       )}

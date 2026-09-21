@@ -644,105 +644,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
               </div>
             </div>
 
-            {/* 4-Stage Process Stepper & Transition Button */}
-            <div className="p-4 bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <span className="text-[11px] font-bold text-blue-300 uppercase tracking-wider">
-                    가구 제작 프로세스 진행 단계
-                  </span>
-                  <div className="text-base font-extrabold flex items-center gap-2 mt-0.5">
-                    <span>현재 공정:</span>
-                    <span className="px-2.5 py-0.5 rounded-lg bg-blue-500 text-white text-sm">
-                      {item.status}
-                    </span>
-                  </div>
-                </div>
 
-                {/* Fast Action Stage Advance Button */}
-                {item.status === "대기" && (
-                  <button
-                    onClick={handleNextStage}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
-                  >
-                    <span>오피스로 전달 (도면 및 택배 리스트업 시작)</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
-
-                {item.status === "오피스" && (
-                  <button
-                    onClick={handleNextStage}
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
-                  >
-                    <Factory className="w-4 h-4" />
-                    <span>공장으로 설계도 및 자재 리스트 인계</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
-
-                {item.status === "공장" && (
-                  <button
-                    onClick={handleNextStage}
-                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>자재 준비 완료 및 준비완료로 인계</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
-
-                {item.status === "준비완료" && (
-                  <button
-                    onClick={handleNextStage}
-                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    <span>🏗️ 현장 시공완료 처리 (칸반에서 삭제/업무 리스트 보관)</span>
-                  </button>
-                )}
-
-                {item.status === "시공완료" && (
-                  <div className="px-3.5 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5">
-                    <CheckCircle className="w-4 h-4 text-emerald-400" />
-                    <span>✅ 현장 시공 완료됨 (업무 관리 리스트에 보관)</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Stepper Indicators */}
-              <div className="grid grid-cols-5 gap-2 pt-2 border-t border-slate-800">
-                {STAGES.map((st, idx) => {
-                  const isCurrent = item.status === st.key;
-                  const isPassed = idx < currentStageIndex;
-                  const Icon = st.icon;
-
-                  return (
-                    <button
-                      key={st.key}
-                      onClick={() => handleStageChange(st.key)}
-                      className={cn(
-                        "p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between",
-                        isCurrent
-                          ? "bg-blue-600/90 border-blue-400 text-white ring-2 ring-blue-400/40"
-                          : isPassed
-                          ? "bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800"
-                          : "bg-slate-900/40 border-slate-800 text-slate-500 hover:bg-slate-800/50"
-                      )}
-                    >
-                      <div className="flex items-center justify-between text-xs font-bold mb-1">
-                        <span className="flex items-center gap-1">
-                          <Icon className="w-3.5 h-3.5" />
-                          {st.label}
-                        </span>
-                        {isPassed && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
-                      </div>
-                      <span className="text-[10px] text-slate-300/80 truncate">{st.desc}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
 
             {/* 🎨 바론 웹 도면 작업 연동 & 수동 전송 / 컨펌 섹션 */}
             <div className="p-5 bg-gradient-to-r from-indigo-50 via-slate-50 to-blue-50 rounded-2xl border border-indigo-200/80 shadow-xs space-y-4">
@@ -1162,6 +1064,10 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                 attachments={liveItem?.attachments || []}
                 onChangeAttachments={(atts) => {
                   updateWorkItem(item.id, { attachments: atts });
+                }}
+                onOpenPdf={(url, name) => {
+                  setActivePdfUrl(url);
+                  setActivePdfTitle(name);
                 }}
                 placeholder="도면 규격, 자재 스펙, 택배 리스트, 공장 인계 사항을 자유롭게 작성하세요... 파일이나 도면, 사진을 여기에 바로 끌어다 놓으시면 됩니다."
               />

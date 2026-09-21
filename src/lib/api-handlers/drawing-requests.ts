@@ -93,17 +93,21 @@ export async function POST(request: Request) {
     if (db) {
       const sql = `
         INSERT INTO drawing_requests 
-        (id, work_item_id, client_name, site_address, delivery_date, contact_name, contact_phone, title, description, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+        (id, work_item_id, drawing_type, client_name, site_address, delivery_date, contact_name, contact_phone, post_color, board_color, drawing_assignee, title, description, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
       `;
       const args = [
         id,
         workItemId,
+        drawingType || "옴니버스",
         clientName,
         siteAddress || null,
         deliveryDate || null,
         contactName || null,
         contactPhone || null,
+        postColor || null,
+        boardColor || null,
+        drawingAssignee || null,
         title,
         description || null,
         now,

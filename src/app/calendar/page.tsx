@@ -103,6 +103,7 @@ export default function CalendarPage() {
   const { workItems, asItems, addWorkItem } = useData();
 
   const [currentDate, setCurrentDate] = useState(new Date(2026, 8, 1)); // 2026-09
+  const [selectedMobileDate, setSelectedMobileDate] = useState<string>("2026-09-15");
   const [viewMode, setViewMode] = useState<"month" | "list">("month");
   const [selectedRegion, setSelectedRegion] = useState("전체");
   const [searchQuery, setSearchQuery] = useState("");
@@ -421,139 +422,339 @@ export default function CalendarPage() {
 
       {/* MONTH VIEW CALENDAR GRID */}
       {viewMode === "month" && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-          {/* Day of Week Header */}
-          <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center font-bold text-xs text-slate-600 py-3">
-            <div className="text-rose-600">일 (Sun)</div>
-            <div>월 (Mon)</div>
-            <div>화 (Tue)</div>
-            <div>수 (Wed)</div>
-            <div>목 (Thu)</div>
-            <div>금 (Fri)</div>
-            <div className="text-blue-600">토 (Sat)</div>
+        <>
+          {/* 💻 DESKTOP MONTH VIEW CALENDAR GRID (hidden lg:block) */}
+          <div className="hidden lg:block bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            {/* Day of Week Header */}
+            <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center font-bold text-xs text-slate-600 py-3">
+              <div className="text-rose-600">일 (Sun)</div>
+              <div>월 (Mon)</div>
+              <div>화 (Tue)</div>
+              <div>수 (Wed)</div>
+              <div>목 (Thu)</div>
+              <div>금 (Fri)</div>
+              <div className="text-blue-600">토 (Sat)</div>
+            </div>
+
+            {/* Calendar Grid (6 Rows x 7 Cols) */}
+            <div className="grid grid-cols-7 divide-x divide-y divide-slate-200 text-xs">
+              {calendarDays.map((day, idx) => {
+                const dayEvents = filteredEvents.filter(
+                  (evt) => evt.dateStr === day.dateStr
+                );
+
+                const isSunday = idx % 7 === 0;
+                const isSaturday = idx % 7 === 6;
+
+                const handleCellClick = () => {
+                  setNewDate(day.dateStr);
+                  setIsAddModalOpen(true);
+                };
+
+                return (
+                  <div
+                    key={idx}
+                    onClick={handleCellClick}
+                    className={cn(
+                      "min-h-[95px] sm:min-h-[150px] lg:min-h-[180px] xl:min-h-[200px] p-1 sm:p-2.5 flex flex-col justify-between transition group hover:bg-blue-50/40 cursor-pointer relative select-none",
+                      day.isCurrentMonth ? "bg-white" : "bg-slate-50/70 text-slate-400"
+                    )}
+                  >
+                    <div className="flex items-center justify-between font-mono font-bold mb-1">
+                      <span
+                        className={cn(
+                          "text-xs sm:text-sm px-2 py-0.5 rounded-full flex items-center gap-1",
+                          isSunday
+                            ? "text-rose-600 font-extrabold"
+                            : isSaturday
+                            ? "text-blue-600 font-extrabold"
+                            : "text-slate-700"
+                        )}
+                      >
+                        {day.dayNum}일
+                      </span>
+
+                      {dayEvents.length > 0 && (
+                        <span className="text-[10px] sm:text-xs font-extrabold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                          {dayEvents.length}건
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex-1 space-y-1 overflow-y-auto max-h-36 sm:max-h-44 lg:max-h-56 scrollbar-none">
+                      {dayEvents.slice(0, 4).map((evt) => {
+                        if (evt.type === "as" && evt.originalAsItem) {
+                          const asItem = evt.originalAsItem;
+                          return (
+                            <div
+                              key={evt.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedAsItem(asItem);
+                              }}
+                              className="flex items-center gap-1.5 px-1.5 py-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-950 border-l-4 border-rose-500 transition cursor-pointer text-[11px] font-bold truncate shadow-2xs group/chip"
+                              title={`[A/S] ${asItem.clientName} - ${asItem.reason}`}
+                            >
+                              <span className="text-[10px] font-extrabold px-1 py-0.2 rounded bg-rose-600 text-white shrink-0">
+                                🛠️ A/S
+                              </span>
+                              <span className="truncate font-bold">
+                                {asItem.clientName}, {asItem.siteAddress.split(" ")[0] || "현장"}
+                              </span>
+                            </div>
+                          );
+                        }
+
+                        if (evt.originalWorkItem) {
+                          const item = evt.originalWorkItem;
+                          const isCompleted = item.status === "시공완료";
+                          const label = getCalendarCardLabel(item);
+                          const dType = getDrawingType(item);
+
+                          return (
+                            <div
+                              key={item.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedItem(item);
+                              }}
+                              className={cn(
+                                "flex items-center justify-between gap-1 px-1.5 py-1 rounded transition cursor-pointer text-[11px] font-bold truncate shadow-2xs border-l-4 group/chip",
+                                isCompleted
+                                  ? "bg-blue-50/90 hover:bg-blue-100 text-blue-950 border-blue-600 font-bold"
+                                  : "bg-emerald-50/80 hover:bg-emerald-100 text-slate-900 border-emerald-500 font-bold"
+                              )}
+                              title={`[${dType}] ${label}`}
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                <span
+                                  className={cn(
+                                    "text-[9px] px-1 py-0.2 rounded font-extrabold shrink-0 text-white",
+                                    dType === "천정형"
+                                      ? "bg-emerald-600"
+                                      : dType === "에보라"
+                                      ? "bg-fuchsia-700"
+                                      : dType === "옴니버스"
+                                      ? "bg-purple-600"
+                                      : "bg-slate-600"
+                                  )}
+                                >
+                                  {dType}
+                                </span>
+                                <span className="truncate font-bold">{label}</span>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return null;
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Calendar Grid (6 Rows x 7 Cols) */}
-          <div className="grid grid-cols-7 divide-x divide-y divide-slate-200 text-xs">
-            {calendarDays.map((day, idx) => {
-              // Find matching items for this date (Work items & A/S items)
-              const dayEvents = filteredEvents.filter(
-                (evt) => evt.dateStr === day.dateStr
-              );
+          {/* 📱 MOBILE FLOW APP STYLE SPLIT VIEW (block lg:hidden) */}
+          <div className="block lg:hidden space-y-4">
+            {/* Top 50%: Compact Calendar Grid with Mark Dots */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden p-2">
+              <div className="grid grid-cols-7 text-center font-bold text-[11px] text-slate-500 py-1.5 border-b border-slate-100">
+                <div className="text-rose-600">일</div>
+                <div>월</div>
+                <div>화</div>
+                <div>수</div>
+                <div>목</div>
+                <div>금</div>
+                <div className="text-blue-600">토</div>
+              </div>
 
-              const isSunday = idx % 7 === 0;
-              const isSaturday = idx % 7 === 6;
+              <div className="grid grid-cols-7 gap-1 pt-1 text-xs">
+                {calendarDays.map((day, idx) => {
+                  const dayEvents = filteredEvents.filter((evt) => evt.dateStr === day.dateStr);
+                  const isSelected = selectedMobileDate === day.dateStr;
+                  const isSunday = idx % 7 === 0;
+                  const isSaturday = idx % 7 === 6;
 
-              const handleCellClick = () => {
-                setNewDate(day.dateStr);
-                setIsAddModalOpen(true);
-              };
+                  const hasWork = dayEvents.some((e) => e.type === "work" && e.status !== "시공완료");
+                  const hasCompleted = dayEvents.some((e) => e.type === "work" && e.status === "시공완료");
+                  const hasAs = dayEvents.some((e) => e.type === "as");
 
-              return (
-                <div
-                  key={idx}
-                  onClick={handleCellClick}
-                  className={cn(
-                    "min-h-[95px] sm:min-h-[150px] lg:min-h-[180px] xl:min-h-[200px] p-1 sm:p-2.5 flex flex-col justify-between transition group hover:bg-blue-50/40 cursor-pointer relative select-none",
-                    day.isCurrentMonth ? "bg-white" : "bg-slate-50/70 text-slate-400"
-                  )}
-                >
-                  <div className="flex items-center justify-between font-mono font-bold mb-1">
-                    <span
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setSelectedMobileDate(day.dateStr);
+                        setNewDate(day.dateStr);
+                      }}
                       className={cn(
-                        "text-xs sm:text-sm px-2 py-0.5 rounded-full flex items-center gap-1",
-                        isSunday
-                          ? "text-rose-600 font-extrabold"
-                          : isSaturday
-                          ? "text-blue-600 font-extrabold"
-                          : "text-slate-700"
+                        "h-12 rounded-xl flex flex-col items-center justify-center relative transition cursor-pointer font-mono font-bold",
+                        isSelected
+                          ? "bg-blue-600 text-white shadow-md ring-2 ring-blue-400"
+                          : day.isCurrentMonth
+                          ? "bg-slate-50 hover:bg-slate-100 text-slate-800"
+                          : "bg-transparent text-slate-300"
                       )}
                     >
-                      {day.dayNum}일
-                    </span>
-
-                    {dayEvents.length > 0 && (
-                      <span className="text-[10px] sm:text-xs font-extrabold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
-                        {dayEvents.length}건
+                      <span
+                        className={cn(
+                          "text-xs font-bold",
+                          isSelected
+                            ? "text-white font-extrabold"
+                            : isSunday
+                            ? "text-rose-600"
+                            : isSaturday
+                            ? "text-blue-600"
+                            : "text-slate-700"
+                        )}
+                      >
+                        {day.dayNum}
                       </span>
-                    )}
-                  </div>
 
-                  {/* Day Event List Cards (Work & A/S - 1줄 콤팩트 스타일) */}
-                  <div className="flex-1 space-y-1 overflow-y-auto max-h-36 sm:max-h-44 lg:max-h-56 scrollbar-none">
-                    {dayEvents.slice(0, 4).map((evt) => {
+                      {/* Dot Mark Indicators */}
+                      {dayEvents.length > 0 && (
+                        <div className="flex items-center gap-0.5 mt-0.5">
+                          {hasWork && (
+                            <span
+                              className={cn(
+                                "w-1.5 h-1.5 rounded-full",
+                                isSelected ? "bg-emerald-300" : "bg-emerald-500"
+                              )}
+                            />
+                          )}
+                          {hasAs && (
+                            <span
+                              className={cn(
+                                "w-1.5 h-1.5 rounded-full",
+                                isSelected ? "bg-rose-300" : "bg-rose-500"
+                              )}
+                            />
+                          )}
+                          {hasCompleted && (
+                            <span
+                              className={cn(
+                                "w-1.5 h-1.5 rounded-full",
+                                isSelected ? "bg-blue-200" : "bg-blue-500"
+                              )}
+                            />
+                          )}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Bottom 50%: Selected Date Event Scrollable List */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs p-4 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-ping" />
+                  <h3 className="font-extrabold text-sm text-slate-900 font-mono">
+                    {selectedMobileDate} 일정 ({filteredEvents.filter((e) => e.dateStr === selectedMobileDate).length}건)
+                  </h3>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setNewDate(selectedMobileDate);
+                    setIsAddModalOpen(true);
+                  }}
+                  className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 transition shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>일정 추가</span>
+                </button>
+              </div>
+
+              {/* Event List */}
+              <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
+                {filteredEvents.filter((e) => e.dateStr === selectedMobileDate).length === 0 ? (
+                  <div className="py-8 text-center space-y-2">
+                    <p className="text-xs text-slate-400 font-medium">선택하신 날짜에 등록된 공정 일정이 없습니다.</p>
+                    <button
+                      onClick={() => {
+                        setNewDate(selectedMobileDate);
+                        setIsAddModalOpen(true);
+                      }}
+                      className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition"
+                    >
+                      + {selectedMobileDate} 신규 일정 추가
+                    </button>
+                  </div>
+                ) : (
+                  filteredEvents
+                    .filter((e) => e.dateStr === selectedMobileDate)
+                    .map((evt) => {
                       if (evt.type === "as" && evt.originalAsItem) {
                         const asItem = evt.originalAsItem;
                         return (
                           <div
                             key={evt.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedAsItem(asItem);
-                            }}
-                            className="flex items-center gap-1.5 px-1.5 py-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-950 border-l-4 border-rose-500 transition cursor-pointer text-[11px] font-bold truncate shadow-2xs group/chip"
-                            title={`[A/S] ${asItem.clientName} - ${asItem.reason}`}
+                            onClick={() => setSelectedAsItem(asItem)}
+                            className="p-3 bg-rose-50/80 hover:bg-rose-100/80 rounded-xl border border-rose-200 text-xs space-y-1.5 cursor-pointer transition shadow-2xs"
                           >
-                            <span className="text-[10px] font-extrabold px-1 py-0.2 rounded bg-rose-600 text-white shrink-0">
-                              🛠️ A/S
-                            </span>
-                            <span className="truncate font-bold">
-                              {asItem.clientName}, {asItem.siteAddress.split(" ")[0] || "현장"}
-                            </span>
+                            <div className="flex items-center justify-between font-bold">
+                              <span className="px-2 py-0.5 rounded bg-rose-600 text-white text-[10px] font-extrabold">
+                                🛠️ 긴급 A/S
+                              </span>
+                              <span className="text-rose-700 font-extrabold">{asItem.resultStatus}</span>
+                            </div>
+                            <p className="font-extrabold text-slate-900 text-xs">{asItem.clientName} - {asItem.reason}</p>
+                            <p className="text-slate-500 text-[11px]">📍 {asItem.siteAddress}</p>
                           </div>
                         );
                       }
 
                       if (evt.originalWorkItem) {
                         const item = evt.originalWorkItem;
-                        const isCompleted = item.status === "시공완료";
-                        const label = getCalendarCardLabel(item);
+                        const isDone = item.status === "시공완료";
                         const dType = getDrawingType(item);
-
                         return (
                           <div
-                            key={item.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedItem(item);
-                            }}
+                            key={evt.id}
+                            onClick={() => setSelectedItem(item)}
                             className={cn(
-                              "flex items-center justify-between gap-1 px-1.5 py-1 rounded transition cursor-pointer text-[11px] font-bold truncate shadow-2xs border-l-4 group/chip",
-                              isCompleted
-                                ? "bg-blue-50/90 hover:bg-blue-100 text-blue-950 border-blue-600 font-bold"
-                                : "bg-emerald-50/80 hover:bg-emerald-100 text-slate-900 border-emerald-500 font-bold"
+                              "p-3 rounded-xl border text-xs space-y-1.5 cursor-pointer transition shadow-2xs",
+                              isDone ? "bg-blue-50/80 border-blue-200" : "bg-white border-slate-200 hover:border-blue-400"
                             )}
-                            title={`[${dType}] ${label}`}
                           >
-                            <div className="flex items-center gap-1.5 min-w-0 truncate">
+                            <div className="flex items-center justify-between font-bold">
+                              <div className="flex items-center gap-1.5">
+                                {renderDrawingTypeBadge(dType)}
+                                <span className="font-extrabold text-slate-900 text-xs truncate max-w-[180px]">
+                                  {item.clientName}
+                                </span>
+                              </div>
                               <span
                                 className={cn(
-                                  "text-[9px] px-1 py-0.2 rounded font-extrabold shrink-0 text-white",
-                                  dType === "천정형"
-                                    ? "bg-emerald-600"
-                                    : dType === "에보라"
-                                    ? "bg-fuchsia-700"
-                                    : dType === "옴니버스"
-                                    ? "bg-purple-600"
-                                    : "bg-slate-600"
+                                  "px-2 py-0.5 rounded-full text-[10px] font-extrabold",
+                                  isDone ? "bg-blue-600 text-white" : "bg-emerald-100 text-emerald-800 border border-emerald-300"
                                 )}
                               >
-                                {dType}
+                                {item.status}
                               </span>
-                              <span className="truncate font-bold">{label}</span>
+                            </div>
+                            <p className="text-slate-700 font-semibold truncate">{item.title}</p>
+                            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5 border-t border-slate-100">
+                              <span>📍 {item.siteAddress || item.region || "서울/수도권"}</span>
+                              {(item.attachments || []).length > 0 && (
+                                <span className="text-blue-600 font-bold">📎 첨부 {item.attachments.length}개</span>
+                              )}
                             </div>
                           </div>
                         );
                       }
-
                       return null;
-                    })}
-                  </div>
-                </div>
-              );
-            })}
+                    })
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* NEW SCHEDULE EVENT MODAL */}

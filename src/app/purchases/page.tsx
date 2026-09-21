@@ -31,6 +31,7 @@ export default function PurchasesPage() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OnlinePurchaseItem | null>(null);
+  const [detailItem, setDetailItem] = useState<OnlinePurchaseItem | null>(null);
 
   // Lightbox Modal State
   const [lightboxImages, setLightboxImages] = useState<string[] | null>(null);
@@ -339,134 +340,148 @@ export default function PurchasesPage() {
           </p>
         </div>
       ) : viewMode === "table" ? (
-        /* Excel Table View */
-        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        /* Excel Table View (Fixed Layout & Front Thumbnail) */
+        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-700">
+            <table className="w-full text-left text-xs sm:text-sm text-slate-700 table-fixed min-w-[950px]">
               <thead className="bg-slate-50 text-slate-600 uppercase text-[11px] font-bold tracking-wider border-b border-slate-200">
                 <tr>
-                  <th className="py-3.5 px-4">쇼핑몰</th>
-                  <th className="py-3.5 px-4">상호</th>
-                  <th className="py-3.5 px-4">품목</th>
-                  <th className="py-3.5 px-4">사이즈</th>
-                  <th className="py-3.5 px-4">색상</th>
-                  <th className="py-3.5 px-4 text-center">수량</th>
-                  <th className="py-3.5 px-4">금액 / 단가</th>
-                  <th className="py-3.5 px-4">구매날짜</th>
-                  <th className="py-3.5 px-4">검색방법</th>
-                  <th className="py-3.5 px-4">기타 (비고)</th>
-                  <th className="py-3.5 px-4 text-center">사진</th>
-                  <th className="py-3.5 px-4 text-right">관리</th>
+                  <th className="py-3.5 px-3 w-16 sm:w-20 text-center">사진</th>
+                  <th className="py-3.5 px-3 w-56">품목명 / 상호</th>
+                  <th className="py-3.5 px-3 w-32">쇼핑몰</th>
+                  <th className="py-3.5 px-3 w-36">규격 / 색상</th>
+                  <th className="py-3.5 px-3 w-16 text-center">수량</th>
+                  <th className="py-3.5 px-3 w-32">금액 / 단가</th>
+                  <th className="py-3.5 px-3 w-28">구매날짜</th>
+                  <th className="py-3.5 px-3 w-44">검색어 / 비고</th>
+                  <th className="py-3.5 px-3 w-28 text-right">상세 / 관리</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredItems.map((item) => {
                   const hasPhotos = item.photos && item.photos.length > 0;
                   return (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                      {/* 쇼핑몰업체 */}
-                      <td className="py-3 px-4 font-semibold text-slate-900 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                          {item.mallName || "온라인몰"}
-                        </span>
-                      </td>
-
-                      {/* 상호 */}
-                      <td className="py-3 px-4 font-semibold text-slate-800 whitespace-nowrap">
-                        {item.storeName}
-                      </td>
-
-                      {/* 품목 */}
-                      <td className="py-3 px-4 font-bold text-slate-900">
-                        {item.itemName}
-                      </td>
-
-                      {/* 사이즈 */}
-                      <td className="py-3 px-4 text-xs font-medium text-slate-600">
-                        {item.sizeSpec || "-"}
-                      </td>
-
-                      {/* 색상 */}
-                      <td className="py-3 px-4 text-xs font-medium text-slate-600 whitespace-nowrap">
-                        {item.color ? (
-                          <span className="inline-block px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
-                            {item.color}
-                          </span>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-
-                      {/* 수량 */}
-                      <td className="py-3 px-4 text-center font-bold text-slate-800">
-                        {item.quantity}
-                      </td>
-
-                      {/* 금액/단가 */}
-                      <td className="py-3 px-4 font-semibold text-emerald-600 whitespace-nowrap">
-                        {item.unitPrice || "-"}
-                      </td>
-
-                      {/* 구매날짜 */}
-                      <td className="py-3 px-4 text-xs font-medium text-slate-500 whitespace-nowrap">
-                        {item.purchaseDate}
-                      </td>
-
-                      {/* 검색방법 */}
-                      <td className="py-3 px-4 text-xs text-slate-500">
-                        {item.searchKeyword ? (
-                          <span className="text-blue-600 underline underline-offset-2">
-                            {item.searchKeyword}
-                          </span>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-
-                      {/* 기타 (비고) */}
-                      <td className="py-3 px-4 text-xs text-slate-600 max-w-xs truncate">
-                        {item.notes || "-"}
-                      </td>
-
-                      {/* 사진 썸네일 */}
-                      <td className="py-3 px-4 text-center">
+                    <tr
+                      key={item.id}
+                      onClick={() => setDetailItem(item)}
+                      className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
+                    >
+                      {/* 1st Column: 썸네일 사진 (앞에 위치, 고정 크기) */}
+                      <td className="py-2.5 px-3 text-center">
                         {hasPhotos ? (
-                          <button
-                            onClick={() => openLightbox(item.photos!)}
-                            className="relative group inline-block rounded-lg overflow-hidden border border-slate-200 shadow-2xs hover:border-blue-500 transition cursor-pointer"
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openLightbox(item.photos!);
+                            }}
+                            className="relative w-12 h-12 mx-auto rounded-xl overflow-hidden border border-slate-200 shadow-2xs hover:border-blue-500 transition shrink-0 group/img"
+                            title="클릭 시 사진 크게 보기"
                           >
                             <img
                               src={item.photos![0]}
                               alt={item.itemName}
-                              className="w-10 h-10 object-cover group-hover:scale-110 transition-transform"
+                              className="w-full h-full object-cover group-hover/img:scale-110 transition-transform"
                             />
                             {item.photos!.length > 1 && (
-                              <span className="absolute bottom-0 right-0 bg-black/70 text-white text-[9px] font-bold px-1 rounded-tl">
+                              <span className="absolute bottom-0 right-0 bg-black/75 text-white text-[9px] font-extrabold px-1 rounded-tl">
                                 +{item.photos!.length - 1}
                               </span>
                             )}
-                          </button>
+                          </div>
                         ) : (
-                          <span className="text-slate-300 text-xs">-</span>
+                          <div className="w-12 h-12 mx-auto rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 shrink-0">
+                            <ImageIcon className="w-5 h-5" />
+                          </div>
                         )}
                       </td>
 
-                      {/* Actions */}
-                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                      {/* 2nd Column: 품목명 / 상호 */}
+                      <td className="py-2.5 px-3">
+                        <p className="font-extrabold text-slate-900 text-xs sm:text-sm truncate group-hover:text-blue-600 transition" title={item.itemName}>
+                          {item.itemName}
+                        </p>
+                        <p className="text-[11px] font-semibold text-slate-500 truncate mt-0.5" title={item.storeName}>
+                          {item.storeName}
+                        </p>
+                      </td>
+
+                      {/* 3rd Column: 쇼핑몰 */}
+                      <td className="py-2.5 px-3">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200 truncate max-w-full">
+                          {item.mallName || "온라인몰"}
+                        </span>
+                      </td>
+
+                      {/* 4th Column: 규격 / 색상 */}
+                      <td className="py-2.5 px-3 text-xs">
+                        <p className="font-bold text-slate-800 truncate" title={item.sizeSpec || "-"}>
+                          {item.sizeSpec || "-"}
+                        </p>
+                        {item.color && (
+                          <p className="text-[10px] text-slate-500 font-semibold truncate mt-0.5">
+                            🎨 {item.color}
+                          </p>
+                        )}
+                      </td>
+
+                      {/* 5th Column: 수량 */}
+                      <td className="py-2.5 px-3 text-center font-extrabold text-slate-900 text-sm">
+                        {item.quantity}
+                      </td>
+
+                      {/* 6th Column: 금액 / 단가 */}
+                      <td className="py-2.5 px-3 font-extrabold text-emerald-600 text-xs sm:text-sm truncate" title={item.unitPrice || "-"}>
+                        {item.unitPrice || "-"}
+                      </td>
+
+                      {/* 7th Column: 구매날짜 */}
+                      <td className="py-2.5 px-3 text-xs font-mono font-bold text-slate-500 whitespace-nowrap">
+                        {item.purchaseDate}
+                      </td>
+
+                      {/* 8th Column: 검색어 / 기타 비고 */}
+                      <td className="py-2.5 px-3 text-xs">
+                        {item.searchKeyword && (
+                          <p className="text-blue-600 font-medium truncate mb-0.5" title={`검색어: ${item.searchKeyword}`}>
+                            🔍 {item.searchKeyword}
+                          </p>
+                        )}
+                        <p className="text-slate-500 truncate" title={item.notes || "-"}>
+                          {item.notes || "-"}
+                        </p>
+                      </td>
+
+                      {/* 9th Column: 상세 / 관리 */}
+                      <td className="py-2.5 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
-                            onClick={() => handleOpenEditModal(item)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
-                            title="수정"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDetailItem(item);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs transition"
                           >
-                            <Edit2 className="w-4 h-4" />
+                            상세
                           </button>
                           <button
-                            onClick={() => handleDelete(item.id, item.itemName)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditModal(item);
+                            }}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition"
+                            title="수정"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(item.id, item.itemName);
+                            }}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
                             title="삭제"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -485,12 +500,16 @@ export default function PurchasesPage() {
             return (
               <div
                 key={item.id}
-                className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition flex flex-col overflow-hidden group"
+                onClick={() => setDetailItem(item)}
+                className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition flex flex-col overflow-hidden group cursor-pointer"
               >
                 {/* Card Image Header */}
                 {hasPhotos ? (
                   <div
-                    onClick={() => openLightbox(item.photos!)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openLightbox(item.photos!);
+                    }}
                     className="relative h-44 bg-slate-900 cursor-pointer overflow-hidden group/img"
                   >
                     <img
@@ -506,7 +525,7 @@ export default function PurchasesPage() {
                       <Maximize2 className="w-4 h-4" />
                     </button>
                     <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-white text-xs font-semibold">
-                      <span>{item.storeName}</span>
+                      <span className="truncate max-w-[150px]">{item.storeName}</span>
                       <span>{item.purchaseDate}</span>
                     </div>
                   </div>
@@ -522,21 +541,19 @@ export default function PurchasesPage() {
                 {/* Card Content */}
                 <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                   <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <h4 className="font-extrabold text-slate-900 text-lg leading-snug">
-                        {item.itemName}
-                      </h4>
-                    </div>
-                    <p className="text-xs font-semibold text-slate-500 mt-1">{item.storeName}</p>
+                    <h4 className="font-extrabold text-slate-900 text-base leading-snug truncate" title={item.itemName}>
+                      {item.itemName}
+                    </h4>
+                    <p className="text-xs font-semibold text-slate-500 mt-1 truncate">{item.storeName}</p>
 
                     <div className="mt-4 grid grid-cols-2 gap-2 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100">
                       <div>
                         <span className="text-slate-400 block font-medium">규격 / 사이즈</span>
-                        <span className="font-bold text-slate-800">{item.sizeSpec || "-"}</span>
+                        <span className="font-bold text-slate-800 truncate block">{item.sizeSpec || "-"}</span>
                       </div>
                       <div>
                         <span className="text-slate-400 block font-medium">색상</span>
-                        <span className="font-bold text-slate-800">{item.color || "-"}</span>
+                        <span className="font-bold text-slate-800 truncate block">{item.color || "-"}</span>
                       </div>
                       <div>
                         <span className="text-slate-400 block font-medium">수량</span>
@@ -544,12 +561,12 @@ export default function PurchasesPage() {
                       </div>
                       <div>
                         <span className="text-slate-400 block font-medium">단가/금액</span>
-                        <span className="font-bold text-emerald-600">{item.unitPrice || "-"}</span>
+                        <span className="font-bold text-emerald-600 truncate block">{item.unitPrice || "-"}</span>
                       </div>
                     </div>
 
                     {item.searchKeyword && (
-                      <div className="mt-3 text-xs text-slate-600">
+                      <div className="mt-3 text-xs text-slate-600 truncate">
                         <span className="font-semibold text-slate-400 mr-1.5">검색어:</span>
                         <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 font-medium">
                           {item.searchKeyword}
@@ -565,21 +582,31 @@ export default function PurchasesPage() {
                   </div>
 
                   {/* Footer Actions */}
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-                    <button
-                      onClick={() => handleOpenEditModal(item)}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      <span>수정</span>
-                    </button>
-                    <button
-                      onClick={() => handleDelete(item.id, item.itemName)}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 transition cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>삭제</span>
-                    </button>
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-xs text-blue-600 font-bold flex items-center gap-1">
+                      <span>상세 정보 보기</span>
+                      <span>→</span>
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEditModal(item);
+                        }}
+                        className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
+                      >
+                        수정
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(item.id, item.itemName);
+                        }}
+                        className="px-2.5 py-1 rounded-lg text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 transition"
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -805,6 +832,159 @@ export default function PurchasesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🔍 Purchase Detail Modal (게시물 클릭 시 세부 정보 및 큰 사진 팝업) */}
+      {detailItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 relative my-8 space-y-5 max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <span className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full font-extrabold text-xs">
+                  {detailItem.mallName || "온라인몰"}
+                </span>
+                <span className="text-xs font-mono text-slate-400">등록 ID: {detailItem.id}</span>
+              </div>
+              <button
+                onClick={() => setDetailItem(null)}
+                className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Title & Store */}
+            <div>
+              <h3 className="text-xl font-extrabold text-slate-900 leading-snug">
+                {detailItem.itemName}
+              </h3>
+              <p className="text-xs font-extrabold text-indigo-600 mt-1 flex items-center gap-1.5">
+                <Store className="w-4 h-4" />
+                <span>상호 (스토어명): {detailItem.storeName}</span>
+              </p>
+            </div>
+
+            {/* Photos Carousel / Lightbox trigger */}
+            {detailItem.photos && detailItem.photos.length > 0 && (
+              <div className="space-y-2">
+                <div
+                  onClick={() => openLightbox(detailItem.photos!)}
+                  className="relative h-64 sm:h-72 bg-slate-950 rounded-2xl overflow-hidden cursor-pointer group shadow-inner border border-slate-200"
+                >
+                  <img
+                    src={detailItem.photos[0]}
+                    alt={detailItem.itemName}
+                    className="w-full h-full object-contain group-hover:scale-105 transition duration-300"
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <span className="px-3 py-1.5 bg-black/80 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg">
+                      <Maximize2 className="w-4 h-4" />
+                      큰 사진으로 자세히 보기
+                    </span>
+                  </div>
+                </div>
+
+                {detailItem.photos.length > 1 && (
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                    {detailItem.photos.map((photo, pIdx) => (
+                      <button
+                        key={pIdx}
+                        onClick={() => openLightbox(detailItem.photos!, pIdx)}
+                        className="w-16 h-16 rounded-xl overflow-hidden border-2 border-slate-200 hover:border-blue-500 shrink-0 cursor-pointer transition"
+                      >
+                        <img src={photo} alt="사진" className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Specifications Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs">
+              <div>
+                <span className="text-slate-400 block font-bold">사이즈 / 규격</span>
+                <span className="font-extrabold text-slate-900 text-sm mt-0.5 block">{detailItem.sizeSpec || "-"}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block font-bold">색상</span>
+                <span className="font-extrabold text-slate-900 text-sm mt-0.5 block">{detailItem.color || "-"}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block font-bold">수량</span>
+                <span className="font-extrabold text-slate-900 text-sm mt-0.5 block">{detailItem.quantity} 개</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block font-bold">금액 / 단가</span>
+                <span className="font-extrabold text-emerald-600 text-sm mt-0.5 block">{detailItem.unitPrice || "-"}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block font-bold">구매 날짜</span>
+                <span className="font-extrabold text-slate-900 text-sm font-mono mt-0.5 block">{detailItem.purchaseDate}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block font-bold">쇼핑몰업체</span>
+                <span className="font-extrabold text-indigo-600 text-sm mt-0.5 block">{detailItem.mallName}</span>
+              </div>
+            </div>
+
+            {/* Keyword */}
+            {detailItem.searchKeyword && (
+              <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-200 text-xs text-blue-950">
+                <span className="font-bold block text-[11px] text-blue-600 mb-0.5">🔍 재구매 검색방법 키워드</span>
+                <span className="font-mono font-bold">{detailItem.searchKeyword}</span>
+              </div>
+            )}
+
+            {/* Notes */}
+            {detailItem.notes && (
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700">
+                <span className="font-bold block text-[11px] text-slate-400 mb-0.5">📝 기타 (비고 사양)</span>
+                <p className="whitespace-pre-wrap leading-relaxed font-medium">{detailItem.notes}</p>
+              </div>
+            )}
+
+            {/* Actions Footer */}
+            <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const itemToEdit = detailItem;
+                    setDetailItem(null);
+                    handleOpenEditModal(itemToEdit);
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  <span>정보 수정</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const idToDelete = detailItem.id;
+                    const titleToDelete = detailItem.itemName;
+                    setDetailItem(null);
+                    handleDelete(idToDelete, titleToDelete);
+                  }}
+                  className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>삭제</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setDetailItem(null)}
+                className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                닫기
+              </button>
+            </div>
           </div>
         </div>
       )}
