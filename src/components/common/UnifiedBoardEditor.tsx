@@ -1,341 +1,309 @@
 "use client";
 
-import React, { useState, useRef } from "react";
-import {
-  Paperclip,
-  UploadCloud,
-  FileText,
-  Image as ImageIcon,
-  ExternalLink,
-  Trash2,
-  Maximize2,
-  X,
-  File,
-  CheckCircle2,
-  Loader2,
-} from "lucide-react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { Paperclip, FileText, File, Loader2, X, Download } from "lucide-react";
 import { AttachmentItem } from "@/types";
+import { bodyHtml, bodyImageIds, imageMarker, isBodyImage, serializeBody } from "@/lib/body-content";
 import { cn } from "@/lib/utils";
 
 interface UnifiedBoardEditorProps {
   description: string;
-  onChangeDescription: (val: string) => void;
+  onChangeDescription: (value: string) => void;
   attachments: AttachmentItem[];
-  onChangeAttachments: (items: AttachmentItem[]) => void;
+  onChangeAttachments: (items: AttachmentItem[]) => void | Promise<void>;
+  onOpenAttachment?: (attachment: AttachmentItem) => void;
   placeholder?: string;
   readOnly?: boolean;
+  minRows?: number;
+  onUploadingChange?: (uploading: boolean) => void;
+}
+
+function attachmentType(attachment: AttachmentItem) {
+  if (attachment.fileType === "image" || /\.(jpe?g|png|webp|gif|svg)$/i.test(attachment.name) || attachment.url.startsWith("data:image")) return "image";
+  if (attachment.fileType === "pdf" || /\.pdf$/i.test(attachment.name) || attachment.url.startsWith("data:application/pdf")) return "pdf";
+  return "file";
 }
 
 export function UnifiedBoardEditor({
-  description,
-  onChangeDescription,
-  attachments,
-  onChangeAttachments,
-  placeholder = "작업 내용, 상세 사양, 현장 지시사항 등을 자유롭게 작성하세요...\n(파일이나 사진을 이 영역으로 드래그 & 드롭하여 바로 첨부할 수 있습니다)",
-  readOnly = false,
+  description, onChangeDescription, attachments, onChangeAttachments, onOpenAttachment,
+  placeholder = "작업 내용과 요청사항을 작성하세요. 사진과 파일을 끌어놓거나 붙여넣을 수 있습니다.",
+  readOnly = false, minRows = 6, onUploadingChange,
 }: UnifiedBoardEditorProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<AttachmentItem | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadLock = useRef(false);
 
-  // Upload handler for single or multiple files
+  const editorRef = useRef<HTMLDivElement>(null);
+  const savedRange = useRef<Range | null>(null);
+  const [initialHtml] = useState(() => bodyHtml(description, attachments));
+  const lastEmitted = useRef<string | null>(null);
+  const latestAttachments = useRef(attachments);
+  const knownImages = useRef(new Map(attachments.filter(isBodyImage).map((image) => [image.id, image])));
+
+  useLayoutEffect(() => {
+    latestAttachments.current = attachments;
+    attachments.filter(isBodyImage).forEach((image) => knownImages.current.set(image.id, image));
+    const editor = editorRef.current;
+    if (!editor) return;
+    if (description === lastEmitted.current) return;
+    const html = bodyHtml(description, attachments);
+    if (editor.innerHTML !== html) editor.innerHTML = html;
+  }, [description, attachments]);
+
+  const rememberCursor = () => {
+    const selection = window.getSelection();
+    if (selection?.rangeCount && editorRef.current?.contains(selection.anchorNode)) savedRange.current = selection.getRangeAt(0).cloneRange();
+  };
+
+  const emitBody = (currentAttachments = latestAttachments.current) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const value = serializeBody(editor);
+    lastEmitted.current = value;
+    onChangeDescription(value);
+    const ids = new Set(bodyImageIds(value));
+    const retained = currentAttachments.filter((attachment) => !isBodyImage(attachment) || ids.has(attachment.id));
+    for (const id of ids) {
+      const restored = knownImages.current.get(id);
+      if (restored && !retained.some((attachment) => attachment.id === id)) retained.push(restored);
+    }
+    if (retained.length !== currentAttachments.length || retained.some((attachment, index) => attachment.id !== currentAttachments[index]?.id)) {
+      latestAttachments.current = retained;
+      void Promise.resolve(onChangeAttachments(retained)).catch(() => setError("이미지 변경을 반영하지 못했습니다. 다시 시도해 주세요."));
+    }
+    rememberCursor();
+  };
+
+  const insertionRange = () => {
+    const editor = editorRef.current!;
+    const range = savedRange.current;
+    if (range && editor.contains(range.startContainer) && editor.contains(range.endContainer)) return range.cloneRange();
+    const end = document.createRange();
+    end.selectNodeContents(editor);
+    end.collapse(false);
+    return end;
+  };
+
+  const restoreCursor = (range: Range) => {
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    savedRange.current = range.cloneRange();
+    editorRef.current?.focus();
+  };
+
+  const insertImages = (images: AttachmentItem[], range: Range) => {
+    if (!images.length || !editorRef.current) return;
+    range.deleteContents();
+    for (const image of images) {
+      const fragment = document.createElement("template");
+      fragment.innerHTML = bodyHtml(imageMarker(image.id), [image]);
+      const node = fragment.content.firstChild;
+      if (!node) continue;
+      range.insertNode(node);
+      range.setStartAfter(node);
+      range.collapse(true);
+      const line = document.createElement("br");
+      range.insertNode(line);
+      range.setStartAfter(line);
+      range.collapse(true);
+    }
+    restoreCursor(range);
+  };
+
+  const pasteText = (text: string) => {
+    const range = insertionRange();
+    range.deleteContents();
+    const fragment = document.createDocumentFragment();
+    text.replace(/\r\n?/g, "\n").split("\n").forEach((line, index) => {
+      if (index) fragment.append(document.createElement("br"));
+      fragment.append(document.createTextNode(line));
+    });
+    const last = fragment.lastChild;
+    range.insertNode(fragment);
+    if (last) range.setStartAfter(last);
+    range.collapse(true);
+    restoreCursor(range);
+    emitBody();
+  };
+
   const uploadFiles = async (files: FileList | File[]) => {
-    if (readOnly || !files || files.length === 0) return;
+    if (readOnly || uploadLock.current || files.length === 0) return;
+    const uploadRange = insertionRange();
+    uploadLock.current = true;
     setIsUploading(true);
-
-    const newAttachments: AttachmentItem[] = [];
-
-    for (const file of Array.from(files)) {
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-
-        const res = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        const data = await res.json();
-        if (data.success) {
-          newAttachments.push({
-            id: `att-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-            name: data.name || file.name,
-            url: data.fileUrl,
-            fileType: data.fileType as any,
-            size: data.size,
-            uploadedAt: data.uploadedAt || new Date().toISOString().split("T")[0],
+    onUploadingChange?.(true);
+    setError(null);
+    const uploaded: AttachmentItem[] = [];
+    const failures: string[] = [];
+    try {
+      for (const file of Array.from(files)) {
+        try {
+          const formData = new FormData();
+          formData.append("file", file);
+          const response = await fetch("/api/upload", { method: "POST", body: formData });
+          const result = await response.json();
+          if (!response.ok || !result.success || !result.fileUrl) throw new Error(result.error || "업로드 실패");
+          uploaded.push({
+            id: crypto.randomUUID(), name: result.name || file.name, url: result.fileUrl,
+            fileType: result.fileType === "image" ? "image" : result.fileType === "pdf" ? "pdf" : "file",
+            size: result.size, uploadedAt: result.uploadedAt,
           });
+        } catch {
+          failures.push(file.name);
         }
-      } catch (err) {
-        console.error("Upload error:", err);
       }
-    }
-
-    if (newAttachments.length > 0) {
-      onChangeAttachments([...attachments, ...newAttachments]);
-    }
-    setIsUploading(false);
-  };
-
-  // Drag & drop events
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!readOnly) setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    if (readOnly) return;
-
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      await uploadFiles(e.dataTransfer.files);
-    }
-  };
-
-  // Clipboard Paste handler (for screenshots or copied files)
-  const handlePaste = async (e: React.ClipboardEvent) => {
-    if (readOnly) return;
-    const items = e.clipboardData.items;
-    const filesToUpload: File[] = [];
-
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].kind === "file") {
-        const file = items[i].getAsFile();
-        if (file) filesToUpload.push(file);
+      if (uploaded.length) {
+        const combined = [...latestAttachments.current, ...uploaded];
+        uploaded.filter(isBodyImage).forEach((image) => knownImages.current.set(image.id, image));
+        insertImages(uploaded.filter(isBodyImage), uploadRange);
+        latestAttachments.current = combined;
+        if (uploaded.some(isBodyImage)) emitBody(combined);
+        await onChangeAttachments(latestAttachments.current);
       }
-    }
-
-    if (filesToUpload.length > 0) {
-      e.preventDefault();
-      await uploadFiles(filesToUpload);
-    }
-  };
-
-  const handleRemoveAttachment = (id: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    onChangeAttachments(attachments.filter((a) => a.id !== id));
-  };
-
-  const handleOpenFile = (url: string, fileType: string) => {
-    if (fileType === "image") {
-      setPreviewImageUrl(url);
-    } else {
-      window.open(url, "_blank");
+      if (failures.length) setError(`업로드하지 못한 파일: ${failures.join(", ")}. 다시 첨부해 주세요.`);
+    } catch {
+      setError("본문에 파일을 반영하지 못했습니다. 다시 시도해 주세요.");
+    } finally {
+      uploadLock.current = false;
+      setIsUploading(false);
+      onUploadingChange?.(false);
     }
   };
 
-  const isImageFile = (att: AttachmentItem) => {
-    return att.fileType === "image" || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(att.name) || att.url.startsWith("data:image");
+  const removeAttachment = async (id: string) => {
+    try { await onChangeAttachments(attachments.filter((attachment) => attachment.id !== id)); }
+    catch { setError("파일을 제거하지 못했습니다. 다시 시도해 주세요."); }
   };
 
-  const isPdfFile = (att: AttachmentItem) => {
-    return att.fileType === "pdf" || /\.pdf$/i.test(att.name) || att.url.endsWith(".pdf");
+  const openAttachment = (attachment: AttachmentItem) => {
+    if (["image", "pdf"].includes(attachmentType(attachment))) setPreview(attachment);
+    else if (onOpenAttachment) onOpenAttachment(attachment);
+    else window.open(attachment.url, "_blank", "noopener,noreferrer");
   };
 
   return (
     <div className="space-y-3">
-      {/* Board Content Area */}
       <div
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        className={cn(
-          "relative bg-white border-2 rounded-2xl p-4 transition-all shadow-xs flex flex-col min-h-[220px]",
-          isDragging
-            ? "border-blue-500 bg-blue-50/50 ring-4 ring-blue-500/20"
-            : "border-slate-200 hover:border-slate-300 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10"
-        )}
+        onDragOver={(event) => { event.preventDefault(); if (!readOnly && !isUploading) setIsDragging(true); }}
+        onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setIsDragging(false); }}
+        onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setIsDragging(false); void uploadFiles(event.dataTransfer.files); }}
+        className={cn("relative overflow-hidden rounded-xl border bg-white p-4 sm:p-5 transition-colors", isDragging ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200" : "border-slate-200 focus-within:border-blue-400")}
       >
-        {/* Text Area */}
-        <textarea
-          rows={5}
-          disabled={readOnly}
-          value={description}
-          onChange={(e) => onChangeDescription(e.target.value)}
-          onPaste={handlePaste}
-          placeholder={placeholder}
-          className="w-full bg-transparent border-0 resize-y text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none font-medium leading-relaxed"
+        <div
+          ref={editorRef} role="textbox" aria-label="업무 내용" aria-multiline="true" aria-readonly={readOnly}
+          contentEditable={!readOnly} suppressContentEditableWarning
+          dangerouslySetInnerHTML={{ __html: initialHtml }}
+          data-placeholder={placeholder}
+          style={{ minHeight: `${minRows * 1.75}rem` }}
+          className="body-content-editor w-full whitespace-pre-wrap break-words text-base leading-7 text-slate-800 focus:outline-none"
+          onInput={() => emitBody()}
+          onMouseUp={rememberCursor} onKeyUp={rememberCursor} onBlur={rememberCursor}
+          onClick={(event) => {
+            const target = event.target;
+            if (target instanceof HTMLImageElement && !readOnly) {
+              const range = document.createRange();
+              range.selectNode(target);
+              restoreCursor(range);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (readOnly || !["Backspace", "Delete"].includes(event.key) || event.nativeEvent.isComposing) return;
+            const selection = window.getSelection();
+            if (!selection?.rangeCount || !selection.isCollapsed) return;
+            const range = selection.getRangeAt(0);
+            let container = range.startContainer;
+            let offset = range.startOffset;
+            const backward = event.key === "Backspace";
+            if (container.nodeType === Node.TEXT_NODE) {
+              if (backward ? offset !== 0 : offset !== container.textContent?.length) return;
+              const text = container;
+              container = text.parentNode!;
+              offset = Array.from(container.childNodes).indexOf(text as ChildNode) + (backward ? 0 : 1);
+            }
+            let neighbor: Node | null = container.childNodes[backward ? offset - 1 : offset] || null;
+            // At the edge of a paragraph, the previous/next image is still one editable object.
+            if (!neighbor && container !== editorRef.current) neighbor = backward ? container.previousSibling : container.nextSibling;
+            const line = neighbor instanceof HTMLElement && neighbor.tagName === "BR" ? neighbor : null;
+            if (line) neighbor = backward ? line.previousSibling : line.nextSibling;
+            if (neighbor instanceof HTMLImageElement && neighbor.dataset.bodyImage) {
+              event.preventDefault();
+              neighbor.remove();
+              line?.remove();
+              emitBody();
+            }
+          }}
+          onPaste={(event) => {
+            if (readOnly) return;
+            event.preventDefault();
+            rememberCursor();
+            const files = Array.from(event.clipboardData.items).filter((item) => item.kind === "file").map((item) => item.getAsFile()).filter((file): file is File => file !== null);
+            if (files.length) void uploadFiles(files);
+            else pasteText(event.clipboardData.getData("text/plain"));
+          }}
         />
 
-        {/* Drag overlay indicator */}
-        {isDragging && (
-          <div className="absolute inset-0 bg-blue-500/10 backdrop-blur-2xs rounded-2xl flex flex-col items-center justify-center pointer-events-none text-blue-600 font-bold text-sm gap-2">
-            <UploadCloud className="w-10 h-10 animate-bounce" />
-            <span>여기에 파일을 놓으면 자동 업로드됩니다 (도면, 이미지 등)</span>
-          </div>
-        )}
-
-        {/* Uploading progress indicator */}
-        {isUploading && (
-          <div className="py-2 flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 px-3 rounded-xl mb-2">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            <span>파일 업로드 및 서버 등록 중...</span>
-          </div>
-        )}
-
-        {/* Attached Files & Images Grid Section inside the board */}
-        {attachments.length > 0 && (
-          <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 mb-1">
-              <span className="flex items-center gap-1.5">
-                <Paperclip className="w-3.5 h-3.5 text-blue-600" />
-                첨부된 파일 및 사진 ({attachments.length}개)
-              </span>
-              <span className="text-slate-400 text-[10px]">클릭 시 미리보기/열기</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-              {attachments.map((att) => {
-                const isImg = isImageFile(att);
-                const isPdf = isPdfFile(att);
-
-                if (isImg) {
-                  return (
-                    <div
-                      key={att.id}
-                      onClick={() => handleOpenFile(att.url, "image")}
-                      className="group relative rounded-xl border border-slate-200 overflow-hidden bg-slate-50 hover:shadow-md hover:border-blue-400 transition cursor-pointer flex flex-col"
-                    >
-                      <div className="h-28 w-full bg-slate-100 overflow-hidden relative">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={att.url}
-                          alt={att.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                        />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center opacity-0 group-hover:opacity-100">
-                          <Maximize2 className="w-5 h-5 text-white drop-shadow-md" />
+        {/* Files remain inside the body, without a separate attachment panel. */}
+        {attachments.some((attachment) => !isBodyImage(attachment)) && (
+          <div className="mt-4 flex flex-col gap-3">
+            {attachments.filter((attachment) => !isBodyImage(attachment)).map((attachment) => {
+              const type = attachmentType(attachment);
+              return (
+                <div key={attachment.id} className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <div className="flex items-center">
+                    <button type="button" onClick={() => openAttachment(attachment)} aria-label={`${attachment.name} ${type === "image" ? "미리보기" : "열기"}`} className="min-w-0 flex-1 text-left hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center gap-3 p-3 sm:p-4">
+                          <div className={cn("flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl", type === "pdf" ? "bg-[#ef4937] text-white" : "bg-blue-100 text-blue-700")}>
+                            {type === "pdf" ? <><FileText className="h-6 w-6" /><span className="text-[9px] font-bold">PDF</span></> : <File className="h-6 w-6" />}
+                          </div>
+                          <div className="min-w-0"><p className="truncate text-sm sm:text-base font-medium text-slate-900" title={attachment.name}>{attachment.name}</p><p className="mt-1 text-xs sm:text-sm text-slate-400">{attachment.size || (type === "pdf" ? "PDF 문서" : "파일")}</p></div>
                         </div>
+                    </button>
+                    {type !== "image" && (
+                      <div className="flex shrink-0 items-center gap-1 pr-3">
+                        <a href={attachment.url} download={attachment.name} aria-label={`${attachment.name} 다운로드`} title="다운로드" className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"><Download className="h-5 w-5" /></a>
+                        {!readOnly && <button type="button" disabled={isUploading} onClick={() => void removeAttachment(attachment.id)} aria-label={`${attachment.name} 본문에서 제거`} className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700"><X className="h-4 w-4" /></button>}
                       </div>
-                      <div className="p-2 flex items-center justify-between gap-1 text-[11px] bg-white">
-                        <span className="truncate font-semibold text-slate-700" title={att.name}>
-                          {att.name}
-                        </span>
-                        {!readOnly && (
-                          <button
-                            type="button"
-                            onClick={(e) => handleRemoveAttachment(att.id, e)}
-                            className="p-1 text-slate-400 hover:text-rose-600 rounded-md transition hover:bg-rose-50 shrink-0 cursor-pointer"
-                            title="삭제"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                }
-
-                // PDF or other document
-                return (
-                  <div
-                    key={att.id}
-                    onClick={() => handleOpenFile(att.url, att.fileType)}
-                    className="group rounded-xl border border-slate-200 p-2.5 bg-slate-50 hover:bg-blue-50/50 hover:border-blue-400 transition cursor-pointer flex items-center justify-between gap-2 shadow-2xs"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div
-                        className={cn(
-                          "w-9 h-9 rounded-lg flex items-center justify-center shrink-0 font-bold",
-                          isPdf ? "bg-rose-100 text-rose-600" : "bg-blue-100 text-blue-600"
-                        )}
-                      >
-                        {isPdf ? <FileText className="w-5 h-5" /> : <File className="w-5 h-5" />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-800 truncate group-hover:text-blue-600" title={att.name}>
-                          {att.name}
-                        </p>
-                        <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
-                          <span>{att.size || "1 MB"}</span>
-                          {isPdf && (
-                            <span className="text-rose-600 font-extrabold flex items-center gap-0.5">
-                              PDF 열기 <ExternalLink className="w-2.5 h-2.5 inline" />
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {!readOnly && (
-                      <button
-                        type="button"
-                        onClick={(e) => handleRemoveAttachment(att.id, e)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition shrink-0 cursor-pointer"
-                        title="파일 삭제"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
                     )}
                   </div>
-                );
-              })}
-            </div>
+
+                </div>
+              );
+            })}
           </div>
         )}
 
-        {/* Bottom toolbar */}
         {!readOnly && (
-          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center gap-1.5 transition cursor-pointer text-xs"
-              >
-                <Paperclip className="w-3.5 h-3.5 text-blue-600" />
-                <span>파일 / 도면 / 사진 첨부</span>
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files) uploadFiles(e.target.files);
-                  e.target.value = "";
-                }}
-              />
-            </div>
-            <span className="text-[11px] text-slate-400 hidden sm:inline">
-              파일을 드래그해서 넣거나 클립보드 이미지(Ctrl+V)도 바로 붙여넣을 수 있습니다.
-            </span>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+            <button type="button" disabled={isUploading} onMouseDown={(event) => { event.preventDefault(); rememberCursor(); }} onClick={() => fileInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200">
+              {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+              {isUploading ? "업로드 중…" : "본문에 사진·파일 추가"}
+            </button>
+            <span className="text-xs text-slate-500">끌어놓기 · 이미지 붙여넣기</span>
+            <input ref={fileInputRef} type="file" multiple aria-label="본문에 추가할 파일 선택" className="hidden" onChange={(event) => { if (event.target.files) void uploadFiles(event.target.files); event.target.value = ""; }} />
           </div>
         )}
+        {isDragging && <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-blue-50/90 text-sm font-semibold text-blue-700">놓으면 본문에 추가합니다</div>}
+        {error && <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p>}
       </div>
 
-      {/* Image Lightbox Modal */}
-      {previewImageUrl && (
-        <div
-          onClick={() => setPreviewImageUrl(null)}
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4 cursor-zoom-out"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="relative max-w-4xl max-h-[90vh] bg-slate-950 rounded-2xl overflow-hidden shadow-2xl p-2 border border-slate-800"
-          >
-            <button
-              onClick={() => setPreviewImageUrl(null)}
-              className="absolute top-4 right-4 z-10 w-9 h-9 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-rose-600 transition cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewImageUrl}
-              alt="Preview"
-              className="max-w-full max-h-[85vh] object-contain rounded-xl mx-auto"
-            />
+      {preview && (
+        <div role="dialog" aria-modal="true" aria-label={attachmentType(preview) === "pdf" ? "PDF 미리보기" : "이미지 미리보기"} onClick={() => setPreview(null)} onKeyDown={(event) => { if (event.key === "Escape") setPreview(null); }} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-3 sm:p-6">
+          <div onClick={(event) => event.stopPropagation()} className={cn("relative overflow-hidden rounded-xl bg-white shadow-xl", attachmentType(preview) === "pdf" ? "flex h-[90vh] w-full max-w-6xl flex-col" : "max-w-5xl")}>
+            <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
+              <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{preview.name}</p>
+              <a href={preview.url} download={preview.name} aria-label={`${preview.name} 다운로드`} className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-100"><Download className="h-4 w-4" /><span className="hidden sm:inline">다운로드</span></a>
+              <button autoFocus type="button" aria-label="미리보기 닫기" onClick={() => setPreview(null)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+            </div>
+            {attachmentType(preview) === "pdf" ? (
+              <iframe src={preview.url} title={`${preview.name} PDF 미리보기`} className="min-h-0 w-full flex-1 border-0" />
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={preview.url} alt={preview.name} className="max-h-[78vh] max-w-full object-contain" />
+            )}
           </div>
         </div>
       )}

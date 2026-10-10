@@ -129,15 +129,15 @@ export default function DrawerAutomationPage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-slate-900">
-                  서랍장 자동화 산출 툴 (Drawer CAD Engine)
+                <h2 className="text-2xl font-bold text-slate-900">
+                  서랍장 규격 계산
                 </h2>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                   정밀 자동 계산
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                가구 외경 및 판재 규격을 입력하면 레일 표준 규격, 판재 정밀 절단 치수, 4×8 원장 소요 장수(결 유무 반영) 및 부속 목록을 자동 계산합니다.
+                가구 치수와 판재 규격을 입력하면 재단 목록과 필요한 부자재를 계산합니다.
               </p>
             </div>
           </div>

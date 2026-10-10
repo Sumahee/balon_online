@@ -1,3 +1,4 @@
+import { getToday } from "@/lib/date";
 import {
   WorkItem,
   AsItem,
@@ -95,14 +96,14 @@ export function getDashboardMetrics(workItems: WorkItem[], asItems: AsItem[]): D
     (a) => a.priority === "긴급" && a.resultStatus !== "완료"
   ).length;
   const completedCount = workItems.filter(
-    (w) => w.status === "준비완료" || w.status === "시공완료"
+    (w) => w.status === "시공완료"
   ).length;
   const completionRate =
     totalProjects > 0 ? Math.round((completedCount / totalProjects) * 100) : 0;
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = getToday();
   const todayTasks = workItems.filter(
-    (w) => (w.startDate || "") <= todayStr && (w.dueDate || w.deliveryDate || "") >= todayStr
+    (w) => w.status !== "시공완료" && !!w.startDate && (w.startDate || "") <= todayStr && (w.deliveryDate || w.dueDate || "") >= todayStr
   );
 
   return {
@@ -117,7 +118,7 @@ export function getDashboardMetrics(workItems: WorkItem[], asItems: AsItem[]): D
       todo: workItems.filter((w) => w.status === "대기"),
       office: workItems.filter((w) => w.status === "오피스"),
       factory: workItems.filter((w) => w.status === "공장"),
-      ready: workItems.filter((w) => w.status === "준비완료" || w.status === "시공완료"),
+      ready: workItems.filter((w) => w.status === "준비완료"),
     },
   };
 }

@@ -75,3 +75,10 @@ export async function executeQuery(sql: string, args: any[] = []) {
     };
   }
 }
+
+/** 저장 실패가 성공 응답으로 바뀌지 않도록 변경 쿼리에 사용합니다. */
+export async function executeMutation(sql: string, args: Parameters<typeof executeQuery>[1] = []) {
+  const result = await executeQuery(sql, args);
+  if (!result.success) throw new Error(result.error || result.message || "데이터베이스 저장에 실패했습니다.");
+  return result;
+}

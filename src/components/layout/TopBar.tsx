@@ -1,10 +1,11 @@
 "use client";
 
+import { getToday } from "@/lib/date";
+
 import React, { useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   Bell,
-  Plus,
   Wrench,
   AlertTriangle,
   Calendar,
@@ -24,6 +25,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle: string; category: s
     subtitle: "프로젝트 진행 현황, 일정 타임라인 및 칸반 업무 요약",
     category: "Dashboard",
   },
+  "/calendar": { title: "일정 관리", subtitle: "현장별 업무와 A/S 방문 일정", category: "Calendar" },
   "/work": {
     title: "업무 게시판",
     subtitle: "제작, 실측, 시공, 설계 업무 일정 및 진척도 통합 관리",
@@ -58,7 +60,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle: string; category: s
 
 export function TopBar() {
   const pathname = usePathname();
-  const { metrics, asItems, setQuickModalType } = useData();
+  const { asItems } = useData();
   const { user, logout } = useAuth();
   const [showAlertMenu, setShowAlertMenu] = useState(false);
 
@@ -74,18 +76,10 @@ export function TopBar() {
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shadow-xs">
-      {/* Left: Breadcrumb & Title */}
-      <div className="flex items-center gap-3 pl-10 lg:pl-0">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-            <span>BARON INT</span>
-            <span>/</span>
-            <span className="text-blue-600 font-medium">{pageInfo.category}</span>
-          </div>
-          <h1 className="text-lg sm:text-xl font-bold text-slate-900 leading-tight">
-            {pageInfo.title}
-          </h1>
-        </div>
+      <div className="flex items-center gap-3 text-sm">
+        <span className="font-semibold tracking-wide text-slate-400">BARON</span>
+        <span className="text-slate-300">/</span>
+        <span className="font-medium text-slate-700">{pageInfo.title}</span>
       </div>
 
       {/* Right: Actions & Tools */}
@@ -93,7 +87,7 @@ export function TopBar() {
         {/* Date Indicator (Desktop) */}
         <div className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-xs font-medium text-slate-600 border border-slate-200/80">
           <Calendar className="w-3.5 h-3.5 text-slate-500" />
-          <span>2026. 09. 10 (목)</span>
+          <span>{getToday().replaceAll("-", ". ")}</span>
         </div>
 
         {/* Notifications & Urgent AS Popover */}
@@ -161,15 +155,6 @@ export function TopBar() {
             </div>
           )}
         </div>
-
-        {/* Quick Action Button: 새 업무 등록 */}
-        <button
-          onClick={() => setQuickModalType("work")}
-          className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>새 업무 등록</span>
-        </button>
 
         {/* User Auth Profile Badge & Action */}
         {user ? (

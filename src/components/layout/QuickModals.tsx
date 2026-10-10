@@ -4,18 +4,18 @@ import React, { useState, useEffect } from "react";
 import { X, Plus, Wrench, Calendar, MapPin, Building, User, FileText, Phone, Palette, Layers, UserCheck, Sparkles } from "lucide-react";
 import { useData } from "@/context/DataContext";
 import { useAuth } from "@/context/AuthContext";
-import { Priority, WorkItem, CardType, DeadlineType, ClientInfo, UserInfo, MaterialOrderItem, DrawingType, AttachmentItem, POST_BAR_COLORS } from "@/types";
+import { Priority, WorkItem, CardType, DeadlineType, ClientInfo, MaterialOrderItem, DrawingType, AttachmentItem, POST_BAR_COLORS } from "@/types";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
+import { bodyText } from "@/lib/body-content";
 import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
 import { cn } from "@/lib/utils";
 
 export function QuickModals() {
-  const { quickModalType, setQuickModalType, addWorkItem, addAsItem } = useData();
+  const { quickModalType, setQuickModalType, addWorkItem, addAsItem, isSaving } = useData();
   const { user } = useAuth();
 
   // Dynamic Client and Staff lists loaded from shared DB
   const [clientsList, setClientsList] = useState<ClientInfo[]>([]);
-  const [staffList, setStaffList] = useState<UserInfo[]>([]);
 
   useEffect(() => {
     if (user?.name) {
@@ -33,14 +33,6 @@ export function QuickModals() {
       })
       .catch(() => {});
 
-    fetch("/api/users")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.staff) {
-          setStaffList(data.staff);
-        }
-      })
-      .catch(() => {});
   }, []);
 
   // Work form state
@@ -105,100 +97,110 @@ export function QuickModals() {
 
   const handleWorkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!workForm.clientName.trim()) {
-      alert("업체명을 입력해 주세요.");
-      return;
+    if (isSaving) return;
+    try {
+      if (!workForm.clientName.trim()) {
+        alert("업체명을 입력해 주세요.");
+        return;
+      }
+
+      const todayStr = new Date().toISOString().split("T")[0];
+      const siteStr = workForm.siteAddress.trim() ? ` ${workForm.siteAddress.trim()}` : "";
+      const autoTitle = `${workForm.clientName.trim()}${siteStr}(${workForm.drawingType})`;
+
+      const hasOrders = workForm.materialOrders.length > 0;
+      const isAllDone = hasOrders && workForm.materialOrders.every((o) => o.isOrdered);
+      const finalOrderStatus = isAllDone ? "발주완료" : hasOrders ? "발주필요" : "발주불필요";
+
+      await addWorkItem({
+        type: "work",
+        title: autoTitle,
+        clientName: workForm.clientName.trim(),
+        siteAddress: workForm.siteAddress.trim(),
+        region: workForm.siteAddress.trim().split(" ")[0] || "서울/수도권",
+        drawingType: workForm.drawingType,
+        cardType: workForm.cardType,
+        deadlineType: workForm.deadlineType,
+        deliveryDate: workForm.deliveryDate,
+        siteContactPhone: workForm.siteContactPhone,
+        postColor: workForm.postColor,
+        boardColor: workForm.boardColor,
+        drawingAssignee: workForm.drawingAssignee,
+        assignee: workForm.drawingAssignee || "김진우 실장", // 로그인 유저 자동 지정
+        priority: workForm.priority,
+        status: "대기",
+        progress: 0,
+        startDate: todayStr, // 등록일이 시작일
+        dueDate: workForm.deliveryDate, // 시공일이 마감일
+        notes: bodyText(workForm.description || workForm.notes),
+        description: workForm.description || workForm.notes,
+        materialOrders: workForm.materialOrders,
+        materialOrderNeeded: workForm.materialOrders.map((o) => o.name).join(", "),
+        materialOrderStatus: finalOrderStatus,
+        attachments: workForm.attachments,
+      });
+
+      setWorkForm({
+        clientName: "",
+        siteAddress: "",
+        drawingType: "옴니버스",
+        cardType: "도면",
+        deadlineType: "시공일",
+        deliveryDate: new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0],
+        siteContactPhone: "",
+        postColor: "11 다크그레이",
+        boardColor: "PET 18T 화이트",
+        drawingAssignee: "김진우 실장 (로그인 유저)",
+        priority: "보통",
+        notes: "",
+        description: "",
+        attachments: [],
+        materialOrders: [],
+      });
+
+      setQuickModalType(null);
+    } catch {
+      // DataContext displays the error; leave the form open for retry.
     }
-
-    const todayStr = new Date().toISOString().split("T")[0];
-    const siteStr = workForm.siteAddress.trim() ? ` ${workForm.siteAddress.trim()}` : "";
-    const autoTitle = `${workForm.clientName.trim()}${siteStr}(${workForm.drawingType})`;
-
-    const hasOrders = workForm.materialOrders.length > 0;
-    const isAllDone = hasOrders && workForm.materialOrders.every((o) => o.isOrdered);
-    const finalOrderStatus = isAllDone ? "발주완료" : hasOrders ? "발주필요" : "발주불필요";
-
-    await addWorkItem({
-      type: "work",
-      title: autoTitle,
-      clientName: workForm.clientName.trim(),
-      siteAddress: workForm.siteAddress.trim(),
-      region: workForm.siteAddress.trim().split(" ")[0] || "서울/수도권",
-      drawingType: workForm.drawingType,
-      cardType: workForm.cardType,
-      deadlineType: workForm.deadlineType,
-      deliveryDate: workForm.deliveryDate,
-      siteContactPhone: workForm.siteContactPhone,
-      postColor: workForm.postColor,
-      boardColor: workForm.boardColor,
-      drawingAssignee: workForm.drawingAssignee,
-      assignee: workForm.drawingAssignee || "김진우 실장", // 로그인 유저 자동 지정
-      priority: workForm.priority,
-      status: "대기",
-      progress: 0,
-      startDate: todayStr, // 등록일이 시작일
-      dueDate: workForm.deliveryDate, // 시공일이 마감일
-      notes: workForm.description || workForm.notes,
-      description: workForm.description || workForm.notes,
-      materialOrders: workForm.materialOrders,
-      materialOrderNeeded: workForm.materialOrders.map((o) => o.name).join(", "),
-      materialOrderStatus: finalOrderStatus,
-      attachments: workForm.attachments,
-    });
-
-    setWorkForm({
-      clientName: "",
-      siteAddress: "",
-      drawingType: "옴니버스",
-      cardType: "도면",
-      deadlineType: "시공일",
-      deliveryDate: new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0],
-      siteContactPhone: "",
-      postColor: "11 다크그레이",
-      boardColor: "PET 18T 화이트",
-      drawingAssignee: "김진우 실장 (로그인 유저)",
-      priority: "보통",
-      notes: "",
-      description: "",
-      attachments: [],
-      materialOrders: [],
-    });
-
-    setQuickModalType(null);
   };
 
   const DRAWING_TYPES: DrawingType[] = ["천정형", "에보라", "옴니버스", "기타"];
 
   const handleAsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!asForm.clientName.trim() || !asForm.siteAddress.trim() || !asForm.reason.trim()) {
-      alert("업체명, 현장주소, A/S 사유를 모두 입력해 주세요.");
-      return;
+    if (isSaving) return;
+    try {
+      if (!asForm.clientName.trim() || !asForm.siteAddress.trim() || !asForm.reason.trim()) {
+        alert("업체명, 현장주소, A/S 사유를 모두 입력해 주세요.");
+        return;
+      }
+
+      await addAsItem({
+        type: "as",
+        clientName: asForm.clientName,
+        constructDate: asForm.constructDate,
+        siteAddress: asForm.siteAddress,
+        reason: asForm.reason,
+        resultStatus: "접수",
+        resolutionDetails: "A/S 접수 완료. 담당자 확인 중.",
+        technician: asForm.technician,
+        contactPhone: asForm.contactPhone,
+        priority: asForm.priority,
+      });
+
+      setAsForm({
+        clientName: "",
+        constructDate: new Date().toISOString().split("T")[0],
+        siteAddress: "",
+        reason: "",
+        technician: "박성훈 반장",
+        contactPhone: "010-",
+        priority: "긴급",
+      });
+      setQuickModalType(null);
+    } catch {
+      // DataContext displays the error; leave the form open for retry.
     }
-
-    await addAsItem({
-      type: "as",
-      clientName: asForm.clientName,
-      constructDate: asForm.constructDate,
-      siteAddress: asForm.siteAddress,
-      reason: asForm.reason,
-      resultStatus: "접수",
-      resolutionDetails: "A/S 접수 완료. 담당자 확인 중.",
-      technician: asForm.technician,
-      contactPhone: asForm.contactPhone,
-      priority: asForm.priority,
-    });
-
-    setAsForm({
-      clientName: "",
-      constructDate: new Date().toISOString().split("T")[0],
-      siteAddress: "",
-      reason: "",
-      technician: "박성훈 반장",
-      contactPhone: "010-",
-      priority: "긴급",
-    });
-    setQuickModalType(null);
   };
 
   return (
@@ -500,9 +502,9 @@ export function QuickModals() {
                 </label>
                 <UnifiedBoardEditor
                   description={workForm.description}
-                  onChangeDescription={(val) => setWorkForm({ ...workForm, description: val, notes: val })}
+                  onChangeDescription={(val) => setWorkForm((prev) => ({ ...prev, description: val, notes: bodyText(val) }))}
                   attachments={workForm.attachments}
-                  onChangeAttachments={(items) => setWorkForm({ ...workForm, attachments: items })}
+                  onChangeAttachments={(items) => setWorkForm((prev) => ({ ...prev, attachments: items }))}
                   placeholder="작업 내용, 상세 사양, 현장 지시사항 등을 자유롭게 작성하세요... 파일이나 사진을 이 영역으로 드래그 & 드롭하여 바로 첨부할 수 있습니다."
                 />
               </div>
@@ -518,7 +520,7 @@ export function QuickModals() {
                 취소 (닫기)
               </button>
               <button
-                type="submit"
+                type="submit" disabled={isSaving} aria-busy={isSaving}
                 className="px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-md shadow-blue-500/20 transition cursor-pointer"
               >
                 + 업무 등록하기
@@ -638,7 +640,7 @@ export function QuickModals() {
                 취소
               </button>
               <button
-                type="submit"
+                type="submit" disabled={isSaving} aria-busy={isSaving}
                 className="px-5 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 text-xs font-bold shadow-md shadow-rose-500/20 transition cursor-pointer"
               >
                 A/S 즉시 접수하기

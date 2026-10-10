@@ -1,38 +1,33 @@
 "use client";
 
+import { PageHeader } from "@/components/common/PageHeader";
+
 import React, { useState } from "react";
 import {
-  ClipboardList,
   Plus,
   Search,
-  Filter,
   LayoutGrid,
   List,
   Edit2,
   Trash2,
-  Calendar,
   User,
-  CheckCircle2,
-  Clock,
-  ArrowRight,
-  Sliders,
-  AlertCircle,
-} from "lucide-react";
+  Sliders} from "lucide-react";
 import { useData } from "@/context/DataContext";
 import { WorkItem, Priority, WorkStatus, MaterialOrderItem, POST_BAR_COLORS } from "@/types";
 import { cn } from "@/lib/utils";
+import { WorkOverview } from "@/components/dashboard/WorkOverview";
 import { KanbanBoard } from "@/components/dashboard/KanbanBoard";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
 import { getMaterialOrders } from "@/lib/materialUtils";
 import { TaskDetailModal } from "@/components/dashboard/TaskDetailModal";
 
 export default function WorkBoardPage() {
-  const { workItems, updateWorkItem, deleteWorkItem, advanceWorkStatus, setQuickModalType } = useData();
+  const { workItems, updateWorkItem, deleteWorkItem, advanceWorkStatus, setQuickModalType, isSaving } = useData();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("전체");
   const [selectedCategory, setSelectedCategory] = useState<string>("전체");
-  const [viewMode, setViewMode] = useState<"kanban" | "table" | "card">("kanban");
+  const [viewMode, setViewMode] = useState<"kanban" | "table" | "card">("table");
 
   // Detail Modal & Edit Modal state
   const [selectedTask, setSelectedTask] = useState<WorkItem | null>(null);
@@ -40,10 +35,9 @@ export default function WorkBoardPage() {
 
   // Filter items
   const filteredItems = workItems.filter((item) => {
-    const matchesSearch =
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.assignee.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.category || "").toLowerCase().includes(searchQuery.toLowerCase());
+    const query = searchQuery.trim().toLocaleLowerCase();
+    const matchesSearch = [item.title, item.assignee, item.clientName, item.siteAddress, item.region, item.category]
+      .some((value) => (value || "").toLocaleLowerCase().includes(query));
 
     const matchesStatus = selectedStatus === "전체" || item.status === selectedStatus;
     const matchesCategory = selectedCategory === "전체" || (item.category || "") === selectedCategory;
@@ -79,60 +73,46 @@ export default function WorkBoardPage() {
     }
   };
 
-  const handleEditSave = (e: React.FormEvent) => {
+  const handleEditSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingItem) return;
-    updateWorkItem(editingItem.id, editingItem);
-    setEditingItem(null);
+    if (isSaving) return;
+    try {
+      if (!editingItem) return;
+      await updateWorkItem(editingItem.id, editingItem);
+      setEditingItem(null);
+    } catch {
+      // DataContext displays the error; leave the form open for retry.
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* Top Banner & Action */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <ClipboardList className="w-6 h-6 text-blue-600" />
-            <span>업무 관리 게시판 (Work Management)</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            제작, 실측, 시공, 설계 등 모든 프로젝트 업무를 등록하고 진척도를 실시간 추적합니다.
-          </p>
-        </div>
-
-        <button
-          onClick={() => setQuickModalType("work")}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 transition cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>신규 업무 등록</span>
-        </button>
-      </div>
+      <PageHeader title="업무 게시판" description="업무를 검색하고 담당자, 마감일, 진행 상태를 한눈에 확인하세요." actions={<><button onClick={() => setQuickModalType("work")} className="action-primary"><Plus className="h-4 w-4" />새 업무 등록</button></>} />
 
       {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="filter-panel space-y-3">
         {/* Search */}
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
           <input
             type="text"
-            placeholder="업무명, 담당자, 카테고리 검색..."
+            placeholder="업무명, 업체, 현장주소, 담당자 검색…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
         {/* Filters and View mode switch */}
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Status filter */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium text-slate-600">
+          <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium text-slate-600">
             {["전체", "대기", "오피스", "공장", "준비완료", "시공완료"].map((st) => (
               <button
                 key={st}
                 onClick={() => setSelectedStatus(st)}
                 className={cn(
-                  "px-2.5 py-1 rounded-md transition cursor-pointer",
+                  "px-3 py-2 rounded-md transition cursor-pointer",
                   selectedStatus === st ? "bg-white text-slate-900 font-bold shadow-2xs" : "hover:text-slate-900"
                 )}
               >
@@ -160,35 +140,35 @@ export default function WorkBoardPage() {
             <button
               onClick={() => setViewMode("kanban")}
               className={cn(
-                "px-2.5 py-1.5 rounded transition cursor-pointer flex items-center gap-1 text-xs font-bold",
+                "px-3 py-2 rounded transition cursor-pointer flex items-center gap-1 text-xs font-bold",
                 viewMode === "kanban" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900"
               )}
-              title="칸반 투두 보드로 보기"
+              title="칸반 투두 보드로 보기" aria-pressed={viewMode === "kanban"}
             >
               <LayoutGrid className="w-4 h-4" />
-              <span>칸반 투두 보드</span>
+              <span>칸반</span>
             </button>
             <button
               onClick={() => setViewMode("card")}
               className={cn(
-                "px-2.5 py-1.5 rounded transition cursor-pointer flex items-center gap-1 text-xs font-bold",
+                "px-3 py-2 rounded transition cursor-pointer flex items-center gap-1 text-xs font-bold",
                 viewMode === "card" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900"
               )}
-              title="카드로 보기"
+              title="카드로 보기" aria-pressed={viewMode === "card"}
             >
               <Sliders className="w-4 h-4" />
-              <span>카드 갤러리</span>
+              <span>카드</span>
             </button>
             <button
               onClick={() => setViewMode("table")}
               className={cn(
-                "px-2.5 py-1.5 rounded transition cursor-pointer flex items-center gap-1 text-xs font-bold",
+                "px-3 py-2 rounded transition cursor-pointer flex items-center gap-1 text-xs font-bold",
                 viewMode === "table" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900"
               )}
-              title="표로 보기"
+              title="표로 보기" aria-pressed={viewMode === "table"}
             >
               <List className="w-4 h-4" />
-              <span>리스트 표</span>
+              <span>리스트</span>
             </button>
           </div>
         </div>
@@ -197,16 +177,19 @@ export default function WorkBoardPage() {
       {/* Kanban View */}
       {viewMode === "kanban" && (
         <div className="space-y-3">
-          <KanbanBoard items={filteredItems} />
+          <KanbanBoard items={filteredItems} showCompleted={selectedStatus === "시공완료"} />
         </div>
       )}
 
       {/* Table View */}
+      <p className="text-sm text-slate-600">전체 {workItems.length}건 · 현재 {filteredItems.length}건 표시</p>
+
       {viewMode === "table" && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          <p className="border-b border-slate-100 px-4 py-2 text-xs text-slate-500 md:hidden">표를 좌우로 밀어 담당자와 일정을 확인하세요.</p>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs sm:text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[11px]">
+            <table aria-label="업무 목록" className="data-table min-w-[900px] w-full text-left text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-xs">
                 <tr>
                   <th className="py-3.5 px-4">구분</th>
                   <th className="py-3.5 px-4 min-w-[220px]">업무 / 프로젝트명</th>
@@ -232,7 +215,7 @@ export default function WorkBoardPage() {
                       className="hover:bg-blue-50/50 transition group cursor-pointer"
                     >
                       <td className="py-3 px-4">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                        <span className="text-xs whitespace-nowrap font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
                           {item.category}
                         </span>
                       </td>
@@ -243,14 +226,10 @@ export default function WorkBoardPage() {
                             {item.clientName || "협력사"}
                           </span>
                         </div>
-                        <div className="font-bold text-slate-900 group-hover:text-blue-600 transition">
+                        <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedTask(item); }} className="block text-left font-semibold text-slate-900 hover:text-blue-700 hover:underline">
                           {item.title}
-                        </div>
-                        {item.deliveryDate && (
-                          <div className="text-[11px] text-rose-600 font-semibold mt-0.5">
-                            시공/배송: {item.deliveryDate}
-                          </div>
-                        )}
+                        </button>
+
                       </td>
 
                       <td className="py-3 px-4 font-medium text-slate-700">
@@ -263,7 +242,7 @@ export default function WorkBoardPage() {
                       <td className="py-3 px-4">
                         <span
                           className={cn(
-                            "text-[10px] font-bold px-2 py-0.5 rounded border",
+                            "text-xs whitespace-nowrap font-bold px-2 py-0.5 rounded border",
                             getPriorityBadge(item.priority)
                           )}
                         >
@@ -271,8 +250,8 @@ export default function WorkBoardPage() {
                         </span>
                       </td>
 
-                      <td className="py-3 px-4 text-slate-600 text-[11px] font-mono whitespace-nowrap">
-                        <div>{item.startDate} ~ {item.dueDate}</div>
+                      <td className="py-3 px-4 text-slate-600 text-xs font-mono whitespace-nowrap">
+                        <div className="text-slate-500">시작 {item.startDate}</div><div className="mt-1 font-semibold text-slate-800">마감 {item.deliveryDate || item.dueDate}</div>
                       </td>
 
                       <td className="py-3 px-4">
@@ -282,7 +261,7 @@ export default function WorkBoardPage() {
                             advanceWorkStatus(item.id);
                           }}
                           className={cn(
-                            "text-[11px] px-2.5 py-0.5 rounded-full border transition hover:opacity-80 cursor-pointer",
+                            "text-xs whitespace-nowrap px-2.5 py-0.5 rounded-full border transition hover:opacity-80 cursor-pointer",
                             getStatusBadge(item.status)
                           )}
                           title="클릭하여 상태 변경"
@@ -337,12 +316,12 @@ export default function WorkBoardPage() {
             >
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                  <span className="text-xs whitespace-nowrap font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
                     {item.category}
                   </span>
                   <span
                     className={cn(
-                      "text-[10px] font-bold px-2 py-0.5 rounded border",
+                      "text-xs whitespace-nowrap font-bold px-2 py-0.5 rounded border",
                       getPriorityBadge(item.priority)
                     )}
                   >
@@ -366,7 +345,7 @@ export default function WorkBoardPage() {
                     <User className="w-3.5 h-3.5 text-slate-400" />
                     {item.assignee}
                   </span>
-                  <span className="text-[11px] font-mono text-slate-400">
+                  <span className="text-xs font-mono text-slate-400">
                     {item.startDate} ~ {item.dueDate}
                   </span>
                 </div>
@@ -411,6 +390,11 @@ export default function WorkBoardPage() {
           ))}
         </div>
       )}
+
+      <details className="summary-disclosure">
+        <summary>오늘 확인할 업무</summary>
+        <div className="pt-4"><WorkOverview /></div>
+      </details>
 
       {/* Edit Modal */}
       {editingItem && (
@@ -614,7 +598,7 @@ export default function WorkBoardPage() {
                   취소
                 </button>
                 <button
-                  type="submit"
+                  type="submit" disabled={isSaving} aria-busy={isSaving}
                   className="px-6 py-2 rounded-xl bg-blue-600 text-white text-xs font-extrabold hover:bg-blue-700 shadow-md transition cursor-pointer"
                 >
                   저장하기

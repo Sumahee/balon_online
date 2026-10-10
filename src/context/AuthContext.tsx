@@ -7,7 +7,7 @@ interface AuthContextType {
   user: UserInfo | null;
   token: string | null;
   isLoading: boolean;
-  login: (loginIdOrName: string, passwordOrPhone?: string) => Promise<{ success: boolean; message?: string }>;
+  login: (loginIdOrName: string, password?: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
 }
 
@@ -25,41 +25,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     async function restoreSession() {
       try {
-        // 1. Check URL query token (for integration with drawing program)
-        if (typeof window !== "undefined") {
-          const searchParams = new URLSearchParams(window.location.search);
-          const urlToken = searchParams.get("token");
-          if (urlToken) {
-            setToken(urlToken);
-            localStorage.setItem(TOKEN_KEY, urlToken);
-            document.cookie = `${TOKEN_KEY}=${urlToken}; path=/; max-age=${60 * 60 * 24 * 7}`;
-          }
-        }
-
-        const savedToken = localStorage.getItem(TOKEN_KEY) || getCookie(TOKEN_KEY);
-        const savedUserStr = localStorage.getItem(USER_KEY);
-
-        if (savedUserStr) {
-          try {
-            setUser(JSON.parse(savedUserStr));
-          } catch (e) {}
-        }
-
+        const urlToken = new URLSearchParams(window.location.search).get("token");
+        const savedToken = urlToken || localStorage.getItem(TOKEN_KEY) || getCookie(TOKEN_KEY);
+        // Cached user names never grant a session before the server checks membership.
+        localStorage.removeItem(USER_KEY);
         if (savedToken) {
-          setToken(savedToken);
-          // Verify with API
-          const res = await fetch(`/api/auth?token=${encodeURIComponent(savedToken)}`);
+          const res = await fetch(`/api/auth?token=${encodeURIComponent(savedToken)}`, { signal: AbortSignal.timeout(15_000), cache: "no-store" });
           const data = await res.json();
-          if (data.success && data.user) {
+          if (res.ok && data.success && data.user) {
             setUser(data.user);
+            setToken(savedToken);
+            localStorage.setItem(TOKEN_KEY, savedToken);
             localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-          } else {
-            // Token invalid or expired -> reset
+            if (urlToken) {
+              const cleanUrl = new URL(window.location.href);
+              cleanUrl.searchParams.delete("token");
+              window.history.replaceState(null, "", cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+            }
+          } else if (res.status === 401 || res.status === 403) {
             localStorage.removeItem(TOKEN_KEY);
-            localStorage.removeItem(USER_KEY);
             document.cookie = `${TOKEN_KEY}=; path=/; max-age=0`;
-            setUser(null);
-            setToken(null);
           }
         }
       } catch (err) {
@@ -72,14 +57,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     restoreSession();
   }, []);
 
-  const login = async (loginIdOrName: string, passwordOrPhone?: string) => {
+  const login = async (loginIdOrName: string, password?: string) => {
     try {
       const res = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({
           loginId: loginIdOrName,
-          password: passwordOrPhone,
+          password,
         }),
       });
 
@@ -97,8 +83,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       document.cookie = `${TOKEN_KEY}=${data.token}; path=/; max-age=${60 * 60 * 24 * 7}`;
 
       return { success: true, message: data.message };
-    } catch (err: any) {
-      return { success: false, message: err.message || "서버 통신 오류가 발생했습니다." };
+    } catch {
+      return { success: false, message: "인증 서버에 연결할 수 없습니다. 네트워크 상태를 확인하고 다시 시도해 주세요." };
     }
   };
 

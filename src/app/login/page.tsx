@@ -12,7 +12,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(false);
-  const [staffList, setStaffList] = useState<any[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -20,27 +19,12 @@ export default function LoginPage() {
     }
   }, [user, router]);
 
-  useEffect(() => {
-    async function loadStaff() {
-      try {
-        const res = await fetch("/api/users");
-        const data = await res.json();
-        if (data.success && data.staff) {
-          setStaffList(data.staff);
-        }
-      } catch (err) {
-        console.error("Failed to load staff list:", err);
-      }
-    }
-    loadStaff();
-  }, []);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
 
-    if (!loginId.trim()) {
-      setErrorMsg("이름 또는 직원 계정을 입력하거나 선택해주세요.");
+    if (!loginId.trim() || !password) {
+      setErrorMsg("직원 계정과 비밀번호를 입력해 주세요.");
       return;
     }
 
@@ -53,15 +37,11 @@ export default function LoginPage() {
       } else {
         setErrorMsg(result.message || "로그인에 실패했습니다.");
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || "오류가 발생했습니다.");
+    } catch {
+      setErrorMsg("인증 서버에 연결할 수 없습니다. 다시 시도해 주세요.");
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSelectStaff = (staffName: string) => {
-    setLoginId(staffName);
   };
 
   return (
@@ -95,66 +75,42 @@ export default function LoginPage() {
 
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-                직원 이름 또는 아이디
+              <label htmlFor="staff-login" className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+                직원 계정
               </label>
               <div className="relative rounded-xl shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                   <User className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
+                  id="staff-login" name="username" autoComplete="username" required
                   type="text"
                   value={loginId}
                   onChange={(e) => setLoginId(e.target.value)}
-                  placeholder="예: 김진우 실장 또는 이민아 팀장"
+                  placeholder="직원 아이디 또는 이메일"
                   className="block w-full pl-11 pr-4 py-3 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-                비밀번호 (선택/내선번호)
+              <label htmlFor="staff-password" className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+                비밀번호
               </label>
               <div className="relative rounded-xl shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
+                  id="staff-password" name="password" autoComplete="current-password" required
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="비밀번호 입력 (기본 인증)"
+                  placeholder="비밀번호를 입력하세요"
                   className="block w-full pl-11 pr-4 py-3 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all"
                 />
               </div>
             </div>
-
-            {/* Quick Staff Selection */}
-            {staffList.length > 0 && (
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-2">
-                  ⚡ 본사 직원 빠른 선택
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {staffList.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => handleSelectStaff(s.name)}
-                      className={`text-left px-3 py-2 text-xs rounded-lg border transition-all ${
-                        loginId === s.name
-                          ? "bg-blue-600/30 border-blue-500 text-blue-300 font-semibold"
-                          : "bg-slate-900/50 border-slate-700/70 text-slate-300 hover:bg-slate-800 hover:border-slate-600"
-                      }`}
-                    >
-                      <div className="truncate font-medium">{s.name}</div>
-                      <div className="text-[10px] text-slate-400 truncate">{s.role}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div>
               <button
@@ -166,7 +122,7 @@ export default function LoginPage() {
                   "인증 확인 중..."
                 ) : (
                   <>
-                    <span>로그인 및 토큰 발행</span>
+                    <span>로그인</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -177,7 +133,7 @@ export default function LoginPage() {
           <div className="mt-6 pt-6 border-t border-slate-700/60 text-center">
             <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>바론 본사 직원(`client_id` 미부여 계정)만 로그인 허용</span>
+              <span>승인된 바론 직원 계정만 로그인할 수 있습니다.</span>
             </div>
           </div>
         </div>

@@ -14,6 +14,8 @@
 }
 
 @theme inline {
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.5;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -24,6 +26,8 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, "Pretendard Variable", Pretendard, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.6;
+  letter-spacing: -0.012em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -58,4 +62,52 @@ body {
   background-size: 40px 40px;
   background-image: 
     linear-gradient(to right, rgba(226, 232, 240, 0.6) 1px, transparent 1px);
+}
+
+/* 키보드 탐색과 저장 중 상태를 모든 화면에서 일관되게 표시합니다. */
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.body-content-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+}
+.body-content-editor img[data-body-image] {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+}
+
+/* Shared page rhythm: heading, filters, records, then optional summaries. */
+.page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; padding: .25rem 0 .75rem; }
+.action-primary, .action-secondary { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 44px; padding: .625rem 1rem; border-radius: .75rem; font-size: .875rem; font-weight: 600; white-space: nowrap; transition: background-color .15s; }
+.action-primary { background: #2563eb; color: white; }
+.action-primary:hover { background: #1d4ed8; }
+.action-secondary { background: white; color: #334155; border: 1px solid #cbd5e1; }
+.action-secondary:hover { background: #f1f5f9; }
+.filter-panel { padding: 1rem; background: white; border: 1px solid #e2e8f0; border-radius: .875rem; }
+.filter-panel input, .filter-panel select { min-height: 42px; }
+.summary-disclosure { border: 1px solid #e2e8f0; border-radius: .875rem; background: white; padding: 1rem; }
+.summary-disclosure > summary { cursor: pointer; font-size: .875rem; font-weight: 600; color: #475569; }
+.data-table th { background: #f1f5f9; color: #475569; font-size: .8125rem; font-weight: 600; padding-top: 1rem; padding-bottom: 1rem; white-space: nowrap; }
+.data-table td { padding-top: 1rem; padding-bottom: 1rem; line-height: 1.55; }
+.app-content input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), .app-content select { min-height: 40px; }
+@media (max-width: 639px) {
+  .page-header { align-items: flex-start; }
+  .app-content input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), .app-content textarea, .app-content select { font-size: 16px; }
 }

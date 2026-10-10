@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { executeQuery, db } from "@/lib/db";
+import { executeQuery, executeMutation, db } from "@/lib/db";
 import { serverStore } from "@/lib/serverStore";
 import { DrawingRequest } from "@/types";
 
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
         now,
       ];
 
-      const res = await executeQuery(sql, args);
+      const res = await executeMutation(sql, args);
       if (res.success) {
         const newReq: DrawingRequest = {
           id,
@@ -192,7 +192,7 @@ export async function PATCH(request: Request) {
 
       args.push(id);
       const sql = `UPDATE drawing_requests SET ${updates.join(", ")} WHERE id = ?`;
-      const res = await executeQuery(sql, args);
+      const res = await executeMutation(sql, args);
 
       if (res.success) {
         return NextResponse.json({ success: true, message: "Drawing request updated successfully" });

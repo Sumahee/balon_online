@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import {
   WorkItem,
   AsItem,
@@ -16,9 +16,10 @@ import {
   initialFolders,
   initialImages,
   initialMaterials,
-  initialPurchaseItems,
   getDashboardMetrics,
 } from "@/lib/dataStore";
+
+import { requestApi } from "@/lib/api-client";
 
 interface DataContextType {
   workItems: WorkItem[];
@@ -29,6 +30,10 @@ interface DataContextType {
   purchaseItems: OnlinePurchaseItem[];
   metrics: DashboardMetrics;
   isLoading: boolean;
+  error: string | null;
+  isSaving: boolean;
+  reloadData: () => Promise<void>;
+  dismissError: () => void;
   addWorkItem: (item: Omit<WorkItem, "id" | "createdAt">) => Promise<void>;
   updateWorkItem: (id: string, updates: Partial<WorkItem>) => Promise<void>;
   deleteWorkItem: (id: string) => Promise<void>;
@@ -75,62 +80,58 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [quickModalType, setQuickModalType] = useState<"work" | "as" | null>(null);
 
-  // Initialize: Purge old dummy data from localStorage & Fetch live from Turso DB
-  useEffect(() => {
-    // 1. Force purge any legacy dummy data from localStorage
-    try {
-      localStorage.removeItem("baron_work_items_v1");
-      localStorage.removeItem("baron_as_items_v1");
-      localStorage.removeItem("baron_folders_v1");
-      localStorage.removeItem("baron_images_v1");
-      localStorage.removeItem("baron_materials_v1");
-      localStorage.removeItem("baron_work_items_v2");
-      localStorage.removeItem("baron_as_items_v2");
-    } catch (e) {}
+  const [error, setError] = useState<string | null>(null);
+  const [pendingWrites, setPendingWrites] = useState(0);
 
-    // 2. Fetch live data directly from Turso DB APIs
-    const loadLiveDbData = async () => {
-      setIsLoading(true);
-      try {
-        const [workRes, asRes, purchaseRes] = await Promise.all([
-          fetch("/api/posts?type=work")
-            .then((r) => r.json())
-            .catch(() => ({ success: false, data: [] })),
-          fetch("/api/posts?type=as")
-            .then((r) => r.json())
-            .catch(() => ({ success: false, data: [] })),
-          fetch("/api/purchases")
-            .then((r) => r.json())
-            .catch(() => ({ success: false, data: [] })),
-        ]);
-
-        if (workRes.success && Array.isArray(workRes.data)) {
-          setWorkItems(workRes.data);
-        } else {
-          setWorkItems([]);
-        }
-
-        if (asRes.success && Array.isArray(asRes.data)) {
-          setAsItems(asRes.data);
-        } else {
-          setAsItems([]);
-        }
-
-        if (purchaseRes.success && Array.isArray(purchaseRes.data) && purchaseRes.data.length > 0) {
-          setPurchaseItems(purchaseRes.data);
-        } else {
-          setPurchaseItems(initialPurchaseItems);
-        }
-      } catch (err) {
-        console.error("Failed to load initial data from DB API:", err);
-        setPurchaseItems(initialPurchaseItems);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadLiveDbData();
+  const reloadData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    const results = await Promise.allSettled([
+      requestApi<WorkItem[]>("/api/posts?type=work"),
+      requestApi<AsItem[]>("/api/posts?type=as"),
+      requestApi<OnlinePurchaseItem[]>("/api/purchases"),
+      requestApi<{ folders: GalleryFolder[]; images: GalleryImage[] }>("/api/gallery"),
+      requestApi<MaterialSample[]>("/api/materials"),
+    ]);
+    const [work, service, purchases, gallery, samples] = results;
+    if (work.status === "fulfilled" && work.value.data) setWorkItems(work.value.data);
+    if (service.status === "fulfilled" && service.value.data) setAsItems(service.value.data);
+    if (purchases.status === "fulfilled" && purchases.value.data) setPurchaseItems(purchases.value.data);
+    if (gallery.status === "fulfilled" && gallery.value.data) {
+      setFolders(gallery.value.data.folders);
+      setImages(gallery.value.data.images);
+    }
+    if (samples.status === "fulfilled" && samples.value.data) setMaterials(samples.value.data);
+    if (results.some((result) => result.status === "rejected")) {
+      setError("일부 데이터를 불러오지 못했습니다. 기존 화면을 유지합니다. 다시 불러오기를 눌러 주세요.");
+    }
+    setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => { if (active) void reloadData(); });
+    return () => { active = false; };
+  }, [reloadData]);
+
+  // 호출자는 실패 시 폼을 유지할 수 있도록 오류를 전달받습니다.
+  const save = async <T,>(url: string, method: string, body?: unknown) => {
+    setPendingWrites((count) => count + 1);
+    setError(null);
+    try {
+      return await requestApi<T>(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "저장에 실패했습니다.";
+      setError(`변경 사항을 저장하지 못했습니다. ${message}`);
+      throw cause;
+    } finally {
+      setPendingWrites((count) => count - 1);
+    }
+  };
 
   // Sync to LocalStorage as auxiliary cache
   useEffect(() => {
@@ -147,38 +148,20 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [workItems, asItems, folders, images, materials, isLoading]);
 
-  // Actions: Live write to Turso DB + State update
+  // 서버 저장이 확인된 데이터만 화면에 반영합니다.
   const addWorkItem = async (item: Omit<WorkItem, "id" | "createdAt">) => {
-    const newItemId = `work-${Date.now()}`;
-    const newItem: WorkItem = {
-      ...item,
-      id: newItemId,
-      createdAt: new Date().toISOString(),
-    };
-    setWorkItems((prev) => [newItem, ...prev]);
-
-    fetch("/api/posts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: newItemId, ...item, type: "work" }),
-    }).catch((e) => console.log("Server sync notice:", e));
+    const result = await save<WorkItem>("/api/posts", "POST", { ...item, id: crypto.randomUUID(), type: "work" });
+    if (result.data) setWorkItems((prev) => [result.data!, ...prev]);
   };
 
   const updateWorkItem = async (id: string, updates: Partial<WorkItem>) => {
-    setWorkItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
-    );
-
-    fetch("/api/posts", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, type: "work", ...updates }),
-    }).catch((e) => console.log("Server sync notice:", e));
+    await save("/api/posts", "PUT", { ...updates, id, type: "work" });
+    setWorkItems((prev) => prev.map((item) => item.id === id ? { ...item, ...updates } : item));
   };
 
   const deleteWorkItem = async (id: string) => {
+    await save(`/api/posts?id=${encodeURIComponent(id)}&type=work`, "DELETE");
     setWorkItems((prev) => prev.filter((item) => item.id !== id));
-    fetch(`/api/posts?id=${id}&type=work`, { method: "DELETE" }).catch(() => {});
   };
 
   const advanceWorkStatus = async (id: string) => {
@@ -200,44 +183,25 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       nextStatus = "시공완료";
       nextProgress = 100;
     } else {
-      nextStatus = "대기";
-      nextProgress = 0;
+      return; // 완료 업무는 자동으로 처음 단계로 돌아가지 않습니다.
     }
 
-    updateWorkItem(id, { status: nextStatus, progress: nextProgress });
+    await updateWorkItem(id, { status: nextStatus, progress: nextProgress });
   };
 
   const addAsItem = async (item: Omit<AsItem, "id" | "createdAt">) => {
-    const newItemId = `as-${Date.now()}`;
-    const newItem: AsItem = {
-      ...item,
-      id: newItemId,
-      createdAt: new Date().toISOString(),
-    };
-    setAsItems((prev) => [newItem, ...prev]);
-
-    fetch("/api/posts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: newItemId, ...item, type: "as" }),
-    }).catch(() => {});
+    const result = await save<AsItem>("/api/posts", "POST", { ...item, id: crypto.randomUUID(), type: "as" });
+    if (result.data) setAsItems((prev) => [result.data!, ...prev]);
   };
 
   const updateAsItem = async (id: string, updates: Partial<AsItem>) => {
-    setAsItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
-    );
-
-    fetch("/api/posts", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, type: "as", ...updates }),
-    }).catch(() => {});
+    await save("/api/posts", "PUT", { ...updates, id, type: "as" });
+    setAsItems((prev) => prev.map((item) => item.id === id ? { ...item, ...updates } : item));
   };
 
   const deleteAsItem = async (id: string) => {
+    await save(`/api/posts?id=${encodeURIComponent(id)}&type=as`, "DELETE");
     setAsItems((prev) => prev.filter((item) => item.id !== id));
-    fetch(`/api/posts?id=${id}&type=as`, { method: "DELETE" }).catch(() => {});
   };
 
   const advanceAsStatus = async (id: string) => {
@@ -246,114 +210,52 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     let nextStatus: AsItem["resultStatus"] = "처리중";
     if (item.resultStatus === "접수") nextStatus = "처리중";
     else if (item.resultStatus === "처리중") nextStatus = "완료";
-    else nextStatus = "접수";
+    else return;
 
-    updateAsItem(id, { resultStatus: nextStatus });
+    await updateAsItem(id, { resultStatus: nextStatus });
   };
 
   const addFolder = async (name: string, description?: string) => {
-    const newFolder: GalleryFolder = {
-      id: `folder-${Date.now()}`,
-      name,
-      description,
-      itemCount: 0,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-    setFolders((prev) => [...prev, newFolder]);
-
-    fetch("/api/gallery", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "create_folder", name, description }),
-    }).catch(() => {});
+    const result = await save<GalleryFolder>("/api/gallery", "POST", { action: "create_folder", name, description });
+    if (result.data) setFolders((prev) => [...prev, result.data!]);
   };
 
   const addImage = async (img: Omit<GalleryImage, "id" | "createdAt">) => {
-    const newImage: GalleryImage = {
-      ...img,
-      id: `img-${Date.now()}`,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-    setImages((prev) => [newImage, ...prev]);
-
-    setFolders((prev) =>
-      prev.map((f) => {
-        if (f.id === img.folderId || f.id === "folder-all") {
-          return { ...f, itemCount: f.itemCount + 1 };
-        }
-        return f;
-      })
-    );
-
-    fetch("/api/gallery", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "upload_image", ...img }),
-    }).catch(() => {});
+    const result = await save<GalleryImage>("/api/gallery", "POST", { action: "upload_image", ...img });
+    if (!result.data) return;
+    setImages((prev) => [result.data!, ...prev]);
+    setFolders((prev) => prev.map((folder) => folder.id === img.folderId || folder.id === "folder-all"
+      ? { ...folder, itemCount: folder.itemCount + 1 } : folder));
   };
 
   const deleteImage = async (id: string) => {
     const target = images.find((img) => img.id === id);
     if (!target) return;
+    await save(`/api/gallery?id=${encodeURIComponent(id)}&type=image`, "DELETE");
     setImages((prev) => prev.filter((img) => img.id !== id));
-
-    setFolders((prev) =>
-      prev.map((f) => {
-        if (f.id === target.folderId || f.id === "folder-all") {
-          return { ...f, itemCount: Math.max(0, f.itemCount - 1) };
-        }
-        return f;
-      })
-    );
-
-    fetch(`/api/gallery?id=${id}&type=image`, { method: "DELETE" }).catch(() => {});
+    setFolders((prev) => prev.map((folder) => folder.id === target.folderId || folder.id === "folder-all"
+      ? { ...folder, itemCount: Math.max(0, folder.itemCount - 1) } : folder));
   };
 
   const addMaterial = async (mat: Omit<MaterialSample, "id">) => {
-    const newMat: MaterialSample = {
-      ...mat,
-      id: `mat-${Date.now()}`,
-    };
-    setMaterials((prev) => [newMat, ...prev]);
-
-    fetch("/api/materials", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(mat),
-    }).catch(() => {});
+    const result = await save<MaterialSample>("/api/materials", "POST", mat);
+    if (result.data) setMaterials((prev) => [result.data!, ...prev]);
   };
 
   const addPurchaseItem = async (item: Omit<OnlinePurchaseItem, "id" | "createdAt">) => {
-    const newItemId = `purch-${Date.now()}`;
-    const newItem: OnlinePurchaseItem = {
-      ...item,
-      id: newItemId,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
+    const newItem = { ...item, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    await save("/api/purchases", "POST", newItem);
     setPurchaseItems((prev) => [newItem, ...prev]);
-
-    fetch("/api/purchases", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newItem),
-    }).catch((e) => console.log("Purchase API sync error:", e));
   };
 
   const updatePurchaseItem = async (id: string, updates: Partial<OnlinePurchaseItem>) => {
-    setPurchaseItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
-    );
-
-    fetch("/api/purchases", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, ...updates }),
-    }).catch((e) => console.log("Purchase API sync error:", e));
+    await save("/api/purchases", "PUT", { ...updates, id });
+    setPurchaseItems((prev) => prev.map((item) => item.id === id ? { ...item, ...updates } : item));
   };
 
   const deletePurchaseItem = async (id: string) => {
+    await save(`/api/purchases?id=${encodeURIComponent(id)}`, "DELETE");
     setPurchaseItems((prev) => prev.filter((item) => item.id !== id));
-    fetch(`/api/purchases?id=${id}`, { method: "DELETE" }).catch(() => {});
   };
 
   // Add Comment to Work Item (with optional photos & auto-gallery sync)
@@ -575,6 +477,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setMaterials(initialMaterials);
   };
 
+  const observeAction = <Args extends unknown[]>(action: (...args: Args) => Promise<void>) =>
+    (...args: Args) => {
+      const pending = action(...args);
+      void pending.catch(() => {}); // The global banner reports the failure.
+      return pending;
+    };
+
   const metrics = getDashboardMetrics(workItems, asItems);
 
   return (
@@ -588,21 +497,25 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         purchaseItems,
         metrics,
         isLoading,
-        addWorkItem,
-        updateWorkItem,
-        deleteWorkItem,
-        advanceWorkStatus,
-        addAsItem,
-        updateAsItem,
-        deleteAsItem,
-        advanceAsStatus,
-        addFolder,
-        addImage,
-        deleteImage,
-        addMaterial,
-        addPurchaseItem,
-        updatePurchaseItem,
-        deletePurchaseItem,
+        error,
+        isSaving: pendingWrites > 0,
+        reloadData,
+        dismissError: () => setError(null),
+        addWorkItem: observeAction(addWorkItem),
+        updateWorkItem: observeAction(updateWorkItem),
+        deleteWorkItem: observeAction(deleteWorkItem),
+        advanceWorkStatus: observeAction(advanceWorkStatus),
+        addAsItem: observeAction(addAsItem),
+        updateAsItem: observeAction(updateAsItem),
+        deleteAsItem: observeAction(deleteAsItem),
+        advanceAsStatus: observeAction(advanceAsStatus),
+        addFolder: observeAction(addFolder),
+        addImage: observeAction(addImage),
+        deleteImage: observeAction(deleteImage),
+        addMaterial: observeAction(addMaterial),
+        addPurchaseItem: observeAction(addPurchaseItem),
+        updatePurchaseItem: observeAction(updatePurchaseItem),
+        deletePurchaseItem: observeAction(deletePurchaseItem),
         addComment,
         deleteComment,
         deleteCommentImage,

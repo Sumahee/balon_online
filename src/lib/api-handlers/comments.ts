@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { executeQuery } from "@/lib/db";
+import { executeQuery, executeMutation } from "@/lib/db";
 
 // GET /api/comments?workItemId=xxx
 export async function GET(request: Request) {
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const imagesStr = images ? (Array.isArray(images) ? JSON.stringify(images) : String(images)) : null;
 
-    const result = await executeQuery(
+    const result = await executeMutation(
       `INSERT INTO bo_work_item_comments (id, work_item_id, author, content, images, created_at) 
        VALUES (?, ?, ?, ?, ?, ?)`,
       [commentId, workItemId, authorName, content, imagesStr, now]

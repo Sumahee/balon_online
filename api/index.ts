@@ -62,7 +62,7 @@ export async function GET(request: NextRequest, context?: RouteContext) {
       case "dashboard":
         return await dashboardHandler.GET();
       case "users":
-        return await usersHandler.GET();
+        return await usersHandler.GET(request);
       case "auth":
         return await authHandler.VERIFY(request);
       case "purchases":

@@ -1,219 +1,108 @@
 import { NextRequest, NextResponse } from "next/server";
 import { executeQuery, db } from "@/lib/db";
-import { UserInfo } from "@/types";
-import crypto from "crypto";
+import type { UserInfo } from "@/types";
+import crypto from "node:crypto";
 
-const SECRET_KEY = process.env.JWT_SECRET || "baron-online-secret-auth-key-2026";
+const SECRET_KEY = process.env.JWT_SECRET;
+const SESSION_DURATION = 1000 * 60 * 60 * 24 * 7;
+type UserRow = Record<string, unknown>;
 
-// Simple Token Helper for environment compatibility
-export function generateToken(user: UserInfo): string {
-  const payload = {
-    id: user.id,
-    name: user.name,
-    role: user.role,
-    email: user.email,
-    phone: user.phone,
-    exp: Date.now() + 1000 * 60 * 60 * 24 * 7, // 7 days
+export function isBaronStaff(row: UserRow): boolean {
+  return [null, 0, "", "0"].includes(row.client_id as null | number | string)
+    && row.status === "APPROVED";
+}
+
+function publicUser(row: UserRow): UserInfo {
+  return {
+    id: row.id as UserInfo["id"],
+    name: String(row.name || row.login_id || "바론 직원"),
+    phone: row.phone ? String(row.phone) : undefined,
+    email: row.email ? String(row.email) : undefined,
+    role: String(row.role || row.manager_rank || "바론 본사 직원"),
   };
-  const jsonStr = JSON.stringify(payload);
-  const base64Payload = Buffer.from(jsonStr).toString("base64url");
-  const signature = crypto
-    .createHmac("sha256", SECRET_KEY)
-    .update(base64Payload)
-    .digest("base64url");
-  return `${base64Payload}.${signature}`;
+}
+
+function equalSecret(actual: string, expected: string): boolean {
+  const digest = (value: string) => crypto.createHash("sha256").update(value).digest();
+  return crypto.timingSafeEqual(digest(actual), digest(expected));
+}
+
+export function generateToken(user: UserInfo): string {
+  if (!SECRET_KEY) throw new Error("Session signing secret is not configured");
+  const payload = Buffer.from(JSON.stringify({ ...user, exp: Date.now() + SESSION_DURATION })).toString("base64url");
+  const signature = crypto.createHmac("sha256", SECRET_KEY).update(payload).digest("base64url");
+  return `${payload}.${signature}`;
 }
 
 export function verifyToken(token: string): (UserInfo & { exp: number }) | null {
+  if (!SECRET_KEY) return null;
   try {
     const parts = token.split(".");
     if (parts.length !== 2) return null;
-    const [base64Payload, signature] = parts;
-    const expectedSignature = crypto
-      .createHmac("sha256", SECRET_KEY)
-      .update(base64Payload)
-      .digest("base64url");
-
-    if (signature !== expectedSignature) return null;
-
-    const jsonStr = Buffer.from(base64Payload, "base64url").toString("utf-8");
-    const payload = JSON.parse(jsonStr);
-
-    if (payload.exp && Date.now() > payload.exp) {
-      return null;
-    }
-    return payload;
-  } catch (err) {
+    const [payload, signature] = parts;
+    const expected = crypto.createHmac("sha256", SECRET_KEY).update(payload).digest("base64url");
+    if (!equalSecret(signature, expected)) return null;
+    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (!decoded.id || typeof decoded.exp !== "number" || !Number.isFinite(decoded.exp) || decoded.exp <= Date.now()) return null;
+    return decoded;
+  } catch {
     return null;
   }
 }
 
-// Mock users for development mode if DB is not populated
-const mockStaff: UserInfo[] = [
-  { id: 1, name: "김진우 실장", phone: "010-1234-5678", role: "설계/공정 총괄", email: "jinwoo@baron.co.kr" },
-  { id: 2, name: "이민아 팀장", phone: "010-9876-5432", role: "오피스/도면", email: "mina@baron.co.kr" },
-  { id: 3, name: "박상현 대리", phone: "010-5555-4444", role: "공장/자재 관리", email: "sanghyun@baron.co.kr" },
-  { id: 4, name: "정성훈 과장", phone: "010-3333-2222", role: "현장 시공 책임", email: "sunghoon@baron.co.kr" },
-];
+function unavailable() {
+  return NextResponse.json({ success: false, message: "직원 인증 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요." }, { status: 503 });
+}
+function denied() {
+  return NextResponse.json({ success: false, message: "아이디 또는 비밀번호를 확인해 주세요. 승인된 바론 직원 계정만 로그인할 수 있습니다." }, { status: 401 });
+}
 
-/**
- * POST /api/auth/login
- * Body: { loginIdOrName, passwordOrPhone }
- */
 export async function LOGIN(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const { loginId, name, password, phone } = body;
-
-    const targetIdentifier = String(loginId || name || "").trim();
-    const targetPassword = String(password || phone || "").trim();
-
-    if (!targetIdentifier) {
-      return NextResponse.json(
-        { success: false, message: "아이디 또는 이름을 입력해주세요." },
-        { status: 400 }
-      );
+    const identifier = typeof body.loginId === "string" ? body.loginId.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    if (!identifier || !password) {
+      return NextResponse.json({ success: false, message: "직원 계정과 비밀번호를 입력해 주세요." }, { status: 400 });
     }
-
-    let foundUser: UserInfo | null = null;
-
-    if (db) {
-      // 1. Check DB for matching user
-      const sql = `
-        SELECT * FROM users 
-        WHERE (name = ? OR login_id = ? OR email = ? OR phone = ?)
-      `;
-      const res = await executeQuery(sql, [targetIdentifier, targetIdentifier, targetIdentifier, targetIdentifier]);
-
-      if (res.success && res.rows && res.rows.length > 0) {
-        const row: any = res.rows[0];
-
-        // 🔒 [바론 본사 직원 전용 검증]
-        // client_id가 없거나 0/빈값인 경우만 본사 직원
-        const clientId = row.client_id;
-        const isStaff = clientId === null || clientId === undefined || clientId === 0 || clientId === "" || clientId === "0";
-
-        if (!isStaff) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: "접속 불가: 바론 온라인은 바론 본사 직원 전용 시스템입니다.",
-            },
-            { status: 403 }
-          );
-        }
-
-        foundUser = {
-          id: row.id,
-          name: String(row.name || row.login_id || "바론 직원"),
-          phone: row.phone ? String(row.phone) : undefined,
-          email: row.email ? String(row.email) : undefined,
-          role: row.status || row.role || "바론 본사 직원",
-        };
-      }
-    }
-
-    // Fallback to Mock Staff if DB not configured or for quick test
-    if (!foundUser) {
-      const matched = mockStaff.find(
-        (u) =>
-          u.name.includes(targetIdentifier) ||
-          (u.email && u.email.includes(targetIdentifier)) ||
-          (u.phone && u.phone.includes(targetIdentifier))
-      );
-
-      if (matched) {
-        foundUser = matched;
-      } else if (!db) {
-        // DB 미연동 시 테스트 유저로 생성
-        foundUser = {
-          id: Date.now(),
-          name: targetIdentifier.endsWith("직원") || targetIdentifier.endsWith("팀장") || targetIdentifier.endsWith("실장") ? targetIdentifier : `${targetIdentifier} 팀장`,
-          role: "바론 본사 직원",
-          phone: "010-0000-0000",
-        };
-      }
-    }
-
-    if (!foundUser) {
-      return NextResponse.json(
-        { success: false, message: "일치하는 바론 직원 계정을 찾을 수 없습니다." },
-        { status: 404 }
-      );
-    }
-
-    const token = generateToken(foundUser);
-
-    const response = NextResponse.json({
-      success: true,
-      message: "로그인 성공",
-      user: foundUser,
-      token,
-    });
-
-    // HTTP Cookie도 설정하여 쿠키 기반 공유 지원
+    if (!db || !SECRET_KEY) return unavailable();
+    const result = await executeQuery(
+      "SELECT * FROM users WHERE login_id = ? OR name = ? OR email = ? LIMIT 2",
+      [identifier, identifier, identifier]
+    );
+    if (!result.success) return unavailable();
+    if (result.rows.length !== 1) return denied();
+    const row = result.rows[0] as UserRow;
+    // Preserve the shared drawing-program account schema; no test account fallback.
+    if (!isBaronStaff(row) || typeof row.password !== "string" || !row.password || !equalSecret(password, row.password)) return denied();
+    const user = publicUser(row);
+    const token = generateToken(user);
+    const response = NextResponse.json({ success: true, message: "로그인 성공", user, token });
     response.cookies.set("baron_auth_token", token, {
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-      httpOnly: false, // 도면 프로그램 등 클라이언트 스크립트에서도 접근 허용
-      sameSite: "lax",
+      path: "/", maxAge: SESSION_DURATION / 1000, httpOnly: false,
+      sameSite: "lax", secure: process.env.NODE_ENV === "production",
     });
-
     return response;
-  } catch (error: any) {
-    console.error("[Auth Login Error]:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch {
+    return unavailable();
   }
 }
 
-/**
- * GET /api/auth/verify?token=...
- * Header: Authorization: Bearer <token>
- */
 export async function VERIFY(request: NextRequest) {
   try {
+    if (!db || !SECRET_KEY) return unavailable();
     const url = new URL(request.url);
-    let token = url.searchParams.get("token");
-
-    if (!token) {
-      const authHeader = request.headers.get("authorization");
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        token = authHeader.substring(7);
-      }
-    }
-
-    if (!token) {
-      token = request.cookies.get("baron_auth_token")?.value || null;
-    }
-
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "인증 토큰이 없습니다." },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json(
-        { success: false, message: "유효하지 않거나 만료된 토큰입니다." },
-        { status: 401 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      valid: true,
-      user: {
-        id: decoded.id,
-        name: decoded.name,
-        role: decoded.role,
-        email: decoded.email,
-        phone: decoded.phone,
-      },
-    });
-  } catch (error: any) {
-    console.error("[Auth Verify Error]:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const header = request.headers.get("authorization");
+    const token = url.searchParams.get("token") || (header?.startsWith("Bearer ") ? header.slice(7) : null)
+      || request.cookies.get("baron_auth_token")?.value;
+    const decoded = token ? verifyToken(token) : null;
+    if (!decoded) return denied();
+    // Re-check membership on every restored session, including drawing-program tokens.
+    const result = await executeQuery("SELECT id, login_id, name, email, phone, manager_rank, client_id, status FROM users WHERE id = ?", [decoded.id]);
+    if (!result.success) return unavailable();
+    if (result.rows.length !== 1 || !isBaronStaff(result.rows[0] as UserRow)) return denied();
+    return NextResponse.json({ success: true, valid: true, user: publicUser(result.rows[0] as UserRow) });
+  } catch {
+    return unavailable();
   }
 }

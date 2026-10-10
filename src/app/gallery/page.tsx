@@ -1,8 +1,9 @@
 "use client";
 
+import { PageHeader } from "@/components/common/PageHeader";
+
 import React, { useState, useRef } from "react";
 import {
-  Images,
   FolderPlus,
   Folder,
   UploadCloud,
@@ -11,19 +12,14 @@ import {
   ChevronRight,
   Download,
   Trash2,
-  Tag,
   Maximize2,
-  Plus,
   Building,
   Image as ImageIcon,
   Search,
-  Filter,
   Sparkles,
-  SlidersHorizontal,
-  Check,
-} from "lucide-react";
+  Check} from "lucide-react";
 import { useData } from "@/context/DataContext";
-import { GalleryImage, GalleryFolder } from "@/types";
+
 import { cn } from "@/lib/utils";
 
 export default function GalleryPage() {
@@ -107,12 +103,16 @@ export default function GalleryPage() {
   const activeFolder = folders.find((f) => f.id === selectedFolderId);
 
   const handleCreateFolder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newFolderName.trim()) return;
-    await addFolder(newFolderName.trim(), newFolderDesc.trim());
-    setNewFolderName("");
-    setNewFolderDesc("");
-    setShowFolderModal(false);
+    try {
+      e.preventDefault();
+      if (!newFolderName.trim()) return;
+      await addFolder(newFolderName.trim(), newFolderDesc.trim());
+      setNewFolderName("");
+      setNewFolderDesc("");
+      setShowFolderModal(false);
+    } catch {
+      // Keep the editor open; DataStatus displays the server error.
+    }
   };
 
   const handleFileDrop = (e: React.DragEvent) => {
@@ -140,47 +140,51 @@ export default function GalleryPage() {
   };
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!uploadPreview || !uploadTitle.trim()) {
-      alert("이미지와 사진 제목을 입력해 주세요.");
-      return;
+    try {
+      e.preventDefault();
+      if (!uploadPreview || !uploadTitle.trim()) {
+        alert("이미지와 사진 제목을 입력해 주세요.");
+        return;
+      }
+
+      // Auto folder classification: Match category to existing folder or use selected
+      let targetFolderId = selectedFolderId === "folder-all" ? "folder-1" : selectedFolderId;
+      const matchedFolder = folders.find((f) => f.name.includes(uploadCategory));
+      if (matchedFolder) {
+        targetFolderId = matchedFolder.id;
+      }
+
+      // Auto-generate tags based on drawing/item attributes
+      const autoTags: string[] = [
+        uploadCategory,
+        uploadColor,
+        uploadHasMirror ? "거울포함" : "거울없음",
+        uploadHasDrawer ? "서랍장포함" : "서랍장없음",
+      ];
+
+      if (uploadCustomTags) {
+        const extra = uploadCustomTags.split(",").map((t) => t.trim()).filter(Boolean);
+        autoTags.push(...extra);
+      }
+
+      await addImage({
+        folderId: targetFolderId,
+        title: uploadTitle,
+        url: uploadPreview,
+        siteName: uploadSiteName || "바론 INT 시공 현장",
+        tags: Array.from(new Set(autoTags)),
+        dimensions: "2400 x 1600",
+        size: "2.4 MB",
+      });
+
+      setUploadPreview(null);
+      setUploadTitle("");
+      setUploadSiteName("");
+      setUploadCustomTags("");
+      setShowUploadModal(false);
+    } catch {
+      // Keep the editor open; DataStatus displays the server error.
     }
-
-    // Auto folder classification: Match category to existing folder or use selected
-    let targetFolderId = selectedFolderId === "folder-all" ? "folder-1" : selectedFolderId;
-    const matchedFolder = folders.find((f) => f.name.includes(uploadCategory));
-    if (matchedFolder) {
-      targetFolderId = matchedFolder.id;
-    }
-
-    // Auto-generate tags based on drawing/item attributes
-    const autoTags: string[] = [
-      uploadCategory,
-      uploadColor,
-      uploadHasMirror ? "거울포함" : "거울없음",
-      uploadHasDrawer ? "서랍장포함" : "서랍장없음",
-    ];
-
-    if (uploadCustomTags) {
-      const extra = uploadCustomTags.split(",").map((t) => t.trim()).filter(Boolean);
-      autoTags.push(...extra);
-    }
-
-    await addImage({
-      folderId: targetFolderId,
-      title: uploadTitle,
-      url: uploadPreview,
-      siteName: uploadSiteName || "바론 INT 시공 현장",
-      tags: Array.from(new Set(autoTags)),
-      dimensions: "2400 x 1600",
-      size: "2.4 MB",
-    });
-
-    setUploadPreview(null);
-    setUploadTitle("");
-    setUploadSiteName("");
-    setUploadCustomTags("");
-    setShowUploadModal(false);
   };
 
   const currentLightboxImage =
@@ -202,45 +206,7 @@ export default function GalleryPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-xs">
-              <Images className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-                <span>시공 사진 아카이브 & 스마트 태그 검색</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                  자동 태그 분류
-                </span>
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                현장 시공 사진, 컬러/타입별 자재 마감, 거울/서랍장 옵션 태그 기반 스마트 탐색
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowFolderModal(true)}
-            className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <FolderPlus className="w-4 h-4 text-slate-500" />
-            <span>새 폴더 생성</span>
-          </button>
-
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <UploadCloud className="w-4 h-4" />
-            <span>사진 업로드 (자동 태그)</span>
-          </button>
-        </div>
-      </div>
+      <PageHeader title="시공 사진" description="현장과 자재별 사진을 모아 보고, 이름이나 태그로 찾아보세요." actions={<><button onClick={() => setShowFolderModal(true)} className="action-secondary"><FolderPlus className="h-4 w-4" />새 폴더</button><button onClick={() => setShowUploadModal(true)} className="action-primary"><UploadCloud className="h-4 w-4" />사진 업로드</button></>} />
 
       {/* 🔍 Smart Tag & Attribute Search Toolbar */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs space-y-3">
@@ -368,7 +334,7 @@ export default function GalleryPage() {
               <span>{folder.name}</span>
               <span
                 className={cn(
-                  "text-[10px] px-1.5 py-0.2 rounded-full",
+                  "text-xs px-1.5 py-0.2 rounded-full",
                   isSelected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
                 )}
               >
@@ -433,7 +399,7 @@ export default function GalleryPage() {
                 </div>
 
                 {/* Size pill */}
-                <span className="absolute bottom-2 right-2 text-[10px] bg-black/60 backdrop-blur-xs text-white px-2 py-0.5 rounded-md font-mono">
+                <span className="absolute bottom-2 right-2 text-xs bg-black/60 backdrop-blur-xs text-white px-2 py-0.5 rounded-md font-mono">
                   {img.size}
                 </span>
               </div>
@@ -448,7 +414,7 @@ export default function GalleryPage() {
                     {img.title}
                   </h3>
                   {img.siteName && (
-                    <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
+                    <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5 truncate">
                       <Building className="w-3 h-3 text-slate-400 shrink-0" />
                       <span>{img.siteName}</span>
                     </p>
@@ -461,7 +427,7 @@ export default function GalleryPage() {
                     {img.tags.slice(0, 2).map((tag, tIdx) => (
                       <span
                         key={tIdx}
-                        className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded"
+                        className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded"
                       >
                         #{tag}
                       </span>
@@ -528,7 +494,7 @@ export default function GalleryPage() {
             <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 text-white px-6 py-3 rounded-xl flex items-center justify-between w-full max-w-2xl text-xs">
               <div>
                 <h4 className="font-bold text-sm text-white">{currentLightboxImage.title}</h4>
-                <p className="text-slate-400 text-[11px] mt-0.5">
+                <p className="text-slate-400 text-xs mt-0.5">
                   현장: {currentLightboxImage.siteName} | 등록일: {currentLightboxImage.createdAt} | 해상도:{" "}
                   {currentLightboxImage.dimensions}
                 </p>
@@ -666,7 +632,7 @@ export default function GalleryPage() {
                       <p className="font-bold text-xs sm:text-sm text-slate-700">
                         사진을 이곳에 끌어다 놓거나 클릭하여 선택하세요.
                       </p>
-                      <p className="text-[11px] text-slate-400 mt-1">
+                      <p className="text-xs text-slate-400 mt-1">
                         JPG, PNG, WebP 지원 (최대 10MB)
                       </p>
                     </div>
@@ -775,11 +741,11 @@ export default function GalleryPage() {
 
               {/* Auto Generated Tags Live Preview */}
               <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl space-y-1.5">
-                <span className="text-[11px] font-bold text-blue-900 flex items-center gap-1">
+                <span className="text-xs font-bold text-blue-900 flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5 text-blue-600" />
                   <span>자동 생성 태그 미리보기:</span>
                 </span>
-                <div className="flex flex-wrap gap-1 text-[10px]">
+                <div className="flex flex-wrap gap-1 text-xs">
                   <span className="bg-blue-600 text-white font-bold px-2 py-0.5 rounded">#{uploadCategory}</span>
                   <span className="bg-slate-800 text-white font-bold px-2 py-0.5 rounded">#{uploadColor}</span>
                   <span className={cn("font-bold px-2 py-0.5 rounded", uploadHasMirror ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-600")}>

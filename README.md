@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BARON ONLINE
 
-## Getting Started
+가구 제작 업무, 현장 일정, 도면 요청, 자재 구매와 A/S를 관리하는 내부 업무 앱입니다.
+Next.js 16.3.4 App Router, React 19, TypeScript, Tailwind CSS 4와 Turso를 사용합니다.
 
-First, run the development server:
+## 실행과 검증
 
 ```bash
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm test
+npx next typegen
+npx tsc --noEmit
+npm run lint
+npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Turbopack이 포트 사용 제한으로 실행되지 않는 환경에서는 `npm run build -- --webpack`으로 검증할 수 있습니다.
+`.env.local`에는 `.env.example`을 참고해 서버용 Turso 연결 정보를 설정합니다. `JWT_SECRET`도 서버 환경에 필수로 설정합니다. 실제 토큰과 서명 키를 Git에 올리지 않습니다.
+기존 DB 초기화 스크립트는 공유 DB에 테이블을 만들기 때문에 테스트 용도로 실행하지 않습니다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 업무 흐름
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. 대시보드 또는 업무 관리의 **오늘 확인할 업무**에서 마감 지남, 오늘 마감, 미발주 업무, 긴급 A/S를 확인합니다.
+2. 업무명을 눌러 상세 화면에서 현장, 담당자, 도면 사양과 발주 목록을 확인합니다.
+3. **대기 → 오피스 → 공장 → 준비완료 → 시공완료** 순서로 업무를 진행합니다. 준비완료는 출고 대기이며 시공완료와 구분합니다.
+4. 달력에서 시공·배송·요청 마감을 확인하고 일정을 조정합니다. 업무 검색은 업체명, 현장주소, 지역, 담당자를 포함합니다.
+5. 완료 업무는 업무 관리의 **시공완료** 필터에서 확인합니다. 상태 진행 버튼은 완료 업무를 자동으로 다시 접수하지 않습니다.
+6. 저장 오류가 표시되면 입력 내용을 유지한 채 다시 저장합니다. **다시 불러오기**는 서버 데이터를 조회하며 실패한 변경을 재전송하지 않습니다.
 
-## Learn More
+## 2026-10-06 소스 리뷰와 반영 내용
 
-To learn more about Next.js, take a look at the following resources:
+검토 범위는 전체 소스 구조, 공통 데이터 계층, API 라우팅, DB 스키마, 각 페이지의 주요 조회·저장·상태 전환, 도면 및 사진 흐름입니다.
+외부 도면 앱 소스는 이 저장소에 없으므로 검증 범위에서 제외됩니다. 로그인 변경에서는 DB 계정 컬럼과 승인 상태를 읽기 전용으로 확인했습니다.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| 문제 | 반영한 개선 |
+| --- | --- |
+| 저장 응답을 기다리지 않고 화면만 바꾸고 실패를 숨김 | 업무·A/S·구매·갤러리·자재의 공통 요청 검증, 저장 중 표시, 실패 알림. 주요 등록·편집 폼은 성공한 뒤 닫힘 |
+| DB 변경 쿼리 실패에도 성공 응답 반환 | 업무·A/S·구매·댓글 등록·도면 요청 변경에 실패를 전달하는 변경 쿼리 헬퍼 적용 |
+| 구매 데이터가 없거나 조회가 실패하면 예시 구매 내역이 등장 | 빈 DB는 빈 목록 유지, 조회 오류는 실패 응답, 미연결 미리보기의 구매 CRUD는 한 서버 프로세스 안에서 일관되게 유지 |
+| 클라이언트와 메모리 저장소가 서로 다른 업무·폴더·이미지 ID 생성 | 업무·A/S ID 유지, 갤러리·자재는 서버 응답의 ID를 사용 |
+| 달력·상세·칸반·헤더·간트가 2026년 9월로 고정 | 한국 시간 기준 오늘, 이번 달과 월별 일수 적용. 간트는 월 밖의 업무를 제외하고 월을 걸치는 업무를 잘라 표시 |
+| 준비완료를 시공완료로 합산, 완료 업무를 다시 대기로 순환 | 실제 시공완료만 완료율에 반영, 준비완료 집계 분리, 완료 상태 자동 순환 중지 |
+| 연락처·포스트바·합판·도면 담당자 변경이 DB에 반영되지 않음 | 업무 사양 4개 필드를 변경 쿼리에 추가. A/S의 업체·주소·사유·연락처·우선순위 등 기존 컬럼 편집도 반영 |
+| 화면별로 업무 우선순위 파악이 어려움 | 대시보드와 모바일/데스크톱 업무 페이지에 오늘 확인할 업무와 상세 바로가기 추가 |
+| 포커스 표시와 모션 설정이 화면마다 다름 | 공통 키보드 포커스, 비활성 버튼, 움직임 줄이기 설정 적용 |
+| 사이드바가 실제 상태와 무관하게 DB 정상 가동이라고 표시 | 조회 중·오류·조회 완료 표시로 변경 |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+공통 요청은 15초 제한을 두고 HTTP 상태와 `success` 값을 함께 검사합니다. 조회 실패 시 기존 데이터를 지우지 않습니다.
+날짜 계산은 `src/lib/date.ts`, HTTP 응답 검증은 `src/lib/api-client.ts`, DB 변경 오류 처리는 `src/lib/db.ts`에 모았습니다.
 
-## Deploy on Vercel
+## 아직 해결이 필요한 항목
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| 우선순위 | 발견 사항 | 필요한 작업 |
+| --- | --- | --- |
+| 최우선 | 로그인과 직원 목록은 인증을 확인하지만 업무·연락처 등 나머지 API에는 인증·역할별 권한 검사가 없음 | 각 API의 접근 권한 검증 추가 |
+| 최우선 | 공유 도면 앱 계정의 기존 비밀번호 저장 형식을 유지함. 토큰 형식은 표준 JWT가 아님 | 공유 앱과 합의한 비밀번호 해시 마이그레이션 및 토큰 형식 통합 |
+| 높음 | 갤러리·자재가 `serverStore` 메모리만 사용함 | 기존 `bo_gallery_*`, `bo_materials` DB 테이블로 읽기/쓰기 전환. 서버 재시작·여러 인스턴스에서의 일관성 확보 |
+| 높음 | `AsItem.asDate`, `resultPhotos`, `images`에 대응하는 DB 컬럼과 저장 로직이 없음 | A/S 방문 날짜와 조치 사진의 스키마 마이그레이션, 조회·등록·편집을 함께 구현 |
+| 높음 | 댓글 삭제·댓글 사진 삭제·일부 시공 사진 추가/삭제는 클라이언트 상태만 변경함. 댓글 등록도 공통 저장 확인 흐름으로 전환해야 함 | 댓글 및 사진 변경 API 추가, 서버가 생성한 댓글 ID 사용, 갤러리 자동 동기화도 서버에 저장 |
+| 높음 | 첨부파일 교체와 업무 삭제가 여러 개별 쿼리로 실행됨 | 트랜잭션으로 묶어 부분 성공 방지. 존재하지 않는 ID의 수정·삭제도 영향 행 수를 확인 |
+| 높음 | 업로드가 로컬 파일 저장 또는 Base64 응답에 의존하고 입력 크기/형식 검증이 약함 | 영구 파일 스토리지, 용량·MIME·확장자 검증, 실제 저장 확인. 기존 자료 이전 계획 수립 |
+| 보통 | 도면 요청 조회가 DB 실패 시 메모리 결과로 대체됨. `/api/dashboard`는 DB 대신 메모리 집계 사용 | 운영 조회 실패를 명시하고 대시보드 API도 실제 DB와 같은 집계 사용 |
+| 보통 | 1,500줄 상세 모달과 중복 편집 폼, 문자열 상태와 광범위한 `any` | 사양·일정·댓글·첨부·도면 패널 분리, 공통 폼 및 상태 전환 규칙 정리. 변경 범위별 린트 오류 정리 |
+| 보통 | 서랍 계산기의 최소 깊이 검사와 실제 레일 선택 규칙 사이에 불일치가 있고 숫자/단수 검증이 부족함 | 제조 규격 확인 후 깊이·레일·유격·단수 입력 검증. 제작 전에 실측 검증 |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+위 항목은 이번 개선으로 해결된 것으로 간주하지 않습니다. 공유 DB와 도면 프로그램의 규격을 확인하지 않고 인증 방식이나 운영 스키마를 임의로 변경하지 않았습니다.
+
+## 검증 범위
+
+회귀 테스트는 한국 날짜 경계, 실패 응답, 빈 구매 DB, DB 조회 실패, 미리보기 구매 CRUD, 업무 ID 유지,
+DB 등록 실패, 구매 부분 수정, 준비완료/시공완료 집계의 차이를 확인합니다. 실제 운영 DB에 테스트 데이터를 기록하지 않습니다.
+프로덕션 빌드와 타입 검사, 모바일 업무 화면 및 데스크톱 대시보드 조회를 확인합니다.
+기존 린트 오류가 남아 있으므로 전체 린트 통과와 전체 업무의 종단 테스트 완료를 의미하지 않습니다.
+
+## 직원 로그인
+
+로그인 화면에는 직원 목록을 표시하지 않습니다. 공유 DB의 `users`에 등록된 계정 중
+`client_id`가 NULL/0/빈값이고 `status = APPROVED`인 직원만 기존 계정 비밀번호로 로그인합니다.
+미등록·승인 대기·외부 업체 계정, 잘못된 비밀번호, DB 조회 실패는 로그인되지 않습니다.
+예시 직원 및 임의 계정 발급 경로를 제거했고, 세션 복원 시 직원 자격을 다시 확인합니다.
+`/api/users` 직원 목록도 검증된 직원 세션이 있어야 조회할 수 있습니다.
+로컬용 서명 키는 `.env.local`에 설정하며 배포 환경에도 별도 `JWT_SECRET` 설정이 필요합니다.
+기존 공개 기본키로 발급한 토큰은 인정하지 않으므로 기존 사용자는 다시 로그인해야 합니다.

@@ -1,33 +1,21 @@
 "use client";
 
+import { getToday } from "@/lib/date";
+
 import React, { useState, useRef } from "react";
 import {
   X,
   Building,
   Calendar,
   User,
-  FileText,
-  Paperclip,
-  UploadCloud,
-  FileCheck,
-  Eye,
   Trash2,
   ExternalLink,
-  ArrowRight,
   Sparkles,
   CheckCircle2,
   Clock,
-  Briefcase,
-  Factory,
   CheckCircle,
   AlertTriangle,
   Download,
-  Maximize2,
-  ClipboardCheck,
-  Layers,
-  FileSpreadsheet,
-  Tag,
-  Check,
   ChevronLeft,
   ChevronRight,
   MessageSquare,
@@ -35,12 +23,13 @@ import {
   Camera,
 } from "lucide-react";
 
-import { WorkItem, WorkStatus, AttachmentItem, Priority, CardType, DeadlineType, DrawingRequest, DrawingType, ClientInfo, POST_BAR_COLORS } from "@/types";
+import { WorkItem, WorkStatus, AttachmentItem, CardType, DeadlineType, DrawingRequest, DrawingType, ClientInfo, POST_BAR_COLORS } from "@/types";
 import { useData } from "@/context/DataContext";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
 import { getMaterialOrders } from "@/lib/materialUtils";
+import { bodyText } from "@/lib/body-content";
 import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
 
 interface TaskDetailModalProps {
@@ -49,16 +38,18 @@ interface TaskDetailModalProps {
 }
 
 export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
-  const { workItems, updateWorkItem, addComment, deleteComment, deleteCommentImage, deletePhotoFromWorkItem } = useData();
+  const { workItems, updateWorkItem, isSaving, addComment, deleteComment, deleteCommentImage } = useData();
   const { user } = useAuth();
 
   // Reactive subscription to live item in DataContext
   const liveItem = item ? (workItems.find((w) => w.id === item.id) || item) : null;
 
   const [description, setDescription] = useState(liveItem?.description || liveItem?.notes || "");
-  const [isEditingDesc, setIsEditingDesc] = useState(false);
+  const [isBodyDirty, setIsBodyDirty] = useState(false);
+  const [attachmentDraft, setAttachmentDraft] = useState<AttachmentItem[] | null>(null);
+  const [isSavingBody, setIsSavingBody] = useState(false);
+  const [isUploadingBody, setIsUploadingBody] = useState(false);
   const [descSaved, setDescSaved] = useState(false);
-  const [pasteToast, setPasteToast] = useState<string | null>(null);
 
   // Title edit state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -93,49 +84,40 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
       .catch(() => {});
   }, []);
 
-  // Sync edit states whenever liveItem updates
-  React.useEffect(() => {
-    if (liveItem) {
-      setEditDrawingType(liveItem.drawingType || "옴니버스");
-      setEditClientName(liveItem.clientName || "");
-      setEditSiteAddress(liveItem.siteAddress || "");
-      setEditDeliveryDate(liveItem.deliveryDate || liveItem.dueDate || "");
-      setEditSiteContactPhone(liveItem.siteContactPhone || "");
-      setEditPostColor(liveItem.postColor || "11 다크그레이");
-      setEditBoardColor(liveItem.boardColor || "PET 18T 화이트");
-      setEditDrawingAssignee(liveItem.drawingAssignee || liveItem.assignee || "김진우 실장");
-    }
-  }, [
-    liveItem?.id,
-    liveItem?.drawingType,
-    liveItem?.clientName,
-    liveItem?.siteAddress,
-    liveItem?.deliveryDate,
-    liveItem?.dueDate,
-    liveItem?.siteContactPhone,
-    liveItem?.postColor,
-    liveItem?.boardColor,
-    liveItem?.drawingAssignee,
-    liveItem?.assignee,
-  ]);
+  const startEditingSpecs = () => {
+    if (!liveItem) return;
+    setEditDrawingType(liveItem.drawingType || "옴니버스");
+    setEditClientName(liveItem.clientName || "");
+    setEditSiteAddress(liveItem.siteAddress || "");
+    setEditDeliveryDate(liveItem.deliveryDate || liveItem.dueDate || "");
+    setEditSiteContactPhone(liveItem.siteContactPhone || "");
+    setEditPostColor(liveItem.postColor || "11 다크그레이");
+    setEditBoardColor(liveItem.boardColor || "PET 18T 화이트");
+    setEditDrawingAssignee(liveItem.drawingAssignee || liveItem.assignee || "김진우 실장");
+    setIsEditingSpecs(true);
+  };
 
   const handleSaveSpecs = async () => {
-    if (!liveItem) return;
-    await updateWorkItem(liveItem.id, {
-      drawingType: editDrawingType,
-      clientName: editClientName.trim() || liveItem.clientName,
-      siteAddress: editSiteAddress.trim(),
-      deliveryDate: editDeliveryDate,
-      dueDate: editDeliveryDate,
-      siteContactPhone: editSiteContactPhone.trim(),
-      postColor: editPostColor,
-      boardColor: editBoardColor.trim(),
-      drawingAssignee: editDrawingAssignee,
-      assignee: editDrawingAssignee,
-    });
-    setIsEditingSpecs(false);
-    setReqToast("도면 전송 8종 사양 정보가 실시간 저장되었습니다! ✨");
-    setTimeout(() => setReqToast(null), 3000);
+    try {
+      if (!liveItem) return;
+      await updateWorkItem(liveItem.id, {
+        drawingType: editDrawingType,
+        clientName: editClientName.trim() || liveItem.clientName,
+        siteAddress: editSiteAddress.trim(),
+        deliveryDate: editDeliveryDate,
+        dueDate: editDeliveryDate,
+        siteContactPhone: editSiteContactPhone.trim(),
+        postColor: editPostColor,
+        boardColor: editBoardColor.trim(),
+        drawingAssignee: editDrawingAssignee,
+        assignee: editDrawingAssignee,
+      });
+      setIsEditingSpecs(false);
+      setReqToast("도면 전송 8종 사양 정보가 실시간 저장되었습니다! ✨");
+      setTimeout(() => setReqToast(null), 3000);
+    } catch {
+      // Keep the editor open; DataStatus displays the server error.
+    }
   };
 
   // PDF Viewer Modal
@@ -148,16 +130,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
   const [newCommentText, setNewCommentText] = useState("");
   const [commentAttachedPhotos, setCommentAttachedPhotos] = useState<string[]>([]);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const commentFileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Top Document Attachments (excludes comment photos)
-  const docAttachments = React.useMemo(() => {
-    return (liveItem?.attachments || []).filter(
-      (att) => att.fileType !== "image" && !/\.(jpg|jpeg|png|webp|gif)$/i.test(att.name)
-    );
-  }, [liveItem?.attachments]);
 
   // All photos for Lightbox Slider (combines card uploads & comment photos)
   const allPhotos = React.useMemo(() => {
@@ -202,8 +175,8 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (activePhotoIndex === null) return;
-      if (e.key === "ArrowLeft") handlePrevPhoto();
-      if (e.key === "ArrowRight") handleNextPhoto();
+      if (e.key === "ArrowLeft") setActivePhotoIndex((prev) => prev !== null && prev > 0 ? prev - 1 : allPhotos.length - 1);
+      if (e.key === "ArrowRight") setActivePhotoIndex((prev) => prev !== null && prev < allPhotos.length - 1 ? prev + 1 : 0);
       if (e.key === "Escape") setActivePhotoIndex(null);
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -265,7 +238,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
 
   // Fetch existing drawing request for this item
   React.useEffect(() => {
-    if (item?.id) {
+    if (item?.id && (item.cardType || "도면") === "도면") {
       fetch(`/api/drawing-requests?workItemId=${item.id}`)
         .then((res) => res.json())
         .then((data) => {
@@ -275,14 +248,18 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
         })
         .catch(() => {});
     }
-  }, [item?.id]);
+  }, [item?.id, item?.cardType]);
 
   if (!item) return null;
 
   const handleSendDrawingRequest = async () => {
     if (!liveItem) return;
+    if (isBodyDirty || attachmentDraft !== null || isEditingSpecs) {
+      window.alert("본문과 도면 사양을 저장한 뒤 전송해 주세요.");
+      return;
+    }
     setIsSendingReq(true);
-    const assignedUser = user?.name || editDrawingAssignee || liveItem.drawingAssignee || liveItem.assignee || "바론 담당자";
+    const assignedUser = user?.name || liveItem.drawingAssignee || liveItem.assignee || "바론 담당자";
 
     try {
       // Auto assign logged-in user to this work item on drawing action
@@ -296,16 +273,16 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workItemId: liveItem.id,
-          drawingType: editDrawingType || liveItem.drawingType || "옴니버스",
-          clientName: editClientName || liveItem.clientName,
-          siteAddress: editSiteAddress || liveItem.siteAddress || "미지정 현장",
-          deliveryDate: editDeliveryDate || liveItem.deliveryDate || liveItem.dueDate,
-          contactPhone: editSiteContactPhone || liveItem.siteContactPhone || "010-미입력", // 업체로부터 받은 현장 담당자 연락처
-          postColor: editPostColor || liveItem.postColor || "11 다크그레이",
-          boardColor: editBoardColor || liveItem.boardColor || "PET 18T 화이트",
+          drawingType: liveItem.drawingType || "옴니버스",
+          clientName: liveItem.clientName,
+          siteAddress: liveItem.siteAddress || "미지정 현장",
+          deliveryDate: liveItem.deliveryDate || liveItem.dueDate,
+          contactPhone: liveItem.siteContactPhone || "010-미입력", // 업체로부터 받은 현장 담당자 연락처
+          postColor: liveItem.postColor || "11 다크그레이",
+          boardColor: liveItem.boardColor || "PET 18T 화이트",
           drawingAssignee: assignedUser,
           title: liveItem.title,
-          description: description || liveItem.description || liveItem.notes,
+          description: bodyText(liveItem.description ?? liveItem.notes ?? ""),
         }),
       });
       const data = await res.json();
@@ -346,7 +323,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
               url: drawingReq.resultPdfUrl,
               fileType: "pdf",
               size: "도면 파일",
-              uploadedAt: new Date().toISOString().split("T")[0],
+              uploadedAt: getToday(),
             };
             updateWorkItem(item.id, { attachments: [newAtt, ...(item.attachments || [])] });
           }
@@ -361,13 +338,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
   };
 
 
-  const STAGES: { key: WorkStatus; label: string; icon: typeof Clock; desc: string }[] = [
-    { key: "대기", label: "To-Do", icon: Clock, desc: "발주 접수 / 대기" },
-    { key: "오피스", label: "오피스", icon: Briefcase, desc: "도면 작업 / 택배" },
-    { key: "공장", label: "공장", icon: Factory, desc: "자재 준비 / 가공" },
-    { key: "준비완료", label: "준비완료", icon: CheckCircle2, desc: "출고 대기" },
-    { key: "시공완료", label: "시공완료", icon: CheckCircle, desc: "현장 시공 완료" },
-  ];
+  const STAGES: WorkStatus[] = ["대기", "오피스", "공장", "준비완료", "시공완료"];
 
   const CARD_TYPES: { key: CardType; label: string; color: string }[] = [
     { key: "도면", label: "도면", color: "bg-indigo-100 text-indigo-800 border-indigo-200" },
@@ -378,7 +349,6 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
 
   const DEADLINE_TYPES: DeadlineType[] = ["시공일", "배송일", "요청일"];
 
-  const currentStageIndex = STAGES.findIndex((s) => s.key === item.status);
 
   const handleStageChange = (newStatus: WorkStatus) => {
     let newProgress = item.progress;
@@ -391,102 +361,34 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
     updateWorkItem(item.id, { status: newStatus, progress: newProgress });
   };
 
-  const handleNextStage = () => {
-    if (item.status === "대기") handleStageChange("오피스");
-    else if (item.status === "오피스") handleStageChange("공장");
-    else if (item.status === "공장") handleStageChange("준비완료");
-    else if (item.status === "준비완료") handleStageChange("시공완료");
-  };
-
-  const handleSaveDescription = () => {
-    updateWorkItem(item.id, { description });
-    setIsEditingDesc(false);
-    setDescSaved(true);
-    setTimeout(() => setDescSaved(false), 2000);
-  };
-
-  // Clipboard Paste Handler (Ctrl+V for Images)
-  const handlePaste = (e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-
-    let hasImage = false;
-    for (let i = 0; i < items.length; i++) {
-      const itemData = items[i];
-      if (itemData.type.indexOf("image") !== -1) {
-        hasImage = true;
-        const file = itemData.getAsFile();
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            const dataUrl = event.target?.result as string;
-            const now = new Date();
-            const timeStr = `${now.getHours().toString().padStart(2, "0")}${now
-              .getMinutes()
-              .toString()
-              .padStart(2, "0")}${now.getSeconds().toString().padStart(2, "0")}`;
-
-            const newAttachment: AttachmentItem = {
-              id: `att-paste-${Date.now()}`,
-              name: `캡처_이미지_${timeStr}.png`,
-              url: dataUrl,
-              fileType: "image",
-              size: `${Math.round(file.size / 1024)} KB`,
-              uploadedAt: now.toISOString().split("T")[0],
-            };
-
-            updateWorkItem(item.id, {
-              attachments: [newAttachment, ...(item.attachments || [])],
-            });
-
-            setPasteToast("클립보드 이미지가 첨부파일로 즉시 추가되었습니다! 📋🖼️");
-            setTimeout(() => setPasteToast(null), 3500);
-          };
-          reader.readAsDataURL(file);
-        }
-      }
-    }
-
-    if (hasImage) {
-      e.preventDefault();
-    }
-  };
-
-  const handleFileUpload = (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-
-    const newAttachments: AttachmentItem[] = [...(item.attachments || [])];
-
-    Array.from(files).forEach((file) => {
-      const isPdf = file.type === "application/pdf" || file.name.endsWith(".pdf");
-      const isImage = file.type.startsWith("image/") || /\.(jpg|jpeg|png|webp|gif)$/i.test(file.name);
-
-      const objectUrl = URL.createObjectURL(file);
-      const sizeStr =
-        file.size > 1024 * 1024
-          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-          : `${Math.round(file.size / 1024)} KB`;
-
-      newAttachments.unshift({
-        id: `att-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-        name: file.name,
-        url: objectUrl,
-        fileType: isPdf ? "pdf" : isImage ? "image" : "file",
-        size: sizeStr,
-        uploadedAt: new Date().toISOString().split("T")[0],
+  const handleSaveBody = async () => {
+    if (!liveItem || isSavingBody || isUploadingBody) return;
+    setIsSavingBody(true);
+    try {
+      await updateWorkItem(liveItem.id, {
+        description: isBodyDirty ? description : (liveItem.description ?? liveItem.notes ?? ""),
+        notes: bodyText(isBodyDirty ? description : (liveItem.description ?? liveItem.notes ?? "")),
+        attachments: attachmentDraft ?? liveItem.attachments ?? [],
       });
-    });
-
-    updateWorkItem(item.id, { attachments: newAttachments });
+      setIsBodyDirty(false);
+      setAttachmentDraft(null);
+      setDescSaved(true);
+      setTimeout(() => setDescSaved(false), 2500);
+    } catch {
+      // Preserve the draft so the user can retry after the error notification.
+    } finally {
+      setIsSavingBody(false);
+    }
   };
 
-  const handleDeleteAttachment = (attId: string) => {
-    const updated = (item.attachments || []).filter((a) => a.id !== attId);
-    updateWorkItem(item.id, { attachments: updated });
+  const handleClose = () => {
+    if (isSavingBody || isUploadingBody) return;
+    if ((isBodyDirty || attachmentDraft !== null) && !window.confirm("저장하지 않은 본문 변경이 있습니다. 닫으시겠습니까?")) return;
+    onClose();
   };
 
   // Urgency detection
-  const todayStr = "2026-09-10";
+  const todayStr = getToday();
   const targetDate = item.deliveryDate || item.dueDate;
   const daysUntilDelivery = Math.ceil(
     (new Date(targetDate).getTime() - new Date(todayStr).getTime()) / (1000 * 60 * 60 * 24)
@@ -495,7 +397,8 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 backdrop-blur-xs animate-in fade-in overflow-y-auto">
+      <div role="dialog" aria-modal="true" aria-label="업무 상세"
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 backdrop-blur-xs animate-in fade-in overflow-y-auto">
         <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
           {/* Top Bar */}
           <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
@@ -536,7 +439,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
             </div>
 
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -544,7 +447,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
           </div>
 
           {/* Modal Main Scrollable Content */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
             {/* Title & Metadata Strip */}
             <div>
               {isEditingTitle ? (
@@ -593,7 +496,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                 </div>
               )}
 
-              <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-slate-600 bg-slate-100/70 p-3 rounded-xl border border-slate-200/80">
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
                 {/* Deadline Type & Date Selector */}
                 <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs">
                   <Calendar className="w-4 h-4 text-rose-500 shrink-0" />
@@ -630,122 +533,50 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-slate-400" />
-                  <span>
-                    시작일: <span className="font-mono">{item.startDate}</span>
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-1.5 ml-auto">
-                  <span className="text-slate-400">공정 진척도:</span>
-                  <span className="font-extrabold text-blue-600">{item.progress}%</span>
-                </div>
+                <label className="ml-auto flex items-center gap-2 text-sm">
+                  <span className="text-slate-500">상태</span>
+                  <select aria-label="현재 업무 상태" value={liveItem?.status || item.status} disabled={isSaving}
+                    onChange={(event) => handleStageChange(event.target.value as WorkStatus)}
+                    className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 font-semibold text-slate-800">
+                    {STAGES.map((stage) => <option key={stage} value={stage}>{stage}</option>)}
+                  </select>
+                </label>
               </div>
             </div>
 
-            {/* 4-Stage Process Stepper & Transition Button */}
-            <div className="p-4 bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <span className="text-[11px] font-bold text-blue-300 uppercase tracking-wider">
-                    가구 제작 프로세스 진행 단계
-                  </span>
-                  <div className="text-base font-extrabold flex items-center gap-2 mt-0.5">
-                    <span>현재 공정:</span>
-                    <span className="px-2.5 py-0.5 rounded-lg bg-blue-500 text-white text-sm">
-                      {item.status}
-                    </span>
-                  </div>
+            <section className="space-y-3" aria-label="기본정보와 본문">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-base font-bold text-slate-900">기본정보 · 업무 내용</h3>
+                <div className="flex items-center gap-2">
+                  <span role="status" className="text-xs text-slate-500">{isBodyDirty || attachmentDraft !== null ? "저장하지 않은 변경" : descSaved ? "저장되었습니다" : ""}</span>
+                  <button type="button" onClick={() => void handleSaveBody()} disabled={isSavingBody || isUploadingBody || isSaving || (!isBodyDirty && attachmentDraft === null)}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                    {isSavingBody ? "저장 중…" : "본문 저장"}
+                  </button>
                 </div>
-
-                {/* Fast Action Stage Advance Button */}
-                {item.status === "대기" && (
-                  <button
-                    onClick={handleNextStage}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
-                  >
-                    <span>오피스로 전달 (도면 및 택배 리스트업 시작)</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
-
-                {item.status === "오피스" && (
-                  <button
-                    onClick={handleNextStage}
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
-                  >
-                    <Factory className="w-4 h-4" />
-                    <span>공장으로 설계도 및 자재 리스트 인계</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
-
-                {item.status === "공장" && (
-                  <button
-                    onClick={handleNextStage}
-                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>자재 준비 완료 및 준비완료로 인계</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
-
-                {item.status === "준비완료" && (
-                  <button
-                    onClick={handleNextStage}
-                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    <span>🏗️ 현장 시공완료 처리 (칸반에서 삭제/업무 리스트 보관)</span>
-                  </button>
-                )}
-
-                {item.status === "시공완료" && (
-                  <div className="px-3.5 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5">
-                    <CheckCircle className="w-4 h-4 text-emerald-400" />
-                    <span>✅ 현장 시공 완료됨 (업무 관리 리스트에 보관)</span>
-                  </div>
-                )}
               </div>
+              <UnifiedBoardEditor
+                description={isBodyDirty ? description : (liveItem?.description ?? liveItem?.notes ?? "")}
+                onChangeDescription={(value) => { setDescription(value); setIsBodyDirty(true); setDescSaved(false); }}
+                attachments={attachmentDraft ?? liveItem?.attachments ?? []}
+                onChangeAttachments={(attachments) => { setAttachmentDraft(attachments); setDescSaved(false); }}
+                onOpenAttachment={(attachment) => {
+                  if (attachment.fileType === "pdf" || /\.pdf$/i.test(attachment.name)) {
+                    setActivePdfUrl(attachment.url); setActivePdfTitle(attachment.name);
+                  } else { window.open(attachment.url, "_blank", "noopener,noreferrer"); }
+                }}
+                placeholder="작업 내용, 요청사항, 현장 메모를 작성하세요. 사진과 PDF는 본문에 끌어놓거나 붙여넣을 수 있습니다."
+                onUploadingChange={setIsUploadingBody}
+                minRows={9}
+                readOnly={isSavingBody}
+              />
+            </section>
 
-              {/* Stepper Indicators */}
-              <div className="grid grid-cols-5 gap-2 pt-2 border-t border-slate-800">
-                {STAGES.map((st, idx) => {
-                  const isCurrent = item.status === st.key;
-                  const isPassed = idx < currentStageIndex;
-                  const Icon = st.icon;
-
-                  return (
-                    <button
-                      key={st.key}
-                      onClick={() => handleStageChange(st.key)}
-                      className={cn(
-                        "p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between",
-                        isCurrent
-                          ? "bg-blue-600/90 border-blue-400 text-white ring-2 ring-blue-400/40"
-                          : isPassed
-                          ? "bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800"
-                          : "bg-slate-900/40 border-slate-800 text-slate-500 hover:bg-slate-800/50"
-                      )}
-                    >
-                      <div className="flex items-center justify-between text-xs font-bold mb-1">
-                        <span className="flex items-center gap-1">
-                          <Icon className="w-3.5 h-3.5" />
-                          {st.label}
-                        </span>
-                        {isPassed && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
-                      </div>
-                      <span className="text-[10px] text-slate-300/80 truncate">{st.desc}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
+            {(liveItem?.cardType || "도면") === "도면" && (
+              <details className="rounded-xl border border-indigo-200 bg-indigo-50/30">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-indigo-950">도면 정보 · {drawingReq ? "전달 내역 및 도면 확인" : "아직 전달하지 않음"}</summary>
             {/* 🎨 바론 웹 도면 작업 연동 & 수동 전송 / 컨펌 섹션 */}
-            <div className="p-5 bg-gradient-to-r from-indigo-50 via-slate-50 to-blue-50 rounded-2xl border border-indigo-200/80 shadow-xs space-y-4">
+            <div className="p-4 bg-gradient-to-r from-indigo-50 via-slate-50 to-blue-50 rounded-2xl border border-indigo-200/80 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-100 pb-3">
                 <div className="flex items-center gap-2.5">
                   <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
@@ -753,7 +584,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                   </div>
                   <div>
                     <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-                      <span>바론웹(도면 프로그램) 연동</span>
+                      <span>도면 프로그램 전달</span>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
                         수동 전송 & 컨펌 시스템
                       </span>
@@ -780,6 +611,22 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                 </button>
               </div>
 
+              {drawingReq && (
+                <div className="rounded-xl border border-indigo-100 bg-white p-4 space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-900">마지막으로 도면 프로그램에 전달한 내용</h4>
+                  <dl className="grid grid-cols-2 gap-3 text-sm">
+                    {[
+                      ["도면 타입", drawingReq.drawingType], ["업체", drawingReq.clientName],
+                      ["현장", drawingReq.siteAddress], ["예정일", drawingReq.deliveryDate],
+                      ["연락처", drawingReq.contactPhone], ["포스트바", drawingReq.postColor],
+                      ["합판", drawingReq.boardColor], ["도면 담당자", drawingReq.drawingAssignee],
+                    ].map(([label, value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 break-words text-slate-800">{value || "미입력"}</dd></div>)}
+                  </dl>
+                  {drawingReq.description && <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{drawingReq.description}</p>}
+                </div>
+              )}
+              <details className="rounded-xl border border-indigo-100 bg-white">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-700">다음 전송에 사용할 사양 확인·수정</summary>
               {/* 📋 도면 프로그램 전송 8개 필수 데이터 사양 카드 (실시간 수정 지원) */}
               <div className={cn(
                 "p-4 rounded-2xl border transition-all text-xs space-y-3",
@@ -789,7 +636,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
               )}>
                 <div className="flex items-center justify-between font-extrabold text-slate-900 border-b border-indigo-100 pb-2.5">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm">📋 도면 프로그램 전송 정보 (8종 사양)</span>
+                    <span className="text-sm">📋 다음 전송 사양</span>
                     {isEditingSpecs ? (
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-extrabold border border-amber-300 animate-pulse">
                         ✏️ 사양 정보 수정 중
@@ -835,7 +682,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                     ) : (
                       <button
                         type="button"
-                        onClick={() => setIsEditingSpecs(true)}
+                        onClick={startEditingSpecs}
                         className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer hover:shadow-2xs"
                       >
                         <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
@@ -961,7 +808,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                   /* 👁️ VIEW MODE GRID (Clickable to Edit) */
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
                     <div
-                      onClick={() => setIsEditingSpecs(true)}
+                      onClick={startEditingSpecs}
                       className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
                       title="클릭하여 도면 타입 수정"
                     >
@@ -973,7 +820,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                     </div>
 
                     <div
-                      onClick={() => setIsEditingSpecs(true)}
+                      onClick={startEditingSpecs}
                       className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
                       title="클릭하여 업체명 수정"
                     >
@@ -985,7 +832,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                     </div>
 
                     <div
-                      onClick={() => setIsEditingSpecs(true)}
+                      onClick={startEditingSpecs}
                       className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
                       title="클릭하여 현장 주소 수정"
                     >
@@ -997,7 +844,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                     </div>
 
                     <div
-                      onClick={() => setIsEditingSpecs(true)}
+                      onClick={startEditingSpecs}
                       className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
                       title="클릭하여 시공일 수정"
                     >
@@ -1009,7 +856,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                     </div>
 
                     <div
-                      onClick={() => setIsEditingSpecs(true)}
+                      onClick={startEditingSpecs}
                       className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
                       title="클릭하여 현장 담당자 연락처 수정"
                     >
@@ -1021,7 +868,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                     </div>
 
                     <div
-                      onClick={() => setIsEditingSpecs(true)}
+                      onClick={startEditingSpecs}
                       className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
                       title="클릭하여 포스트바 컬러 수정"
                     >
@@ -1033,7 +880,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                     </div>
 
                     <div
-                      onClick={() => setIsEditingSpecs(true)}
+                      onClick={startEditingSpecs}
                       className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
                       title="클릭하여 합판 컬러 수정"
                     >
@@ -1045,7 +892,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                     </div>
 
                     <div
-                      onClick={() => setIsEditingSpecs(true)}
+                      onClick={startEditingSpecs}
                       className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 border border-slate-100 rounded-xl cursor-pointer transition group"
                       title="클릭하여 도면 담당자 수정"
                     >
@@ -1059,6 +906,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                 )}
               </div>
 
+              </details>
               {/* Toast Message */}
               {reqToast && (
                 <div className="p-3 rounded-xl bg-indigo-600 text-white text-xs font-bold flex items-center gap-2 animate-in fade-in">
@@ -1069,6 +917,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
 
 
               {/* Status Display Card */}
+
               {!drawingReq ? (
                 <div className="p-3.5 bg-white/80 rounded-xl border border-indigo-100 text-xs text-slate-600 flex items-center gap-2">
                   <Clock className="w-4 h-4 text-indigo-500 shrink-0" />
@@ -1118,13 +967,18 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                   {drawingReq.status === "confirmed" && (
                     <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-bold flex items-center gap-2">
                       <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>도면 검토가 최종 완료되어 승인되었습니다. 도면 파일이 아래 첨부파일에 추가되었습니다.</span>
+                      <span>도면 검토가 최종 완료되어 승인되었습니다. 도면 파일이 본문에 추가되었습니다.</span>
                     </div>
                   )}
                 </div>
               )}
             </div>
 
+              </details>
+            )}
+
+            <details className="rounded-xl border border-slate-200 bg-white">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">자재 발주 · {getMaterialOrders(item).length}개 품목</summary>
             {/* 📦 Material Order Management Section */}
             <MaterialOrderManager
               orders={getMaterialOrders(item)}
@@ -1139,33 +993,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
             />
 
 
-            {/* UNIFIED BOARD (TEXT + ATTACHMENTS + IMAGES + PDFS) */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  <h3 className="font-extrabold text-sm text-slate-900">
-                    상세 작업 지시사항 및 첨부 도면/파일
-                  </h3>
-                </div>
-                <span className="text-[11px] text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full font-bold border border-blue-200/80">
-                  파일 드래그&드롭, 이미지 미리보기, PDF 즉시 열기 지원
-                </span>
-              </div>
-
-              <UnifiedBoardEditor
-                description={liveItem?.description || liveItem?.notes || description}
-                onChangeDescription={(val) => {
-                  setDescription(val);
-                  updateWorkItem(item.id, { description: val, notes: val });
-                }}
-                attachments={liveItem?.attachments || []}
-                onChangeAttachments={(atts) => {
-                  updateWorkItem(item.id, { attachments: atts });
-                }}
-                placeholder="도면 규격, 자재 스펙, 택배 리스트, 공장 인계 사항을 자유롭게 작성하세요... 파일이나 도면, 사진을 여기에 바로 끌어다 놓으시면 됩니다."
-              />
-            </div>
+            </details>
 
             {/* 💬 SNS 게시물/피드 스타일 현장 소통 댓글 섹션 */}
 

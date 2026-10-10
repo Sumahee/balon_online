@@ -27,10 +27,10 @@ class ServerStore {
     return this.workItems;
   }
 
-  addWorkItem(item: Omit<WorkItem, "id" | "createdAt">): WorkItem {
+  addWorkItem(item: Omit<WorkItem, "id" | "createdAt">, id = crypto.randomUUID()): WorkItem {
     const newItem: WorkItem = {
       ...item,
-      id: `work-${Date.now()}`,
+      id,
       createdAt: new Date().toISOString(),
     };
     this.workItems = [newItem, ...this.workItems];
@@ -55,10 +55,10 @@ class ServerStore {
     return this.asItems;
   }
 
-  addAsItem(item: Omit<AsItem, "id" | "createdAt">): AsItem {
+  addAsItem(item: Omit<AsItem, "id" | "createdAt">, id = crypto.randomUUID()): AsItem {
     const newItem: AsItem = {
       ...item,
-      id: `as-${Date.now()}`,
+      id,
       createdAt: new Date().toISOString(),
     };
     this.asItems = [newItem, ...this.asItems];

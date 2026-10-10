@@ -1,5 +1,7 @@
 "use client";
 
+import { PageHeader } from "@/components/common/PageHeader";
+
 import React, { useState, useMemo } from "react";
 import { useData } from "@/context/DataContext";
 import { OnlinePurchaseItem } from "@/types";
@@ -21,7 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export default function PurchasesPage() {
-  const { purchaseItems, addPurchaseItem, updatePurchaseItem, deletePurchaseItem } = useData();
+  const { purchaseItems, addPurchaseItem, updatePurchaseItem, deletePurchaseItem, isSaving } = useData();
 
   // Filters & State
   const [searchTerm, setSearchTerm] = useState("");
@@ -157,20 +159,25 @@ export default function PurchasesPage() {
   };
 
   // Form Submit Handler
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.itemName.trim()) {
-      alert("품목명을 입력해주세요.");
-      return;
-    }
+    if (isSaving) return;
+    try {
+      if (!formData.itemName.trim()) {
+        alert("품목명을 입력해주세요.");
+        return;
+      }
 
-    if (editingItem) {
-      updatePurchaseItem(editingItem.id, formData);
-    } else {
-      addPurchaseItem(formData);
-    }
+      if (editingItem) {
+        await updatePurchaseItem(editingItem.id, formData);
+      } else {
+        await addPurchaseItem(formData);
+      }
 
-    setIsModalOpen(false);
+      setIsModalOpen(false);
+    } catch {
+      // DataContext displays the error; leave the form open for retry.
+    }
   };
 
   // Delete Handler
@@ -187,31 +194,8 @@ export default function PurchasesPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white shadow-xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-indigo-400 font-semibold text-xs tracking-wider uppercase mb-1">
-            <ShoppingBag className="w-4 h-4" />
-            <span>Internet Procurement Management</span>
-          </div>
-          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            인터넷 자재구매 목록
-          </h2>
-          <p className="text-slate-300 text-sm mt-1 max-w-2xl">
-            온라인 쇼핑몰(네이버, 쿠팡, 포장자재몰 등)에서 구매한 부자재, 테이프, 포장재 등의 구매 이력 및 실물 사진을 모아 한눈에 관리합니다.
-          </p>
-        </div>
-        <div>
-          <button
-            onClick={handleOpenAddModal}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm shadow-lg shadow-blue-600/30 transition-all hover:scale-102 active:scale-98 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>신규 구매 등록</span>
-          </button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader title="자재 구매" description="구매 내역과 배송 상태, 금액을 확인하고 필요한 자재를 등록하세요." actions={<><button onClick={handleOpenAddModal} className="action-primary"><Plus className="h-4 w-4" />구매 등록</button></>} />
 
       {/* Metric Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -343,7 +327,7 @@ export default function PurchasesPage() {
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm text-slate-700">
-              <thead className="bg-slate-50 text-slate-600 uppercase text-[11px] font-bold tracking-wider border-b border-slate-200">
+              <thead className="bg-slate-50 text-slate-600 uppercase text-xs font-bold tracking-wider border-b border-slate-200">
                 <tr>
                   <th className="py-3.5 px-4">쇼핑몰</th>
                   <th className="py-3.5 px-4">상호</th>
@@ -776,7 +760,7 @@ export default function PurchasesPage() {
 
                   <label className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50 flex flex-col items-center justify-center cursor-pointer transition text-slate-400 hover:text-blue-600">
                     <Upload className="w-5 h-5 mb-1" />
-                    <span className="text-[10px] font-bold">사진 첨부</span>
+                    <span className="text-xs font-bold">사진 첨부</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -798,7 +782,7 @@ export default function PurchasesPage() {
                   취소
                 </button>
                 <button
-                  type="submit"
+                  type="submit" disabled={isSaving} aria-busy={isSaving}
                   className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md transition cursor-pointer"
                 >
                   {editingItem ? "수정 완료" : "구매 등록 저장"}

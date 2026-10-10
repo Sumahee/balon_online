@@ -1,0 +1,261 @@
+import assert from "node:assert/strict";
+import { readFileSync, existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import { resolve } from "node:path";
+import { Script } from "node:vm";
+import { test } from "node:test";
+import ts from "typescript";
+
+const nativeRequire = createRequire(import.meta.url);
+
+// Isolated module graphs keep tests away from real Turso credentials and records.
+function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
+  const requestedPath = resolve(file);
+  const path = [requestedPath, requestedPath.replace(/\.ts$/, ".tsx"), requestedPath.replace(/\.ts$/, "/index.ts")].find(existsSync) ?? requestedPath;
+  if (cache.has(path)) return cache.get(path).exports;
+  const loaded = { exports: {} };
+  cache.set(path, loaded);
+  const code = ts.transpileModule(readFileSync(path, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
+  }).outputText;
+  const require = (name) => {
+    if (name in mocks) return mocks[name];
+    if (name.startsWith("@/")) return loadModule(`src/${name.slice(2)}.ts`, mocks, globals, cache);
+    if (name.startsWith("./")) return loadModule(resolve(path, "..", `${name}.ts`), mocks, globals, cache);
+    return nativeRequire(name);
+  };
+  new Script(`(function(require, module, exports) { ${code}\n})`, { filename: path })
+    .runInNewContext({ ...globalThis, console, Buffer, URL, Intl, AbortSignal, process: { env: { NODE_ENV: "production" } }, crypto: globalThis.crypto, ...globals })(require, loaded, loaded.exports);
+  return loaded.exports;
+}
+
+const request = (body) => ({ json: async () => body });
+
+test("Korean business dates cross midnight independently of host timezone", () => {
+  const { getToday } = loadModule("src/lib/date.ts");
+  assert.equal(getToday(new Date("2026-10-05T15:01:00Z")), "2026-10-06");
+});
+
+test("a successful HTTP response containing a failed save rejects", async () => {
+  const { requestApi } = loadModule("src/lib/api-client.ts", {}, {
+    fetch: async () => ({ ok: true, json: async () => ({ success: false, message: "저장 실패" }) }),
+  });
+  await assert.rejects(requestApi("/api/posts"), /저장 실패/);
+});
+
+test("empty DB purchase results stay empty and never become sample purchases", async () => {
+  const handlers = loadModule("src/lib/api-handlers/purchases.ts", {
+    "@/lib/db": { db: {}, executeMutation: async () => ({ success: true }), executeQuery: async () => ({ success: true, rows: [] }) },
+  });
+  const body = await (await handlers.GET()).json();
+  assert.deepEqual(body.data, []);
+});
+
+test("DB purchase read errors return failure rather than sample success", async () => {
+  const handlers = loadModule("src/lib/api-handlers/purchases.ts", {
+    "@/lib/db": { db: {}, executeMutation: async () => ({ success: true }), executeQuery: async () => ({ success: false, error: "offline" }) },
+  }, { console: { error() {} } });
+  const result = await handlers.GET();
+  assert.equal(result.status, 503);
+  assert.equal((await result.json()).success, false);
+});
+
+test("preview purchase create, partial edit, delete survive a reload in one process", async () => {
+  const handlers = loadModule("src/lib/api-handlers/purchases.ts", { "@/lib/db": { db: null } });
+  await handlers.POST(request({ id: "test-purchase", itemName: "경첩", mallName: "자재몰", quantity: 2 }));
+  await handlers.PUT(request({ id: "test-purchase", quantity: 3 }));
+  let rows = (await (await handlers.GET()).json()).data;
+  assert.equal(rows[0].quantity, 3);
+  assert.equal(rows[0].itemName, "경첩");
+  await handlers.DELETE({ url: "http://localhost/api/purchases?id=test-purchase" });
+  rows = (await (await handlers.GET()).json()).data;
+  assert.deepEqual(rows, []);
+});
+
+test("memory work IDs remain stable from creation through update and deletion", () => {
+  const { serverStore } = loadModule("src/lib/serverStore.ts");
+  const item = serverStore.addWorkItem({ title: "현장 업무", status: "대기" }, "stable-id");
+  assert.equal(item.id, "stable-id");
+  assert.equal(serverStore.updateWorkItem("stable-id", { status: "오피스" }).status, "오피스");
+  assert.equal(serverStore.deleteWorkItem("stable-id"), true);
+});
+
+test("a failed work DB insert does not return a success response", async () => {
+  const handlers = loadModule("src/lib/api-handlers/posts.ts", {
+    "@/lib/db": { db: {}, executeMutation: async () => { throw new Error("offline"); } },
+  });
+  const result = await handlers.POST(request({ type: "work", title: "현장 업무", assignee: "담당자" }));
+  assert.equal(result.status, 500);
+  assert.equal((await result.json()).success, false);
+});
+
+test("partial purchase edits do not overwrite unspecified DB columns", async () => {
+  const writes = [];
+  const handlers = loadModule("src/lib/api-handlers/purchases.ts", {
+    "@/lib/db": { db: {}, executeMutation: async (sql, args) => { writes.push({ sql, args }); return { success: true }; } },
+  });
+  await handlers.PUT(request({ id: "purchase", quantity: 4 }));
+  assert.match(writes[0].sql, /SET quantity = \? WHERE id = \?/);
+  assert.equal(writes[0].args.join(","), "4,purchase");
+});
+
+test("ready-to-ship work does not count as completed installation", () => {
+  const { getDashboardMetrics } = loadModule("src/lib/dataStore.ts");
+  const metrics = getDashboardMetrics([
+    { status: "준비완료" }, { status: "시공완료" },
+  ], []);
+  assert.equal(metrics.completionRate, 50);
+  assert.equal(metrics.kanban.ready.length, 1);
+});
+
+
+test("body editor renders inline image previews and named PDF tiles in a larger writing area", () => {
+  const React = nativeRequire("react");
+  const { renderToStaticMarkup } = nativeRequire("react-dom/server");
+  const { UnifiedBoardEditor } = loadModule("src/components/common/UnifiedBoardEditor.tsx");
+  const html = renderToStaticMarkup(React.createElement(UnifiedBoardEditor, {
+    description: "현장 요청사항", onChangeDescription() {}, onChangeAttachments() {}, minRows: 9,
+    attachments: [
+      { id: "image", name: "현장.png", url: "/test-image.png", fileType: "image" },
+      { id: "pdf", name: "제작도면.pdf", url: "/test-drawing.pdf", fileType: "pdf" },
+    ],
+  }));
+  assert.match(html, /contentEditable="true"/);
+  assert.match(html, /min-height:15.75rem/);
+  assert.match(html, /<img[^>]+data-body-image="image"/);
+  assert.doesNotMatch(html, /현장.png/);
+  assert.match(html, /제작도면.pdf 열기/);
+  assert.match(html, /download="제작도면.pdf"/);
+  assert.match(html, /aria-label="제작도면.pdf 다운로드"/);
+  assert.match(html, />PDF<\/span>/);
+  assert.match(html, /본문에 사진·파일 추가/);
+});
+
+test("only drawing tasks display drawing integration, and body comes before optional details", () => {
+  const React = nativeRequire("react");
+  const { renderToStaticMarkup } = nativeRequire("react-dom/server");
+  const item = { id: "fixture", title: "검증 업무", status: "대기", dueDate: "2026-12-01", cardType: "기타", attachments: [], comments: [] };
+  const { TaskDetailModal } = loadModule("src/components/dashboard/TaskDetailModal.tsx", {
+    "@/context/DataContext": { useData: () => ({ workItems: [item], updateWorkItem() {}, isSaving: false }) },
+    "@/context/AuthContext": { useAuth: () => ({ user: null }) },
+    "@/components/dashboard/MaterialOrderManager": { MaterialOrderManager: () => null },
+  });
+  const render = () => renderToStaticMarkup(React.createElement(TaskDetailModal, { item, onClose() {} }));
+  assert.doesNotMatch(render(), /도면 정보 ·/);
+  item.cardType = "도면";
+  const html = render();
+  assert.match(html, /도면 정보 ·/);
+  assert.ok(html.indexOf("기본정보 · 업무 내용") < html.indexOf("도면 정보 ·"));
+  assert.match(html, /aria-label="현재 업무 상태"/);
+});
+
+
+test("image positions survive storage and legacy text remains safe", () => {
+  const { bodyHtml, imageMarker, bodyText, bodyImageIds } = loadModule("src/lib/body-content.ts");
+  const attachments = [{ id: "photo-1", name: "hidden-name.png", url: "/photo.png", fileType: "image" }];
+  const body = `이미지 앞\n${imageMarker("photo-1")}\n이미지 뒤`;
+  const html = bodyHtml(body, attachments);
+  assert.ok(html.indexOf("이미지 앞") < html.indexOf("<img"));
+  assert.ok(html.indexOf("<img") < html.indexOf("이미지 뒤"));
+  assert.equal(bodyText(body), "이미지 앞\n\n이미지 뒤");
+  assert.deepEqual([...bodyImageIds(body)], ["photo-1"]);
+  assert.doesNotMatch(html, /hidden-name/);
+  assert.match(bodyHtml('<script>alert("x")</script>', attachments), /&lt;script&gt;/);
+  assert.doesNotMatch(bodyHtml("", [{ ...attachments[0], url: 'javascript:alert("x")' }]), /<img/);
+  assert.match(bodyHtml("기존 메모", attachments), /기존 메모.*<img/);
+});
+
+
+const authEnvironment = { process: { env: { NODE_ENV: "test", JWT_SECRET: "test-only-signing-secret" } } };
+const approvedStaff = { id: 42, login_id: "staff-account", name: "등록 직원", client_id: null, status: "APPROVED", password: "correct-password" };
+function authHandlers(rows, success = true, connected = true) {
+  return loadModule("src/lib/api-handlers/auth.ts", {
+    "@/lib/db": { db: connected ? {} : null, executeQuery: async () => ({ success, rows }) },
+  }, authEnvironment);
+}
+
+test("unregistered, client, pending, missing membership and wrong-password accounts cannot sign in", async () => {
+  for (const rows of [[], [{ ...approvedStaff, client_id: 99 }], [{ ...approvedStaff, status: "PENDING" }], [{ ...approvedStaff, client_id: undefined }], [approvedStaff, approvedStaff]]) {
+    const response = await authHandlers(rows).LOGIN(request({ loginId: "staff-account", password: "correct-password" }));
+    assert.equal(response.status, 401);
+    assert.equal((await response.json()).token, undefined);
+  }
+  assert.equal((await authHandlers([approvedStaff]).LOGIN(request({ loginId: "staff-account", password: "incorrect" }))).status, 401);
+  assert.equal((await authHandlers([approvedStaff]).LOGIN(request({ loginId: "staff-account" }))).status, 400);
+});
+
+test("DB outage or unconfigured DB never grants a mock staff session", async () => {
+  for (const handlers of [authHandlers([], false), authHandlers([], true, false)]) {
+    const response = await handlers.LOGIN(request({ loginId: "김진우", password: "anything" }));
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).token, undefined);
+  }
+});
+
+test("approved staff credentials issue a token, but revoked staff cannot restore it", async () => {
+  const handlers = authHandlers([approvedStaff]);
+  const response = await handlers.LOGIN(request({ loginId: "staff-account", password: "correct-password" }));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.user.password, undefined);
+  assert.equal(handlers.verifyToken(body.token).id, 42);
+  assert.equal(handlers.verifyToken(body.token + "modified"), null);
+  const verification = { url: `http://localhost/api/auth?token=${encodeURIComponent(body.token)}`, headers: new Headers(), cookies: { get() {} } };
+  assert.equal((await handlers.VERIFY(verification)).status, 200);
+  assert.equal((await authHandlers([{ ...approvedStaff, client_id: 3 }]).VERIFY(verification)).status, 401);
+  assert.equal((await authHandlers([{ ...approvedStaff, status: "PENDING" }]).VERIFY(verification)).status, 401);
+  assert.equal((await authHandlers([], false).VERIFY(verification)).status, 503);
+});
+
+test("login UI has no staff chooser and requires a password", () => {
+  const React = nativeRequire("react");
+  const { renderToStaticMarkup } = nativeRequire("react-dom/server");
+  const { default: LoginPage } = loadModule("src/app/login/page.tsx", {
+    "@/context/AuthContext": { useAuth: () => ({ user: null, login() {} }) },
+    "next/navigation": { useRouter: () => ({ push() {} }) },
+  });
+  const html = renderToStaticMarkup(React.createElement(LoginPage));
+  assert.doesNotMatch(html, /빠른 선택|김진우|이민아|내선번호|토큰 발행/);
+  assert.match(html, /type="password"/);
+  assert.match(html, /autoComplete="current-password"/);
+  assert.match(html, /required=""/);
+});
+
+test("staff directory is inaccessible without a verified staff session", async () => {
+  let queried = false;
+  const handlers = loadModule("src/lib/api-handlers/users.ts", {
+    "@/lib/db": { executeQuery: async () => { queried = true; return { success: true, rows: [] }; } },
+    "@/lib/api-handlers/auth": { VERIFY: async () => new Response("{}", { status: 401 }) },
+  });
+  assert.equal((await handlers.GET({})).status, 401);
+  assert.equal(queried, false);
+});
+
+test("work board opens in list view while keeping the kanban switch available", () => {
+  const React = nativeRequire("react");
+  const { renderToStaticMarkup } = nativeRequire("react-dom/server");
+  const { default: WorkBoardPage } = loadModule("src/app/work/page.tsx", {
+    "@/context/DataContext": { useData: () => ({ workItems: [], isSaving: false }) },
+    "@/components/dashboard/WorkOverview": { WorkOverview: () => null },
+    "@/components/dashboard/KanbanBoard": { KanbanBoard: () => React.createElement("div", null, "kanban-content") },
+    "@/components/dashboard/MaterialOrderManager": { MaterialOrderManager: () => null },
+    "@/components/dashboard/TaskDetailModal": { TaskDetailModal: () => null },
+  });
+  const html = renderToStaticMarkup(React.createElement(WorkBoardPage));
+  assert.match(html, /<table/);
+  assert.match(html, /업무 \/ 프로젝트명/);
+  assert.doesNotMatch(html, /kanban-content/);
+  assert.match(html, /칸반 투두 보드/);
+});
+
+test("AS details show request, resolution, contact, dates and actions", () => {
+  const React = nativeRequire("react");
+  const { renderToStaticMarkup } = nativeRequire("react-dom/server");
+  const { AsDetailModal } = loadModule("src/components/as/AsDetailModal.tsx");
+  const html = renderToStaticMarkup(React.createElement(AsDetailModal, {
+    item: { id: "as-test", clientName: "검증 업체", siteAddress: "검증 현장", constructDate: "2026-10-01", asDate: "2026-10-15", createdAt: "2026-10-09", reason: "도어 조절 요청", resolutionDetails: "경첩 조절 완료", technician: "검증 기사", contactPhone: "010-0000-0000", resultStatus: "처리중", priority: "보통" },
+    onClose() {}, onEdit() {}, onPrint() {}, onOpenPhoto() {},
+  }));
+  assert.match(html, /role="dialog"/);
+  for (const text of ["검증 업체", "도어 조절 요청", "경첩 조절 완료", "검증 기사", "2026-10-15", "접수증 인쇄", "A\/S 상세 닫기"]) assert.ok(html.includes(text));
+});

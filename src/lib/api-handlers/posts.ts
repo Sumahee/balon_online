@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverStore } from "@/lib/serverStore";
-import { db, executeQuery } from "@/lib/db";
+import { db, executeQuery, executeMutation } from "@/lib/db";
 import { WorkItem, AsItem } from "@/types";
 
 export async function GET(request: NextRequest) {
@@ -29,10 +29,12 @@ export async function GET(request: NextRequest) {
       sql += " ORDER BY created_at DESC";
 
       const res = await executeQuery(sql, args);
+      if (!res.success) return NextResponse.json({ success: false, message: "업무 데이터를 불러오지 못했습니다." }, { status: 503 });
       if (res.success && res.rows) {
         // Load attachments and comments for live items
         const attRes = await executeQuery("SELECT * FROM bo_attachments", []);
         const cmtRes = await executeQuery("SELECT * FROM bo_work_item_comments ORDER BY created_at ASC", []);
+        if (!attRes.success || !cmtRes.success) return NextResponse.json({ success: false, message: "첨부파일 또는 댓글을 불러오지 못했습니다." }, { status: 503 });
 
         const attMap = new Map<string, any[]>();
         if (attRes.success && attRes.rows) {
@@ -150,6 +152,7 @@ export async function GET(request: NextRequest) {
       sql += " ORDER BY created_at DESC";
 
       const res = await executeQuery(sql, args);
+      if (!res.success) return NextResponse.json({ success: false, message: "업무 데이터를 불러오지 못했습니다." }, { status: 503 });
       if (res.success && res.rows) {
         const items: AsItem[] = res.rows.map((row: any) => ({
           id: String(row.id),
@@ -251,7 +254,7 @@ export async function POST(request: NextRequest) {
       const now = new Date().toISOString();
 
       if (db) {
-        await executeQuery(
+        await executeMutation(
           `INSERT INTO bo_work_items 
            (id, type, title, client_name, site_address, region, drawing_type, card_type, deadline_type, delivery_date, site_contact_phone, post_color, board_color, drawing_assignee, category, assignee, priority, status, progress, start_date, due_date, notes, description, material_orders, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -285,7 +288,7 @@ export async function POST(request: NextRequest) {
         );
         if (Array.isArray(attachments) && attachments.length > 0) {
           for (const att of attachments) {
-            await executeQuery(
+            await executeMutation(
               `INSERT INTO bo_attachments (id, work_item_id, name, url, file_type, size, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
               [
                 att.id || `att-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -304,6 +307,7 @@ export async function POST(request: NextRequest) {
       const newItem = serverStore.addWorkItem({
         type: "work",
         title,
+        siteContactPhone, postColor, boardColor, drawingAssignee,
         clientName: safeClient,
         siteAddress,
         region: safeRegion,
@@ -322,7 +326,7 @@ export async function POST(request: NextRequest) {
         description: safeDesc,
         materialOrders: Array.isArray(materialOrders) ? materialOrders : [],
         attachments: Array.isArray(attachments) ? attachments : [],
-      });
+      }, id);
       return NextResponse.json({ success: true, data: { ...newItem, id } }, { status: 201 });
     } else if (type === "as") {
       const {
@@ -354,7 +358,7 @@ export async function POST(request: NextRequest) {
       const now = new Date().toISOString();
 
       if (db) {
-        await executeQuery(
+        await executeMutation(
           `INSERT INTO bo_as_items 
            (id, type, client_name, construct_date, site_address, reason, result_status, resolution_details, technician, contact_phone, priority, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -386,7 +390,7 @@ export async function POST(request: NextRequest) {
         technician: safeTechnician,
         contactPhone: safeContact,
         priority: safePriority,
-      });
+      }, id);
       return NextResponse.json({ success: true, data: { ...newItem, id } }, { status: 201 });
     }
 
@@ -483,15 +487,22 @@ export async function PUT(request: NextRequest) {
           args.push(JSON.stringify(updates.materialOrders));
         }
 
+        for (const [key, column] of Object.entries({
+          siteContactPhone: "site_contact_phone", postColor: "post_color",
+          boardColor: "board_color", drawingAssignee: "drawing_assignee",
+        })) {
+          if (updates[key] !== undefined) { fields.push(`${column} = ?`); args.push(updates[key]); }
+        }
+
         if (fields.length > 0) {
           args.push(id);
-          await executeQuery(`UPDATE bo_work_items SET ${fields.join(", ")} WHERE id = ?`, args);
+          await executeMutation(`UPDATE bo_work_items SET ${fields.join(", ")} WHERE id = ?`, args);
         }
 
         if (updates.attachments !== undefined && Array.isArray(updates.attachments)) {
-          await executeQuery("DELETE FROM bo_attachments WHERE work_item_id = ?", [id]);
+          await executeMutation("DELETE FROM bo_attachments WHERE work_item_id = ?", [id]);
           for (const att of updates.attachments) {
-            await executeQuery(
+            await executeMutation(
               `INSERT INTO bo_attachments (id, work_item_id, name, url, file_type, size, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
               [
                 att.id || `att-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -527,9 +538,16 @@ export async function PUT(request: NextRequest) {
           args.push(updates.technician);
         }
 
+        for (const [key, column] of Object.entries({
+          clientName: "client_name", constructDate: "construct_date", siteAddress: "site_address",
+          reason: "reason", contactPhone: "contact_phone", priority: "priority",
+        })) {
+          if (updates[key] !== undefined) { fields.push(`${column} = ?`); args.push(updates[key]); }
+        }
+
         if (fields.length > 0) {
           args.push(id);
-          await executeQuery(`UPDATE bo_as_items SET ${fields.join(", ")} WHERE id = ?`, args);
+          await executeMutation(`UPDATE bo_as_items SET ${fields.join(", ")} WHERE id = ?`, args);
         }
       }
 
@@ -544,29 +562,33 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get("id");
-  const type = searchParams.get("type");
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    const type = searchParams.get("type");
 
-  if (!id || !type) {
-    return NextResponse.json({ success: false, message: "id and type are required" }, { status: 400 });
-  }
-
-  if (type === "work") {
-    if (db) {
-      await executeQuery("DELETE FROM bo_attachments WHERE work_item_id = ?", [id]);
-      await executeQuery("DELETE FROM bo_work_item_comments WHERE work_item_id = ?", [id]);
-      await executeQuery("DELETE FROM bo_work_items WHERE id = ?", [id]);
+    if (!id || !type) {
+      return NextResponse.json({ success: false, message: "id and type are required" }, { status: 400 });
     }
-    serverStore.deleteWorkItem(id);
-    return NextResponse.json({ success: true, message: "Deleted successfully" });
-  } else if (type === "as") {
-    if (db) {
-      await executeQuery("DELETE FROM bo_as_items WHERE id = ?", [id]);
-    }
-    serverStore.deleteAsItem(id);
-    return NextResponse.json({ success: true, message: "Deleted successfully" });
-  }
 
-  return NextResponse.json({ success: false, message: "Invalid type" }, { status: 400 });
+    if (type === "work") {
+      if (db) {
+        await executeMutation("DELETE FROM bo_attachments WHERE work_item_id = ?", [id]);
+        await executeMutation("DELETE FROM bo_work_item_comments WHERE work_item_id = ?", [id]);
+        await executeMutation("DELETE FROM bo_work_items WHERE id = ?", [id]);
+      }
+      serverStore.deleteWorkItem(id);
+      return NextResponse.json({ success: true, message: "Deleted successfully" });
+    } else if (type === "as") {
+      if (db) {
+        await executeMutation("DELETE FROM bo_as_items WHERE id = ?", [id]);
+      }
+      serverStore.deleteAsItem(id);
+      return NextResponse.json({ success: true, message: "Deleted successfully" });
+    }
+
+    return NextResponse.json({ success: false, message: "Invalid type" }, { status: 400 });
+  } catch {
+    return NextResponse.json({ success: false, message: "삭제에 실패했습니다. 다시 시도해 주세요." }, { status: 500 });
+  }
 }

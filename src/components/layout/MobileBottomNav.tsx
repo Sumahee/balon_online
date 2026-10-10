@@ -15,13 +15,13 @@ export function MobileBottomNav({ onOpenDrawer }: MobileBottomNavProps) {
 
   const TABS = [
     {
-      name: "스케줄러",
+      name: "일정",
       path: "/calendar",
       icon: Calendar,
       isHome: true,
     },
     {
-      name: "업무칸반",
+      name: "업무목록",
       path: "/work",
       icon: ClipboardList,
     },

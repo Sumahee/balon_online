@@ -15,10 +15,11 @@ export function MobileHeader({ onOpenDrawer }: MobileHeaderProps) {
   const getPageTitle = () => {
     switch (pathname) {
       case "/":
+        return "업무 칸반";
       case "/calendar":
         return "스케줄러 (달력)";
       case "/work":
-        return "업무 칸반 보드";
+        return "업무 목록";
       case "/as":
         return "A/S 관리 게시판";
       case "/gallery":

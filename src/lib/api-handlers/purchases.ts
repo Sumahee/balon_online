@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { executeQuery, db } from "@/lib/db";
+import { executeQuery, executeMutation, db } from "@/lib/db";
 import { OnlinePurchaseItem } from "@/types";
-import { initialPurchaseItems } from "@/lib/dataStore";
+// Database-free preview data lives only for the current server process.
+const previewPurchases: OnlinePurchaseItem[] = [];
 
 /**
  * 인터넷 자재구매 정보 API Handler
@@ -10,7 +11,7 @@ export async function GET() {
   try {
     if (db) {
       // Create table if not exists defensively
-      await executeQuery(`
+      await executeMutation(`
         CREATE TABLE IF NOT EXISTS bo_online_purchases (
           id TEXT PRIMARY KEY,
           mall_name TEXT NOT NULL,
@@ -30,7 +31,8 @@ export async function GET() {
       `);
 
       const res = await executeQuery("SELECT * FROM bo_online_purchases ORDER BY purchase_date DESC, created_at DESC");
-      if (res.success && res.rows && res.rows.length > 0) {
+      if (!res.success) throw new Error(res.error || "구매 목록을 불러오지 못했습니다.");
+      if (res.success && res.rows) {
         const purchases: OnlinePurchaseItem[] = res.rows.map((row: any) => ({
           id: row.id,
           mallName: row.mall_name,
@@ -52,10 +54,10 @@ export async function GET() {
     }
 
     // Fallback to sample data if DB is empty or not connected
-    return NextResponse.json({ success: true, data: initialPurchaseItems, isMock: !db });
+    return NextResponse.json({ success: true, data: previewPurchases, isMock: !db });
   } catch (error: any) {
     console.error("[Purchases API GET Error]:", error);
-    return NextResponse.json({ success: false, data: initialPurchaseItems, error: error.message });
+    return NextResponse.json({ success: false, error: error.message }, { status: 503 });
   }
 }
 
@@ -88,7 +90,7 @@ export async function POST(request: NextRequest) {
           id, mall_name, store_name, item_name, size_spec, color, quantity, unit_price, total_price, purchase_date, search_keyword, notes, photos
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
-      const res = await executeQuery(sql, [
+      const res = await executeMutation(sql, [
         itemId,
         mallName || "스마트스토어",
         storeName || "기타상호",
@@ -109,6 +111,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (!db) previewPurchases.unshift({ ...body, id: itemId, createdAt: new Date().toISOString() });
+
     return NextResponse.json({
       success: true,
       message: "인터넷 자재구매 내역이 등록되었습니다.",
@@ -123,60 +127,27 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const {
-      id,
-      mallName,
-      storeName,
-      itemName,
-      sizeSpec,
-      color,
-      quantity,
-      unitPrice,
-      totalPrice,
-      purchaseDate,
-      searchKeyword,
-      notes,
-      photos,
-    } = body;
+    const { id } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, message: "Missing purchase id" }, { status: 400 });
     }
 
-    const photosJson = photos ? JSON.stringify(photos) : null;
-
     if (db) {
-      const sql = `
-        UPDATE bo_online_purchases SET
-          mall_name = ?,
-          store_name = ?,
-          item_name = ?,
-          size_spec = ?,
-          color = ?,
-          quantity = ?,
-          unit_price = ?,
-          total_price = ?,
-          purchase_date = ?,
-          search_keyword = ?,
-          notes = ?,
-          photos = ?
-        WHERE id = ?
-      `;
-      await executeQuery(sql, [
-        mallName,
-        storeName,
-        itemName,
-        sizeSpec || "",
-        color || "",
-        Number(quantity || 1),
-        unitPrice || "",
-        Number(totalPrice || 0),
-        purchaseDate,
-        searchKeyword || "",
-        notes || "",
-        photosJson,
-        id,
-      ]);
+      const columns: Record<string, string> = {
+        mallName: "mall_name", storeName: "store_name", itemName: "item_name", sizeSpec: "size_spec",
+        color: "color", quantity: "quantity", unitPrice: "unit_price", totalPrice: "total_price",
+        purchaseDate: "purchase_date", searchKeyword: "search_keyword", notes: "notes", photos: "photos",
+      };
+      const entries = Object.entries(columns).filter(([key]) => body[key] !== undefined);
+      if (entries.length) {
+        await executeMutation(`UPDATE bo_online_purchases SET ${entries.map(([, column]) => `${column} = ?`).join(", ")} WHERE id = ?`,
+          [...entries.map(([key]) => key === "photos" ? JSON.stringify(body[key]) : body[key]), id]);
+      }
+    } else {
+      const index = previewPurchases.findIndex((item) => item.id === id);
+      if (index < 0) return NextResponse.json({ success: false, message: "구매 내역을 찾을 수 없습니다." }, { status: 404 });
+      previewPurchases[index] = { ...previewPurchases[index], ...body, id };
     }
 
     return NextResponse.json({ success: true, message: "구매 내역이 수정되었습니다." });
@@ -196,9 +167,13 @@ export async function DELETE(request: NextRequest) {
     }
 
     if (db) {
-      await executeQuery("DELETE FROM bo_online_purchases WHERE id = ?", [id]);
+      await executeMutation("DELETE FROM bo_online_purchases WHERE id = ?", [id]);
     }
 
+    if (!db) {
+      const index = previewPurchases.findIndex((item) => item.id === id);
+      if (index >= 0) previewPurchases.splice(index, 1);
+    }
     return NextResponse.json({ success: true, message: "구매 내역이 삭제되었습니다." });
   } catch (error: any) {
     console.error("[Purchases API DELETE Error]:", error);

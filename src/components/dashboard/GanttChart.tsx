@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { getToday } from "@/lib/date";
 import { WorkItem } from "@/types";
 import { Calendar, ChevronLeft, ChevronRight, User, CheckCircle2, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,22 +14,14 @@ interface GanttChartProps {
 export function GanttChart({ items, onSelectTask }: GanttChartProps) {
   const [selectedTask, setSelectedTask] = useState<WorkItem | null>(null);
 
-  // Month reference: 2026년 9월 (1일 ~ 30일)
-  const totalDays = 30;
-  const currentSimulatedDay = 10; // 9월 10일
+  const today = getToday();
+  const [year, month, currentDay] = today.split("-").map(Number);
+  const totalDays = new Date(year, month, 0).getDate();
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const monthEnd = `${today.slice(0, 7)}-${totalDays}`;
   const daysArray = Array.from({ length: totalDays }, (_, i) => i + 1);
-
-  const getDayFromDate = (dateStr: string) => {
-    try {
-      const parts = dateStr.split("-");
-      if (parts.length === 3) {
-        return parseInt(parts[2], 10);
-      }
-    } catch {
-      return 1;
-    }
-    return 1;
-  };
+  const visibleItems = items.filter((item) => item.startDate && item.dueDate && item.startDate <= monthEnd && item.dueDate >= monthStart);
+  const getDayFromDate = (date: string) => Number(date.slice(8, 10));
 
   const getCategoryColor = (category: WorkItem["category"]) => {
     switch (category) {
@@ -60,7 +53,7 @@ export function GanttChart({ items, onSelectTask }: GanttChartProps) {
               공정 일정 타임라인 (Gantt Chart)
             </h3>
             <p className="text-xs text-slate-500">
-              2026년 9월 제작·시공 일정 및 공정률 시각화
+              {year}년 {month}월 제작·시공 일정
             </p>
           </div>
         </div>
@@ -68,7 +61,7 @@ export function GanttChart({ items, onSelectTask }: GanttChartProps) {
         <div className="flex items-center gap-3 text-xs">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
-            <span className="font-medium text-slate-600">오늘 (9월 10일)</span>
+            <span className="font-medium text-slate-600">오늘 ({month}월 {currentDay}일)</span>
           </div>
 
           <div className="hidden md:flex items-center gap-2 border-l border-slate-200 pl-3">
@@ -100,7 +93,7 @@ export function GanttChart({ items, onSelectTask }: GanttChartProps) {
             <div className="pl-2">프로젝트 / 담당자</div>
             <div className="grid grid-cols-30 text-center">
               {daysArray.map((day) => {
-                const isToday = day === currentSimulatedDay;
+                const isToday = day === currentDay;
                 const isWeekend = (day % 7 === 5 || day % 7 === 6); // roughly Saturday/Sunday
                 return (
                   <div
@@ -121,11 +114,13 @@ export function GanttChart({ items, onSelectTask }: GanttChartProps) {
             </div>
           </div>
 
+          {visibleItems.length === 0 && <p className="py-8 text-center text-sm text-slate-500">이번 달에 등록된 공정 일정이 없습니다.</p>}
+
           {/* Task Rows */}
           <div className="divide-y divide-slate-100 mt-1">
-            {items.map((item) => {
-              const startDay = Math.min(30, Math.max(1, getDayFromDate(item.startDate)));
-              const dueDay = Math.min(30, Math.max(startDay, getDayFromDate(item.dueDate)));
+            {visibleItems.map((item) => {
+              const startDay = item.startDate < monthStart ? 1 : getDayFromDate(item.startDate);
+              const dueDay = item.dueDate > monthEnd ? totalDays : Math.max(startDay, getDayFromDate(item.dueDate));
               const durationDays = dueDay - startDay + 1;
 
               // Grid column start and span
@@ -171,7 +166,7 @@ export function GanttChart({ items, onSelectTask }: GanttChartProps) {
                     <div
                       className="absolute top-0 bottom-0 w-0.5 bg-rose-500/60 z-10 pointer-events-none"
                       style={{
-                        left: `${((currentSimulatedDay - 0.5) / totalDays) * 100}%`,
+                        left: `${((currentDay - 0.5) / totalDays) * 100}%`,
                       }}
                     />
 

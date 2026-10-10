@@ -29,6 +29,7 @@ import {
 import { WorkItem, ClientInfo, DrawingType, WorkStatus, Priority, AttachmentItem } from "@/types";
 import { useData } from "@/context/DataContext";
 import { cn } from "@/lib/utils";
+import { bodyText } from "@/lib/body-content";
 import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
 
 interface CalendarDetailModalProps {
@@ -226,21 +227,25 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
   const DAYS_OPTIONS = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
   const handleMarkAsCompleted = async () => {
-    const isCurrentlyCompleted = liveItem.status === "시공완료";
-    const newStatus = isCurrentlyCompleted ? "준비완료" : "시공완료";
-    const newProgress = isCurrentlyCompleted ? 90 : 100;
+    try {
+      const isCurrentlyCompleted = liveItem.status === "시공완료";
+      const newStatus = isCurrentlyCompleted ? "준비완료" : "시공완료";
+      const newProgress = isCurrentlyCompleted ? 90 : 100;
 
-    await updateWorkItem(liveItem.id, {
-      status: newStatus,
-      progress: newProgress,
-    });
+      await updateWorkItem(liveItem.id, {
+        status: newStatus,
+        progress: newProgress,
+      });
 
-    setSaveNotice(
-      isCurrentlyCompleted
-        ? "시공 완료가 취소되어 준비완료 상태로 변경되었습니다."
-        : "🏗️ 현장 시공 완료 처리되었습니다!"
-    );
-    setTimeout(() => setSaveNotice(""), 4000);
+      setSaveNotice(
+        isCurrentlyCompleted
+          ? "시공 완료가 취소되어 준비완료 상태로 변경되었습니다."
+          : "🏗️ 현장 시공 완료 처리되었습니다!"
+      );
+      setTimeout(() => setSaveNotice(""), 4000);
+    } catch {
+      // Keep the editor open; DataStatus displays the server error.
+    }
   };
 
   const handleOpenEditMode = () => {
@@ -265,50 +270,60 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
   };
 
   const handleSaveAllEdits = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setIsSaving(true);
-    const finalDateStr = `${editYear}-${String(editMonth).padStart(2, "0")}-${String(editDay).padStart(2, "0")}`;
+    try {
+      if (e) e.preventDefault();
+      setIsSaving(true);
+      const finalDateStr = `${editYear}-${String(editMonth).padStart(2, "0")}-${String(editDay).padStart(2, "0")}`;
 
-    await updateWorkItem(liveItem.id, {
-      title: editTitle.trim() || liveItem.title,
-      clientName: editClientName.trim() || liveItem.clientName,
-      siteAddress: editSiteAddress.trim(),
-      drawingType: editDrawingType,
-      deadlineType: editDeadlineType,
-      deliveryDate: finalDateStr,
-      dueDate: finalDateStr,
-      region: editRegion,
-      status: editStatus,
-      priority: editPriority,
-      category: editCategory as any,
-      description: editDescription,
-      notes: editDescription,
-      attachments: editAttachments,
-    });
+      await updateWorkItem(liveItem.id, {
+        title: editTitle.trim() || liveItem.title,
+        clientName: editClientName.trim() || liveItem.clientName,
+        siteAddress: editSiteAddress.trim(),
+        drawingType: editDrawingType,
+        deadlineType: editDeadlineType,
+        deliveryDate: finalDateStr,
+        dueDate: finalDateStr,
+        region: editRegion,
+        status: editStatus,
+        priority: editPriority,
+        category: editCategory as any,
+        description: editDescription,
+        notes: bodyText(editDescription),
+        attachments: editAttachments,
+      });
 
-    setIsSaving(false);
-    setIsEditMode(false);
-    setIsEditingDate(false);
-    setSaveNotice("✨ 모든 수정 내용(제목, 업체, 현장, 도면타입, 일정, 본문, 첨부파일)이 저장되었습니다!");
-    setTimeout(() => setSaveNotice(""), 4000);
+      setIsSaving(false);
+      setIsEditMode(false);
+      setIsEditingDate(false);
+      setSaveNotice("✨ 모든 수정 내용(제목, 업체, 현장, 도면타입, 일정, 본문, 첨부파일)이 저장되었습니다!");
+      setTimeout(() => setSaveNotice(""), 4000);
+    } catch {
+      // Keep the editor open; DataStatus displays the server error.
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSaveScheduleEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const finalDateStr = `${editYear}-${String(editMonth).padStart(2, "0")}-${String(editDay).padStart(2, "0")}`;
+    try {
+      e.preventDefault();
+      const finalDateStr = `${editYear}-${String(editMonth).padStart(2, "0")}-${String(editDay).padStart(2, "0")}`;
 
-    await updateWorkItem(liveItem.id, {
-      deliveryDate: finalDateStr,
-      startDate: finalDateStr,
-      dueDate: finalDateStr,
-      deadlineType: editDeadlineType,
-      region: editRegion,
-      status: editStatus,
-    });
+      await updateWorkItem(liveItem.id, {
+        deliveryDate: finalDateStr,
+        startDate: finalDateStr,
+        dueDate: finalDateStr,
+        deadlineType: editDeadlineType,
+        region: editRegion,
+        status: editStatus,
+      });
 
-    setIsEditingDate(false);
-    setSaveNotice(`일정이 ${finalDateStr} (${editDeadlineType})로 변경/연기 되었습니다!`);
-    setTimeout(() => setSaveNotice(""), 4000);
+      setIsEditingDate(false);
+      setSaveNotice(`일정이 ${finalDateStr} (${editDeadlineType})로 변경/연기 되었습니다!`);
+      setTimeout(() => setSaveNotice(""), 4000);
+    } catch {
+      // Keep the editor open; DataStatus displays the server error.
+    }
   };
 
   const handleCommentSubmit = async (e: React.FormEvent) => {

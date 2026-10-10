@@ -1,5 +1,9 @@
 "use client";
 
+import { PageHeader } from "@/components/common/PageHeader";
+
+import { getToday } from "@/lib/date";
+
 import React, { useState, useMemo } from "react";
 import {
   Calendar as CalendarIcon,
@@ -100,9 +104,9 @@ interface CalendarEvent {
 }
 
 export default function CalendarPage() {
-  const { workItems, asItems, addWorkItem } = useData();
+  const { workItems, asItems, addWorkItem, isSaving } = useData();
 
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 8, 1)); // 2026-09
+  const [currentDate, setCurrentDate] = useState(new Date(`${getToday()}T00:00:00`));
   const [viewMode, setViewMode] = useState<"month" | "list">("month");
   const [selectedRegion, setSelectedRegion] = useState("전체");
   const [searchQuery, setSearchQuery] = useState("");
@@ -119,7 +123,7 @@ export default function CalendarPage() {
   const [newClient, setNewClient] = useState("");
   const [newSiteAddress, setNewSiteAddress] = useState("");
   const [newRegion, setNewRegion] = useState("반포");
-  const [newDate, setNewDate] = useState("2026-09-15");
+  const [newDate, setNewDate] = useState(getToday());
   const [newDrawingType, setNewDrawingType] = useState<DrawingType>("옴니버스");
   const [newDeadlineType, setNewDeadlineType] = useState<"시공일" | "배송일" | "요청일">("시공일");
   const [newCategory, setNewCategory] = useState<"제작" | "실측" | "시공" | "설계" | "납품" | "기타">("시공");
@@ -207,7 +211,7 @@ export default function CalendarPage() {
     return events;
   }, [workItems, asItems, selectedRegion, searchQuery]);
 
-  // Calendar Days calculation for 2026-09 (or active month)
+  // Calendar days for the selected month
   const calendarDays = useMemo(() => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -255,75 +259,48 @@ export default function CalendarPage() {
 
   const handleCreateSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim()) return;
+    if (isSaving) return;
+    try {
+      if (!newTitle.trim()) return;
 
-    const safeClient = newClient.trim() || "(주)바론 협력업체";
-    const todayStr = new Date().toISOString().split("T")[0];
+      const safeClient = newClient.trim() || "(주)바론 협력업체";
+      const todayStr = getToday();
 
-    await addWorkItem({
-      type: "work",
-      title: newTitle.trim(),
-      clientName: safeClient,
-      siteAddress: newSiteAddress.trim(),
-      region: newRegion,
-      drawingType: newDrawingType,
-      cardType: "도면",
-      deadlineType: newDeadlineType,
-      deliveryDate: newDate,
-      category: newCategory,
-      assignee: "김진우 실장",
-      priority: "높음",
-      status: "대기",
-      progress: 0,
-      startDate: todayStr,
-      dueDate: newDate,
-      notes: `${newRegion} 현장 ${newDeadlineType} 일정 등록`,
-      description: newDescription,
-      attachments: newAttachments,
-    });
+      await addWorkItem({
+        type: "work",
+        title: newTitle.trim(),
+        clientName: safeClient,
+        siteAddress: newSiteAddress.trim(),
+        region: newRegion,
+        drawingType: newDrawingType,
+        cardType: "도면",
+        deadlineType: newDeadlineType,
+        deliveryDate: newDate,
+        category: newCategory,
+        assignee: "김진우 실장",
+        priority: "높음",
+        status: "대기",
+        progress: 0,
+        startDate: todayStr,
+        dueDate: newDate,
+        notes: `${newRegion} 현장 ${newDeadlineType} 일정 등록`,
+        description: newDescription,
+        attachments: newAttachments,
+      });
 
-    setIsAddModalOpen(false);
-    setNewTitle("");
-    setNewSiteAddress("");
-    setNewDescription("");
-    setNewAttachments([]);
+      setIsAddModalOpen(false);
+      setNewTitle("");
+      setNewSiteAddress("");
+      setNewDescription("");
+      setNewAttachments([]);
+    } catch {
+      // DataContext displays the error; leave the form open for retry.
+    }
   };
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-md shadow-blue-600/20">
-              <CalendarIcon className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-extrabold text-slate-900">
-                  바론 INT 통합 일정 관리 캘린더 (Schedule Flow)
-                </h2>
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
-                  현장/도면 연동
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                시공일, 배송일, 요청일 일정을 캘린더에서 한눈에 확인하고 완료 도면 및 시공 완성 사진을 공유합니다.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition flex items-center gap-2 shadow-sm cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>신규 일정 추가</span>
-          </button>
-        </div>
-      </div>
+      <PageHeader title="일정 관리" description="시공·배송·요청 일정을 확인하고 현장별 업무를 열어보세요." actions={<button onClick={() => setIsAddModalOpen(true)} className="action-primary"><Plus className="h-4 w-4" />일정 추가</button>} />
 
       {/* Control Bar: Filters & Month Navigator */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -348,10 +325,10 @@ export default function CalendarPage() {
           </div>
 
           <button
-            onClick={() => setCurrentDate(new Date(2026, 8, 1))}
+            onClick={() => setCurrentDate(new Date(`${getToday()}T00:00:00`))}
             className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
           >
-            오늘 (2026-09)
+            오늘
           </button>
         </div>
 
@@ -663,7 +640,7 @@ export default function CalendarPage() {
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">일정 날짜 (연 / 월 / 일 선택)</label>
                   {(() => {
-                    const dateParts = (newDate || "2026-09-15").split("-");
+                    const dateParts = (newDate || getToday()).split("-");
                     const selYear = parseInt(dateParts[0]) || 2026;
                     const selMonth = parseInt(dateParts[1]) || 9;
                     const selDay = parseInt(dateParts[2]) || 15;
@@ -758,7 +735,7 @@ export default function CalendarPage() {
                   취소
                 </button>
                 <button
-                  type="submit"
+                  type="submit" disabled={isSaving} aria-busy={isSaving}
                   className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-md transition"
                 >
                   일정 추가 등록

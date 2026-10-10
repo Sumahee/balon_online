@@ -8,6 +8,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { MobileHeader } from "@/components/layout/MobileHeader";
 import { MobileDrawer } from "@/components/layout/MobileDrawer";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
+import { DataStatus } from "@/components/layout/DataStatus";
 import { QuickModals } from "@/components/layout/QuickModals";
 
 export function AppLayout({ children }: { children: ReactNode }) {
@@ -37,7 +38,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </div>
 
             {/* Dynamic Page Content */}
-            <main className="flex-1 p-2 sm:p-5 lg:p-6 w-full max-w-[1920px] mx-auto transition-all">
+            <main className="app-content flex-1 px-4 py-5 sm:p-6 lg:p-8 w-full max-w-[1680px] mx-auto">
+              <DataStatus />
               {children}
             </main>
 

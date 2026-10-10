@@ -1,5 +1,7 @@
 "use client";
 
+import { getToday } from "@/lib/date";
+
 import React, { useState } from "react";
 import { WorkItem, WorkStatus } from "@/types";
 import { getMaterialOrders, getMaterialSummary } from "@/lib/materialUtils";
@@ -14,11 +16,8 @@ import {
   Calendar,
   Building,
   Paperclip,
-  AlertTriangle,
   Plus,
-  FileText,
-  Box,
-} from "lucide-react";
+  Box} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useData } from "@/context/DataContext";
 import { useAuth } from "@/context/AuthContext";
@@ -26,16 +25,17 @@ import { TaskDetailModal } from "@/components/dashboard/TaskDetailModal";
 
 interface KanbanBoardProps {
   items: WorkItem[];
+  showCompleted?: boolean;
 }
 
-export function KanbanBoard({ items }: KanbanBoardProps) {
+export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) {
   const { advanceWorkStatus, updateWorkItem, setQuickModalType } = useData();
   const { user } = useAuth();
   const [selectedTask, setSelectedTask] = useState<WorkItem | null>(null);
   const [mobileActiveTab, setMobileActiveTab] = useState<WorkStatus | "전체">("전체");
 
-  // Simulated today date for urgency check
-  const todayStr = "2026-09-10";
+  // 실제 업무 날짜로 마감 임박 여부를 판단합니다.
+  const todayStr = getToday();
 
   const columns: {
     status: WorkStatus;
@@ -84,6 +84,11 @@ export function KanbanBoard({ items }: KanbanBoardProps) {
     },
   ];
 
+  if (showCompleted) {
+    columns.push({ status: "시공완료", title: "시공완료", subtext: "완료 업무 기록", icon: CheckCircle2,
+      headerBg: "bg-emerald-50", borderAccent: "border-emerald-500", textColor: "text-emerald-800" });
+  }
+
   const visibleColumns =
     mobileActiveTab === "전체"
       ? columns
@@ -118,7 +123,7 @@ export function KanbanBoard({ items }: KanbanBoardProps) {
               : "bg-slate-100 text-slate-600 hover:bg-slate-200"
           )}
         >
-          📱 전체 칸반 ({items.length})
+          전체 공정 ({items.length})
         </button>
         {columns.map((col) => {
           const count = items.filter((i) => i.status === col.status).length;
@@ -134,7 +139,7 @@ export function KanbanBoard({ items }: KanbanBoardProps) {
               )}
             >
               <span>{col.title.split(" ")[0]}</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-800 font-extrabold">
+              <span className="text-xs px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-800 font-extrabold">
                 {count}
               </span>
             </button>
@@ -167,7 +172,7 @@ export function KanbanBoard({ items }: KanbanBoardProps) {
                       {col.title}
                     </h4>
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-0.5">{col.subtext}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{col.subtext}</p>
                 </div>
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white shadow-2xs text-slate-700">
                   {colItems.length}
@@ -187,77 +192,54 @@ export function KanbanBoard({ items }: KanbanBoardProps) {
                 {colItems.map((task) => {
                   const targetDate = task.deliveryDate || task.dueDate;
                   const { isUrgent, diffDays } = getUrgencyInfo(targetDate, task.priority);
+                  const clientName = task.clientName?.trim();
+                  const titleIncludesClient = clientName && task.title.replace(/\s/g, "").includes(clientName.replace(/\s/g, ""));
                   const hasPdf = task.attachments?.some((a) => a.fileType === "pdf");
 
                   return (
                     <React.Fragment key={task.id}>
                       <div
                         className={cn(
-                          "p-3.5 bg-white rounded-xl border shadow-2xs hover:shadow-md transition cursor-pointer group space-y-2.5 relative",
+                          "min-w-0 p-3 bg-white rounded-xl border shadow-2xs hover:shadow-md transition cursor-pointer group space-y-2.5 relative",
                           isUrgent
                             ? "border-rose-400 ring-2 ring-rose-500/20 bg-rose-50/10"
                             : "border-slate-200 hover:border-blue-400"
                         )}
                         onClick={() => setSelectedTask(task)}
                       >
-                        {/* Urgent Alert Banner on Card */}
-                        {isUrgent && (
-                          <div className="flex items-center justify-between text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-rose-600 text-white shadow-xs">
-                            <span className="flex items-center gap-1">
-                              <AlertTriangle className="w-3 h-3" />
-                              기한 긴급 촉박
-                            </span>
-                            <span>{diffDays >= 0 ? `D-${diffDays}` : "기한경과"}</span>
+                        {/* Title is the primary information; do not repeat its client name. */}
+                        <h5 className="text-[15px] font-semibold leading-6 text-slate-900 [overflow-wrap:anywhere]">
+                          <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedTask(task); }} className="block w-full text-left cursor-pointer hover:text-blue-600" title={task.title}>
+                            <span className="line-clamp-2">{task.title}</span>
+                          </button>
+                        </h5>
+                        {clientName && !titleIncludesClient && (
+                          <div className="flex min-w-0 items-center gap-1 text-xs text-slate-600" title={clientName}>
+                            <Building className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{clientName}</span>
                           </div>
                         )}
 
-                        {/* Top: Client Name & Card Type */}
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="flex items-center gap-1 font-extrabold text-blue-950 text-xs truncate max-w-[150px]">
-                            <Building className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                            <span className="truncate">{task.clientName || "협력업체"}</span>
-                          </span>
-
-                          <div className="flex items-center gap-1 shrink-0">
-                            {/* Card Type Badge */}
-                            <span
-                              className={cn(
-                                "text-[10px] font-bold px-1.5 py-0.5 rounded border",
-                                task.cardType === "도면"
-                                  ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                                  : task.cardType === "자재리스트"
-                                  ? "bg-amber-50 text-amber-700 border-amber-200"
-                                  : task.cardType === "견적"
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  : "bg-slate-100 text-slate-700 border-slate-200"
-                              )}
-                            >
-                              {task.cardType || "도면"}
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
+                          {[task.cardType, task.category].filter((label, index, labels) => label && labels.indexOf(label) === index).map((label) => (
+                            <span key={label} className="rounded bg-slate-100 px-1.5 py-0.5 whitespace-nowrap">{label}</span>
+                          ))}
+                          {!!task.attachments?.length && (
+                            <span className="ml-auto flex items-center gap-1 whitespace-nowrap" title={`첨부파일 ${task.attachments.length}개${hasPdf ? " · PDF 포함" : ""}`}>
+                              <Paperclip className="h-3 w-3" />{task.attachments.length}{hasPdf && <span className="text-rose-600">PDF</span>}
                             </span>
-                            <span className="text-[10px] font-medium px-1 py-0.5 rounded bg-slate-50 text-slate-500">
-                              {task.category}
-                            </span>
-                          </div>
+                          )}
                         </div>
 
-                        {/* Project / Task Title */}
-                        <h5 className="font-bold text-xs sm:text-sm text-slate-900 leading-snug group-hover:text-blue-600 transition line-clamp-2">
-                          {task.title}
-                        </h5>
-
-                        {/* Deadline Type & Date */}
-                        <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100">
-                          <div className="flex items-center gap-1 text-slate-700">
-                            <Calendar className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                            <span className="font-bold text-slate-900">
-                              [{task.deadlineType || "시공일"}] {task.deliveryDate ? task.deliveryDate.substring(5) : task.dueDate.substring(5)}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-1 text-slate-500">
-                            <User className="w-3 h-3 text-slate-400" />
-                            <span>{task.assignee}</span>
-                          </div>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                          <span className={cn("flex items-center gap-1 font-medium", isUrgent ? "text-rose-700" : "text-slate-700")}>
+                            <Calendar className="h-3.5 w-3.5 shrink-0" />
+                            {task.deadlineType || "마감"} {targetDate ? targetDate.substring(5) : "미정"}
+                          </span>
+                          {isUrgent && <span className="rounded bg-rose-50 px-1.5 font-semibold text-rose-700 whitespace-nowrap">{task.priority === "긴급" ? "긴급" : diffDays === 0 ? "오늘" : `D-${diffDays}`}</span>}
+                          <span className="ml-auto flex min-w-0 items-center gap-1 text-slate-500" title={task.assignee || "담당 미정"}>
+                            <User className="h-3 w-3 shrink-0" /><span className="truncate max-w-[10rem]">{task.assignee || "담당 미정"}</span>
+                          </span>
                         </div>
 
                         {/* Multi-Item Material Order Section */}
@@ -271,35 +253,11 @@ export function KanbanBoard({ items }: KanbanBoardProps) {
                               className="pt-1.5 space-y-1"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              {/* Overall Status Banner */}
-                              <div
-                                className={cn(
-                                  "p-1.5 rounded-lg border text-[11px] font-bold flex items-center justify-between shadow-2xs",
-                                  isAllOrdered
-                                    ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-                                    : "bg-rose-50 border-rose-300 text-rose-800"
-                                )}
-                              >
-                                <span className="flex items-center gap-1">
-                                  <Box className="w-3.5 h-3.5 shrink-0" />
-                                  <span>
-                                    {isAllOrdered
-                                      ? "✅ 자재 발주 완료"
-                                      : "⚠️ 미발주 자재 확인 필요"}
-                                  </span>
-                                </span>
-                                <span
-                                  className={cn(
-                                    "text-[10px] font-extrabold px-1.5 py-0.2 rounded text-white",
-                                    isAllOrdered ? "bg-emerald-600" : "bg-rose-600 animate-pulse"
-                                  )}
-                                >
-                                  {completed}/{total} 완료
-                                </span>
-                              </div>
-
-                              {/* Itemized Checkboxes */}
-                              <div className="space-y-1 pl-0.5">
+                              <details>
+                                <summary className={cn("cursor-pointer text-xs rounded-md px-2 py-1.5", isAllOrdered ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800")}>
+                                  <span className="inline-flex items-center gap-1"><Box className="h-3.5 w-3.5" />자재 발주 {completed}/{total}{isAllOrdered ? " 완료" : ` · ${total - completed}건 남음`}</span>
+                                </summary>
+                                <div className="mt-2 space-y-1">
                                 {matOrders.map((mo) => (
                                   <button
                                     key={mo.id}
@@ -315,7 +273,7 @@ export function KanbanBoard({ items }: KanbanBoardProps) {
                                       });
                                     }}
                                     className={cn(
-                                      "w-full text-left p-1.5 rounded-md border text-[11px] font-semibold flex items-center justify-between transition cursor-pointer group/item",
+                                      "w-full text-left p-1.5 rounded-md border text-xs font-semibold flex items-center justify-between transition cursor-pointer group/item",
                                       mo.isOrdered
                                         ? "bg-slate-50 border-slate-200 text-slate-500 hover:bg-emerald-50 hover:border-emerald-200"
                                         : "bg-amber-50/80 border-amber-200 text-amber-950 font-bold hover:bg-rose-100"
@@ -325,7 +283,7 @@ export function KanbanBoard({ items }: KanbanBoardProps) {
                                     <span className="flex items-center gap-1.5 truncate">
                                       <span
                                         className={cn(
-                                          "w-3.5 h-3.5 rounded flex items-center justify-center text-[10px] font-bold shrink-0 border",
+                                          "w-3.5 h-3.5 rounded flex items-center justify-center text-xs font-bold shrink-0 border",
                                           mo.isOrdered
                                             ? "bg-emerald-600 border-emerald-600 text-white"
                                             : "bg-white border-amber-400 text-transparent group-hover/item:text-rose-500"
@@ -340,7 +298,7 @@ export function KanbanBoard({ items }: KanbanBoardProps) {
 
                                     <span
                                       className={cn(
-                                        "text-[9px] px-1 py-0.2 rounded shrink-0 font-extrabold",
+                                        "text-xs px-1 py-0.2 rounded shrink-0 font-extrabold",
                                         mo.isOrdered
                                           ? "bg-emerald-100 text-emerald-800"
                                           : "bg-rose-500 text-white"
@@ -350,25 +308,10 @@ export function KanbanBoard({ items }: KanbanBoardProps) {
                                     </span>
                                   </button>
                                 ))}
-                              </div>
+                              </div></details>
                             </div>
                           );
                         })()}
-
-                        {/* Attachments Indicator */}
-                        <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
-                          <div className="flex items-center gap-1.5">
-                            {task.attachments && task.attachments.length > 0 ? (
-                              <span className="flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-slate-100 font-bold text-slate-700">
-                                <Paperclip className="w-3 h-3 text-slate-500" />
-                                {task.attachments.length}개
-                                {hasPdf && <span className="text-rose-600 ml-0.5">PDF</span>}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">파일없음</span>
-                            )}
-                          </div>
-                        </div>
 
                         {/* Quick Process Step Transition Button */}
                         <div
@@ -391,7 +334,7 @@ export function KanbanBoard({ items }: KanbanBoardProps) {
                               }}
                               className="w-full py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
                             >
-                              <span>오피스 인계 (도면작업)</span>
+                              <span>오피스 인계</span>
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>
                           )}
@@ -411,7 +354,7 @@ export function KanbanBoard({ items }: KanbanBoardProps) {
                                 onClick={() => advanceWorkStatus(task.id)}
                                 className="flex-1 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
                               >
-                                <span>공장 인계 (설계도/자재)</span>
+                                <span>공장 인계</span>
                                 <ArrowRight className="w-3.5 h-3.5" />
                               </button>
                             </div>
@@ -444,17 +387,17 @@ export function KanbanBoard({ items }: KanbanBoardProps) {
                                 onClick={() =>
                                   updateWorkItem(task.id, { status: "시공완료", progress: 100 })
                                 }
-                                className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-extrabold shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer ring-2 ring-emerald-400/40"
-                                title="해당일 시공 완료 처리시 클릭하면 칸반에서 삭제되고 업무 리스트로 보관됩니다"
+                                className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                                title="시공을 완료하면 완료 업무 목록에 보관됩니다"
                               >
-                                <CheckCircle2 className="w-4 h-4 text-emerald-200" />
-                                <span>🏗️ 시공완료 (칸반에서 삭제)</span>
+                                <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                                <span>시공완료 처리</span>
                               </button>
                               <button
                                 onClick={() =>
                                   updateWorkItem(task.id, { status: "공장", progress: 75 })
                                 }
-                                className="w-full py-0.5 text-[10px] text-slate-400 hover:text-slate-700 transition flex items-center justify-center gap-1 cursor-pointer"
+                                className="w-full py-0.5 text-xs text-slate-400 hover:text-slate-700 transition flex items-center justify-center gap-1 cursor-pointer"
                               >
                                 <ArrowLeft className="w-3 h-3" />
                                 <span>공장으로 되돌리기</span>

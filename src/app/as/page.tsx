@@ -1,41 +1,34 @@
 "use client";
 
+import { PageHeader } from "@/components/common/PageHeader";
+
 import React, { useState } from "react";
 import {
-  Wrench,
   Plus,
   Search,
   Building,
   Calendar,
   MapPin,
-  FileText,
   User,
-  Phone,
   Printer,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  ArrowRight,
   Edit2,
   Trash2,
-  Filter,
   Camera,
-  UploadCloud,
-  Eye,
-  Image as ImageIcon,
-  ZoomIn,
-  X,
-} from "lucide-react";
+  X} from "lucide-react";
 import { useData } from "@/context/DataContext";
 import { AsItem, AsStatus, Priority } from "@/types";
+import { AsDetailModal } from "@/components/as/AsDetailModal";
 import { cn } from "@/lib/utils";
 
 export default function AsBoardPage() {
-  const { asItems, updateAsItem, deleteAsItem, advanceAsStatus, setQuickModalType } = useData();
+  const { asItems, updateAsItem, deleteAsItem, advanceAsStatus, setQuickModalType, isSaving } = useData();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("전체");
   const [selectedPriority, setSelectedPriority] = useState<string>("전체");
+
+  const [selectedAsId, setSelectedAsId] = useState<string | null>(null);
+  const selectedAsItem = asItems.find((item) => item.id === selectedAsId);
 
   // Detailed view & print receipt modal
   const [activeReceipt, setActiveReceipt] = useState<AsItem | null>(null);
@@ -117,44 +110,24 @@ export default function AsBoardPage() {
     }
   };
 
-  const handleEditSave = (e: React.FormEvent) => {
+  const handleEditSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingItem) return;
-    updateAsItem(editingItem.id, editingItem);
-    setEditingItem(null);
+    if (isSaving) return;
+    try {
+      if (!editingItem) return;
+      await updateAsItem(editingItem.id, editingItem);
+      setEditingItem(null);
+    } catch {
+      // DataContext displays the error; leave the form open for retry.
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-rose-50 text-rose-600">
-              <Wrench className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">
-                A/S 관리 게시판 (After-Sales Service)
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                현장 시공 하자 접수, 원인 파악, 현장 기사 출동 및 조치 결과를 체계적으로 추적합니다.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <button
-          onClick={() => setQuickModalType("as")}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-md shadow-rose-500/20 transition cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>신규 A/S 접수</span>
-        </button>
-      </div>
+      <PageHeader title="A/S 관리" description="접수부터 방문, 조치 완료까지 확인하세요. 게시물을 누르면 상세정보가 열립니다." actions={<><button onClick={() => setQuickModalType("as")} className="action-primary"><Plus className="h-4 w-4" />A/S 접수</button></>} />
 
       {/* Summary Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <div
           onClick={() => setSelectedStatus("전체")}
           className={cn(
@@ -165,7 +138,7 @@ export default function AsBoardPage() {
           )}
         >
           <span className="text-xs font-bold">전체 A/S</span>
-          <span className="text-base font-extrabold">{asItems.length}건</span>
+          <span className="text-xl font-bold tabular-nums">{asItems.length}건</span>
         </div>
 
         <div
@@ -181,7 +154,7 @@ export default function AsBoardPage() {
             <span className="w-2 h-2 rounded-full bg-rose-500" />
             <span className="text-xs font-bold">접수 대기</span>
           </div>
-          <span className="text-base font-extrabold text-rose-600">
+          <span className="text-xl font-bold tabular-nums">
             {asItems.filter((a) => a.resultStatus === "접수").length}건
           </span>
         </div>
@@ -199,7 +172,7 @@ export default function AsBoardPage() {
             <span className="w-2 h-2 rounded-full bg-amber-500" />
             <span className="text-xs font-bold">처리 진행 중</span>
           </div>
-          <span className="text-base font-extrabold text-amber-600">
+          <span className="text-xl font-bold tabular-nums">
             {asItems.filter((a) => a.resultStatus === "처리중").length}건
           </span>
         </div>
@@ -217,7 +190,7 @@ export default function AsBoardPage() {
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
             <span className="text-xs font-bold">조치 완료</span>
           </div>
-          <span className="text-base font-extrabold text-emerald-600">
+          <span className="text-xl font-bold tabular-nums">
             {asItems.filter((a) => a.resultStatus === "완료").length}건
           </span>
         </div>
@@ -261,22 +234,25 @@ export default function AsBoardPage() {
           filteredItems.map((item) => (
             <div
               key={item.id}
-              className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md transition space-y-3"
+              onClick={(event) => {
+                if (!(event.target as HTMLElement).closest("button, a, input")) setSelectedAsId(item.id);
+              }}
+              className="cursor-pointer bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md transition space-y-3"
             >
               {/* Card Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span
                     className={cn(
-                      "text-[10px] font-bold px-2 py-0.5 rounded",
+                      "text-xs font-bold px-2 py-0.5 rounded",
                       getPriorityBadge(item.priority)
                     )}
                   >
                     {item.priority}
                   </span>
-                  <h3 className="font-bold text-base text-slate-900 flex items-center gap-1.5">
+                  <h3 className="font-semibold text-lg text-slate-900 flex items-center gap-1.5">
                     <Building className="w-4 h-4 text-slate-400" />
-                    <span>{item.clientName}</span>
+                    <button type="button" onClick={() => setSelectedAsId(item.id)} aria-label={`${item.clientName} A/S 상세보기`} className="text-left hover:text-blue-600 hover:underline">{item.clientName}</button>
                   </h3>
                 </div>
 
@@ -290,7 +266,7 @@ export default function AsBoardPage() {
                     title="상태 단계 변경"
                   >
                     <span>{item.resultStatus}</span>
-                    <span className="text-[10px]">↻</span>
+                    <span className="text-xs">↻</span>
                   </button>
 
                   <button
@@ -322,7 +298,7 @@ export default function AsBoardPage() {
               </div>
 
               {/* Site Address & Dates */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
                 <div className="flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                   <span className="truncate font-medium">{item.siteAddress}</span>
@@ -346,52 +322,28 @@ export default function AsBoardPage() {
                 </div>
               </div>
 
-              {/* Reason & Resolution Details & Photos */}
-              <div className="space-y-2 text-xs">
-                <div>
-                  <span className="font-bold text-slate-700">A/S 발생 사유:</span>
-                  <p className="text-slate-800 mt-0.5 leading-relaxed bg-amber-50/50 p-2.5 rounded-lg border border-amber-100/80">
-                    {item.reason}
-                  </p>
+              <p className="line-clamp-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{item.reason}</p>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                <span>{item.asDate ? `방문 예정 ${item.asDate}` : "방문 일정 미등록"}</span>
+                <div className="flex items-center gap-3">
+                  {(item.resultPhotos?.length || item.images?.length || 0) > 0 && <span>사진 {item.resultPhotos?.length || item.images?.length}장</span>}
+                  <span className="font-medium text-blue-700">상세보기 →</span>
                 </div>
-
-                {item.resolutionDetails && (
-                  <div>
-                    <span className="font-bold text-slate-700">처리 및 조치 결과:</span>
-                    <p className="text-slate-600 mt-0.5 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-200/60">
-                      {item.resolutionDetails}
-                    </p>
-                  </div>
-                )}
-
-                {/* 조치 결과 현장 사진 갤러리 */}
-                {((item.resultPhotos && item.resultPhotos.length > 0) || (item.images && item.images.length > 0)) && (
-                  <div>
-                    <span className="font-bold text-slate-700 flex items-center gap-1.5 mb-1.5">
-                      <Camera className="w-3.5 h-3.5 text-blue-600" />
-                      <span>조치 결과 현장 사진 ({(item.resultPhotos || item.images || []).length}장):</span>
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {(item.resultPhotos || item.images || []).map((imgUrl: string, idx: number) => (
-                        <div
-                          key={idx}
-                          onClick={() => setPreviewPhotoUrl(imgUrl)}
-                          className="w-16 h-16 rounded-xl border border-slate-200 overflow-hidden relative group cursor-pointer shadow-2xs hover:scale-105 transition"
-                        >
-                          <img src={imgUrl} alt={`조치 사진 #${idx + 1}`} className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-white">
-                            <ZoomIn className="w-4 h-4" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           ))
         )}
       </div>
+
+      {selectedAsItem && (
+        <AsDetailModal
+          item={selectedAsItem}
+          onClose={() => { if (previewPhotoUrl) setPreviewPhotoUrl(null); else setSelectedAsId(null); }}
+          onEdit={() => { setEditingItem(selectedAsItem); setSelectedAsId(null); }}
+          onPrint={() => { setActiveReceipt(selectedAsItem); setSelectedAsId(null); }}
+          onOpenPhoto={setPreviewPhotoUrl}
+        />
+      )}
 
       {/* Printable Receipt Modal */}
       {activeReceipt && (
@@ -432,31 +384,31 @@ export default function AsBoardPage() {
 
               <div className="grid grid-cols-2 gap-4 text-xs">
                 <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <span className="text-slate-400 block text-[10px] uppercase font-bold">의뢰 업체</span>
+                  <span className="text-slate-400 block text-xs uppercase font-bold">의뢰 업체</span>
                   <span className="font-bold text-sm text-slate-900">{activeReceipt.clientName}</span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <span className="text-slate-400 block text-[10px] uppercase font-bold">원시공 일자</span>
+                  <span className="text-slate-400 block text-xs uppercase font-bold">원시공 일자</span>
                   <span className="font-bold text-sm text-slate-900">{activeReceipt.constructDate}</span>
                 </div>
               </div>
 
               <div className="text-xs space-y-1">
-                <span className="font-bold text-slate-500 text-[11px]">현장 주소</span>
+                <span className="font-bold text-slate-500 text-xs">현장 주소</span>
                 <p className="p-3 bg-slate-50 rounded-lg border border-slate-200 font-semibold">
                   {activeReceipt.siteAddress}
                 </p>
               </div>
 
               <div className="text-xs space-y-1">
-                <span className="font-bold text-slate-500 text-[11px]">A/S 접수 및 하자 내용</span>
+                <span className="font-bold text-slate-500 text-xs">A/S 접수 및 하자 내용</span>
                 <p className="p-4 bg-slate-50 rounded-lg border border-slate-200 leading-relaxed min-h-[70px]">
                   {activeReceipt.reason}
                 </p>
               </div>
 
               <div className="text-xs space-y-1">
-                <span className="font-bold text-slate-500 text-[11px]">기사 조치 사항 및 특이사항</span>
+                <span className="font-bold text-slate-500 text-xs">기사 조치 사항 및 특이사항</span>
                 <div className="p-4 border border-dashed border-slate-300 rounded-lg min-h-[90px] text-slate-700">
                   {activeReceipt.resolutionDetails || "현장 조치 사항을 수기 기재하거나 서명합니다."}
                 </div>
@@ -630,7 +582,7 @@ export default function AsBoardPage() {
                 {/* 첨부된 조치 결과 사진 썸네일 & 삭제 */}
                 {((editingItem.resultPhotos && editingItem.resultPhotos.length > 0) || (editingItem.images && editingItem.images.length > 0)) && (
                   <div className="mt-2.5 space-y-1">
-                    <span className="text-[11px] font-bold text-slate-600">첨부된 조치 결과 현장 사진 ({(editingItem.resultPhotos || editingItem.images || []).length}장):</span>
+                    <span className="text-xs font-bold text-slate-600">첨부된 조치 결과 현장 사진 ({(editingItem.resultPhotos || editingItem.images || []).length}장):</span>
                     <div className="flex flex-wrap gap-2">
                       {(editingItem.resultPhotos || editingItem.images || []).map((imgUrl: string, idx: number) => (
                         <div key={idx} className="w-16 h-16 rounded-xl border border-slate-300 overflow-hidden relative group shadow-2xs">
@@ -659,7 +611,7 @@ export default function AsBoardPage() {
                   취소
                 </button>
                 <button
-                  type="submit"
+                  type="submit" disabled={isSaving} aria-busy={isSaving}
                   className="px-5 py-2 rounded-lg bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 shadow-xs cursor-pointer"
                 >
                   수정 저장
