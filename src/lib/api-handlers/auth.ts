@@ -88,13 +88,14 @@ export async function LOGIN(request: NextRequest) {
   }
 }
 
-export async function VERIFY(request: NextRequest) {
+export async function VERIFY(request: Request) {
   try {
     if (!db || !SECRET_KEY) return unavailable();
     const url = new URL(request.url);
     const header = request.headers.get("authorization");
     const token = url.searchParams.get("token") || (header?.startsWith("Bearer ") ? header.slice(7) : null)
-      || request.cookies.get("baron_auth_token")?.value;
+      || request.headers.get("cookie")?.split(";").map(part => part.trim())
+        .find(part => part.startsWith("baron_auth_token="))?.slice("baron_auth_token=".length);
     const decoded = token ? verifyToken(token) : null;
     if (!decoded) return denied();
     // Re-check membership on every restored session, including drawing-program tokens.

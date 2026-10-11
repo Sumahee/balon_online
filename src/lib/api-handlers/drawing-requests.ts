@@ -4,7 +4,6 @@ import { serverStore } from "@/lib/serverStore";
 import { DrawingRequest } from "@/types";
 import { ensureDrawingHandoffs, saveDrawingHandoff } from "@/lib/drawing-handoff";
 import { VERIFY } from "./auth";
-import { NextRequest } from "next/server";
 import crypto from "node:crypto";
 
 export async function GET(request: Request) {
@@ -69,7 +68,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await VERIFY(new NextRequest(request.clone()));
+  const session = await VERIFY(request);
   if (!session.ok) return session;
   try {
     const body = await request.json();

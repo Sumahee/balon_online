@@ -37,15 +37,17 @@ test("drawing authentication leaves the POST body readable and preserves all lau
     "@/lib/db": { db: {}, executeMutation: async () => ({ success: true }) },
     "./auth": { VERIFY: async authenticatedRequest => {
       assert.equal(authenticatedRequest.headers.get("authorization"), "Bearer test-token");
-      await authenticatedRequest.json();
+      assert.equal(authenticatedRequest.bodyUsed, false);
       return new Response(null, { status: 200 });
     } },
     "@/lib/drawing-handoff": { saveDrawingHandoff: async data => { snapshot = data; return "https://balon-design.vercel.app/app#handoff=test"; } },
   });
   const input = { workItemId: "test-work", title: "천정 도면", clientName: "업체", drawingType: "천정형", siteAddress: "현장 주소", boardColor: "네츄럴오크", postColor: "화이트" };
-  const response = await handlers.POST(new Request("http://localhost/api/drawing-requests", {
+  const incoming = new Request("http://localhost/api/drawing-requests", {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer test-token" }, body: JSON.stringify(input),
-  }));
+  });
+  incoming.clone = () => { throw new Error("Cannot read private member #state from an object whose class did not declare it"); };
+  const response = await handlers.POST(incoming);
   const body = await response.json();
   assert.equal(response.status, 200);
   assert.equal(body.success, true);
