@@ -31,6 +31,48 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
 
 const request = (body) => ({ json: async () => body });
 
+test("drawing authentication leaves the POST body readable and preserves all launch information", async () => {
+  let snapshot;
+  const handlers = loadModule("src/lib/api-handlers/drawing-requests.ts", {
+    "@/lib/db": { db: {}, executeMutation: async () => ({ success: true }) },
+    "./auth": { VERIFY: async authenticatedRequest => {
+      assert.equal(authenticatedRequest.headers.get("authorization"), "Bearer test-token");
+      await authenticatedRequest.json();
+      return new Response(null, { status: 200 });
+    } },
+    "@/lib/drawing-handoff": { saveDrawingHandoff: async data => { snapshot = data; return "https://balon-design.vercel.app/app#handoff=test"; } },
+  });
+  const input = { workItemId: "test-work", title: "천정 도면", clientName: "업체", drawingType: "천정형", siteAddress: "현장 주소", boardColor: "네츄럴오크", postColor: "화이트" };
+  const response = await handlers.POST(new Request("http://localhost/api/drawing-requests", {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer test-token" }, body: JSON.stringify(input),
+  }));
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.success, true);
+  assert.ok(body.launchUrl);
+  for (const [key, value] of Object.entries(input)) assert.equal(snapshot[key], value);
+});
+
+test("drawing launch link contains only a short-lived random key and stores the complete snapshot", async () => {
+  const writes = [];
+  const { saveDrawingHandoff } = loadModule("src/lib/drawing-handoff.ts", {
+    "./db": { executeMutation: async (sql, args) => { writes.push({ sql, args }); } },
+  }, { URLSearchParams });
+  const snapshot = { id: "request-test", workItemId: "work-test", drawingType: "천정형", siteAddress: "서울 현장", boardColor: "네츄럴오크", postColor: "11 다크그레이" };
+  const before = Date.now();
+  const url = new URL(await saveDrawingHandoff(snapshot));
+  const token = new URLSearchParams(url.hash.slice(1)).get("handoff");
+  assert.match(token, /^[a-f0-9]{64}$/);
+  assert.equal(url.origin, "https://balon-design.vercel.app");
+  assert.equal(url.pathname, "/app");
+  assert.equal(url.search, "");
+  const saved = writes.find(write => write.sql.startsWith("INSERT"));
+  assert.notEqual(saved.args[1], token);
+  assert.deepEqual(JSON.parse(saved.args[2]), snapshot);
+  assert.ok(saved.args[3] >= before + 15 * 60 * 1000);
+  assert.ok(saved.args[3] <= Date.now() + 15 * 60 * 1000);
+});
+
 test("Korean business dates cross midnight independently of host timezone", () => {
   const { getToday } = loadModule("src/lib/date.ts");
   assert.equal(getToday(new Date("2026-10-05T15:01:00Z")), "2026-10-06");

@@ -39,7 +39,7 @@ interface TaskDetailModalProps {
 
 export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
   const { workItems, updateWorkItem, isSaving, addComment, deleteComment, deleteCommentImage } = useData();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
 
   // Reactive subscription to live item in DataContext
   const liveItem = item ? (workItems.find((w) => w.id === item.id) || item) : null;
@@ -258,6 +258,13 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
       window.alert("본문과 도면 사양을 저장한 뒤 전송해 주세요.");
       return;
     }
+    const drawingWindow = window.open("about:blank", "_blank");
+    if (!drawingWindow) {
+      window.alert("새 창을 열 수 없습니다. 팝업을 허용한 뒤 다시 전송해 주세요.");
+      return;
+    }
+    drawingWindow.opener = null;
+    drawingWindow.document.body.textContent = "도면 정보를 전송하고 있습니다…";
     setIsSendingReq(true);
     const assignedUser = user?.name || liveItem.drawingAssignee || liveItem.assignee || "바론 담당자";
 
@@ -270,28 +277,34 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
 
       const res = await fetch("/api/drawing-requests", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           workItemId: liveItem.id,
           drawingType: liveItem.drawingType || "옴니버스",
           clientName: liveItem.clientName,
-          siteAddress: liveItem.siteAddress || "미지정 현장",
+          siteAddress: liveItem.siteAddress || "",
           deliveryDate: liveItem.deliveryDate || liveItem.dueDate,
-          contactPhone: liveItem.siteContactPhone || "010-미입력", // 업체로부터 받은 현장 담당자 연락처
-          postColor: liveItem.postColor || "11 다크그레이",
-          boardColor: liveItem.boardColor || "PET 18T 화이트",
+          contactPhone: liveItem.siteContactPhone || "",
+          postColor: liveItem.postColor || "",
+          boardColor: liveItem.boardColor || "",
           drawingAssignee: assignedUser,
           title: liveItem.title,
           description: bodyText(liveItem.description ?? liveItem.notes ?? ""),
         }),
       });
       const data = await res.json();
+      if (!res.ok || !data.success || !data.request || !data.launchUrl) {
+        throw new Error(data.error || data.message || "도면 전송에 실패했습니다.");
+      }
+      drawingWindow.location.replace(data.launchUrl);
       if (data.success && data.request) {
         setDrawingReq(data.request);
         setReqToast(`바론웹으로 도면 작업 요청이 전송되었습니다! 🚀 (담당자: ${assignedUser} 자동 배정 완료)`);
         setTimeout(() => setReqToast(null), 4500);
       }
     } catch (err) {
+      drawingWindow.close();
+      window.alert(err instanceof Error ? err.message : "도면 전송에 실패했습니다.");
       console.error(err);
     } finally {
       setIsSendingReq(false);
@@ -590,7 +603,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                       </span>
                     </h3>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      버튼을 눌러 발주/도면 정보(업체명, 시공일, 요구사항)를 바론웹 알림으로 전달합니다.
+                      전송하면 바론웹이 새 창으로 열리고 해당 도면 화면에 주소, 컬러, 업체와 요청사항이 입력됩니다. 바론웹 로그인이 필요할 수 있습니다.
                     </p>
                   </div>
                 </div>

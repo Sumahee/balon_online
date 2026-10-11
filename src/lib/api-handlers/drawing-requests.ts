@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { executeQuery, executeMutation, db } from "@/lib/db";
 import { serverStore } from "@/lib/serverStore";
 import { DrawingRequest } from "@/types";
+import { ensureDrawingHandoffs, saveDrawingHandoff } from "@/lib/drawing-handoff";
+import { VERIFY } from "./auth";
+import { NextRequest } from "next/server";
+import crypto from "node:crypto";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -9,7 +13,8 @@ export async function GET(request: Request) {
   const status = searchParams.get("status");
 
   if (db) {
-    let sql = "SELECT * FROM drawing_requests";
+    await ensureDrawingHandoffs();
+    let sql = "SELECT drawing_requests.*, bo_drawing_handoffs.data AS handoff_data FROM drawing_requests LEFT JOIN bo_drawing_handoffs ON drawing_requests.id = bo_drawing_handoffs.request_id";
     const args: any[] = [];
     const conditions: string[] = [];
 
@@ -30,17 +35,18 @@ export async function GET(request: Request) {
     const res = await executeQuery(sql, args);
     if (res.success && res.rows) {
       const requests: DrawingRequest[] = res.rows.map((row: any) => ({
+        ...(row.handoff_data ? JSON.parse(String(row.handoff_data)) : {}),
         id: String(row.id),
         workItemId: String(row.work_item_id),
-        drawingType: row.drawing_type ? (String(row.drawing_type) as any) : undefined,
+        drawingType: row.drawing_type || (row.handoff_data ? JSON.parse(String(row.handoff_data)).drawingType : undefined),
         clientName: String(row.client_name || ""),
         siteAddress: row.site_address ? String(row.site_address) : undefined,
         deliveryDate: row.delivery_date ? String(row.delivery_date) : undefined,
         contactName: row.contact_name ? String(row.contact_name) : undefined,
         contactPhone: row.contact_phone ? String(row.contact_phone) : undefined,
-        postColor: row.post_color ? String(row.post_color) : undefined,
-        boardColor: row.board_color ? String(row.board_color) : undefined,
-        drawingAssignee: row.drawing_assignee ? String(row.drawing_assignee) : undefined,
+        postColor: row.post_color || (row.handoff_data ? JSON.parse(String(row.handoff_data)).postColor : undefined),
+        boardColor: row.board_color || (row.handoff_data ? JSON.parse(String(row.handoff_data)).boardColor : undefined),
+        drawingAssignee: row.drawing_assignee || (row.handoff_data ? JSON.parse(String(row.handoff_data)).drawingAssignee : undefined),
         title: String(row.title || ""),
         description: row.description ? String(row.description) : undefined,
         status: row.status || "pending",
@@ -63,6 +69,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const session = await VERIFY(new NextRequest(request.clone()));
+  if (!session.ok) return session;
   try {
     const body = await request.json();
     const {
@@ -87,7 +95,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const id = `req-${Date.now()}`;
+    if (!db) return NextResponse.json({ success: false, error: "도면 전송 DB에 연결할 수 없습니다." }, { status: 503 });
+    const id = `req-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
 
     if (db) {
@@ -130,7 +139,8 @@ export async function POST(request: Request) {
           createdAt: now,
           updatedAt: now,
         };
-        return NextResponse.json({ success: true, request: newReq });
+        const launchUrl = await saveDrawingHandoff(newReq);
+        return NextResponse.json({ success: true, request: newReq, launchUrl });
       }
     }
 
