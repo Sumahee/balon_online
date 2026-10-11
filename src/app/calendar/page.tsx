@@ -1,5 +1,6 @@
 "use client";
 
+import { useAuth } from "@/context/AuthContext";
 import { PageHeader } from "@/components/common/PageHeader";
 
 import { getToday } from "@/lib/date";
@@ -104,6 +105,7 @@ interface CalendarEvent {
 }
 
 export default function CalendarPage() {
+  const { user } = useAuth();
   const { workItems, asItems, addWorkItem, isSaving } = useData();
 
   const [currentDate, setCurrentDate] = useState(new Date(`${getToday()}T00:00:00`));
@@ -277,7 +279,7 @@ export default function CalendarPage() {
         deadlineType: newDeadlineType,
         deliveryDate: newDate,
         category: newCategory,
-        assignee: "김진우 실장",
+        assignee: user?.name || "",
         priority: "높음",
         status: "대기",
         progress: 0,

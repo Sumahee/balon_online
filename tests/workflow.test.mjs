@@ -259,3 +259,128 @@ test("AS details show request, resolution, contact, dates and actions", () => {
   assert.match(html, /role="dialog"/);
   for (const text of ["검증 업체", "도어 조절 요청", "경첩 조절 완료", "검증 기사", "2026-10-15", "접수증 인쇄", "A\/S 상세 닫기"]) assert.ok(html.includes(text));
 });
+
+test("client lookup never substitutes example companies for missing or failed DB", async () => {
+  for (const db of [null, {}]) {
+    const handlers = loadModule("src/lib/api-handlers/clients.ts", {
+      "@/lib/db": { db, executeQuery: async () => ({ success: false }) },
+    });
+    const response = await handlers.GET({ url: "http://localhost/api/clients" });
+    assert.equal(response.status, 503);
+    const body = await response.json();
+    assert.equal(body.success, false);
+    assert.deepEqual(body.clients, []);
+  }
+});
+
+test("a valid empty client directory stays empty", async () => {
+  const handlers = loadModule("src/lib/api-handlers/clients.ts", {
+    "@/lib/db": { db: {}, executeQuery: async () => ({ success: true, rows: [] }) },
+  });
+  const response = await handlers.GET({ url: "http://localhost/api/clients" });
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).clients, []);
+});
+
+test("missing upload data cannot create a successful fake attachment URL", async () => {
+  const handler = loadModule("src/lib/api-handlers/upload.ts");
+  const response = await handler.POST({ headers: new Headers({ "content-type": "application/json" }), json: async () => ({ fileName: "missing.pdf" }) });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).success, false);
+});
+
+test("kanban flags overdue active work but never completed work", () => {
+  const React = nativeRequire("react");
+  const { renderToStaticMarkup } = nativeRequire("react-dom/server");
+  const { KanbanBoard } = loadModule("src/components/dashboard/KanbanBoard.tsx", {
+    "@/context/DataContext": { useData: () => ({}) },
+    "@/context/AuthContext": { useAuth: () => ({ user: null }) },
+    "@/lib/date": { getToday: () => "2026-10-10", getDaysUntil: (date) => date ? (Date.parse(date) - Date.parse("2026-10-10")) / 86400000 : null },
+    "@/components/dashboard/TaskDetailModal": { TaskDetailModal: () => null },
+  });
+  const item = { id: "test", title: "검증 업무", status: "대기", dueDate: "2026-10-08", priority: "보통", category: "제작" };
+  const render = (task) => renderToStaticMarkup(React.createElement(KanbanBoard, { items: [task], showCompleted: true }));
+  assert.match(render(item), /2일 지연/);
+  assert.doesNotMatch(render({ ...item, status: "시공완료", priority: "긴급" }), /2일 지연|D-/);
+  assert.doesNotMatch(render({ ...item, dueDate: "" }), /D-null|NaN/);
+});
+
+test("manual plywood registration persists name, SKU and image across handler reload", async () => {
+  const rows = new Map();
+  const database = { db: {},
+    executeMutation: async (sql, args) => { if (sql.startsWith("INSERT")) rows.set(args[1], { id: args[0], data: args[3] }); return { success: true }; },
+    executeQuery: async (sql, args) => ({ success: true, rows: sql.includes("bo_plywood_official") ? (args?.[0] === "BL-30" ? [{ id: "balon-28" }] : []) : sql.includes("bo_plywood_image_overrides") ? [] : sql.startsWith("SELECT id") ? (rows.has(args[0]) ? [rows.get(args[0])] : []) : [...rows.values()] }),
+  };
+  const mocks = { "@/lib/db": database, "./auth": { VERIFY: async () => ({ ok: true }) } };
+  const handler = loadModule("src/lib/api-handlers/plywoods.ts", mocks);
+  const image = "data:image/png;base64,iVBORw0KGgo=";
+  const created = await handler.POST(request({ name: "검증 합판", code: "test-99", color: "#eeeeee", image }));
+  assert.equal(created.status, 201);
+  const reloaded = loadModule("src/lib/api-handlers/plywoods.ts", mocks);
+  const data = (await (await reloaded.GET()).json()).data;
+  assert.equal(data[0].name, "검증 합판");
+  assert.equal(data[0].code, "TEST-99");
+  assert.equal(data[0].image, image);
+  assert.equal((await reloaded.POST(request({ name: "중복", code: "TEST-99" }))).status, 409);
+  assert.equal((await reloaded.POST(request({ name: "공식 중복", code: "BL-30" }))).status, 409);
+});
+
+test("manual plywood rejects anonymous writes, invalid input and DB failures", async () => {
+  const denied = new Response(null, { status: 401 });
+  const unauthenticated = loadModule("src/lib/api-handlers/plywoods.ts", { "./auth": { VERIFY: async () => denied }, "@/lib/db": { db: null } });
+  assert.equal((await unauthenticated.POST(request({}))).status, 401);
+  const handler = loadModule("src/lib/api-handlers/plywoods.ts", { "./auth": { VERIFY: async () => ({ ok: true }) }, "@/lib/db": { db: null } });
+  assert.equal((await handler.POST(request({ name: "품번 없음" }))).status, 400);
+  assert.equal((await handler.POST(request({ name: "잘못된 이미지", code: "NEW-1", image: "https://invalid.example/image.svg" }))).status, 400);
+  assert.equal((await handler.POST(request({ name: "연결 실패", code: "NEW-1" }))).status, 503);
+});
+
+test("official plywood image overrides persist by ID without mixing duplicate SKUs", async () => {
+  const overrides = new Map();
+  const mocks = {
+    "./auth": { VERIFY: async () => ({ ok: true }) },
+    "@/lib/db": { db: {},
+      executeMutation: async (sql, args) => { if (sql.startsWith("INSERT INTO bo_plywood_image_overrides")) overrides.set(args[0], args[1]); return { success: true }; },
+      executeQuery: async (sql, args) => ({ success: true, rows: sql.includes("bo_plywood_official") ? (!args || args[0] === "balon-28" ? [{ data: JSON.stringify({ id: "balon-28", code: "BL-30", name: "스카이블루", image: "/original.jpg" }) }] : []) : sql.includes("overrides") ? [...overrides].map(([id, image]) => ({ id, image })) : [] }),
+    },
+  };
+  const image = "data:image/png;base64,iVBORw0KGgo=";
+  const handler = loadModule("src/lib/api-handlers/plywoods.ts", mocks);
+  const response = await handler.PUT(request({ id: "balon-28", image, name: "무시할 이름", code: "잘못된 품번" }));
+  assert.equal(response.status, 200);
+  const saved = (await response.json()).data;
+  assert.equal(saved.name, "스카이블루");
+  assert.equal(saved.code, "BL-30");
+  const reloaded = loadModule("src/lib/api-handlers/plywoods.ts", mocks);
+  const data = (await (await reloaded.GET()).json()).data;
+  assert.equal(data.length, 1);
+  assert.equal(data[0].id, "balon-28");
+  assert.equal(data[0].image, image);
+  assert.equal((await handler.PUT(request({ id: "missing", image }))).status, 404);
+  assert.equal((await handler.PUT(request({ id: "balon-28", image: "javascript:bad" }))).status, 400);
+});
+
+test("manual plywood image edit changes only image and requires staff authentication", async () => {
+  const original = { id: "manual-test", code: "TEST", name: "기존 합판", image: null, color: "#ffffff" };
+  let mutation;
+  const handler = loadModule("src/lib/api-handlers/plywoods.ts", {
+    "./auth": { VERIFY: async () => ({ ok: true }) },
+    "@/lib/db": { db: {}, executeQuery: async (sql) => ({ success: true, rows: sql.includes("bo_plywood_official") ? [] : [{ data: JSON.stringify(original) }] }), executeMutation: async (sql, args) => { if (sql.startsWith("UPDATE")) mutation = { sql, args }; return { success: true }; } },
+  });
+  const image = "data:image/png;base64,iVBORw0KGgo=";
+  const response = await handler.PUT(request({ id: original.id, image }));
+  assert.equal(response.status, 200);
+  assert.match(mutation.sql, /json_set\(data, '\$\.image'/);
+  assert.equal(mutation.args[1], original.id);
+  assert.equal((await response.json()).data.name, original.name);
+  const denied = loadModule("src/lib/api-handlers/plywoods.ts", { "./auth": { VERIFY: async () => new Response(null, { status: 401 }) }, "@/lib/db": { db: null } });
+  assert.equal((await denied.PUT(request({ id: original.id, image }))).status, 401);
+});
+
+
+test("plywood listing uses DB records and never silently substitutes local catalog", async () => {
+  const failed = loadModule("src/lib/api-handlers/plywoods.ts", { "@/lib/db": { db: {}, executeMutation: async () => ({}), executeQuery: async () => ({ success: false, rows: [] }) } });
+  assert.equal((await failed.GET()).status, 503);
+  const empty = loadModule("src/lib/api-handlers/plywoods.ts", { "@/lib/db": { db: {}, executeMutation: async () => ({}), executeQuery: async () => ({ success: true, rows: [] }) } });
+  assert.deepEqual((await (await empty.GET()).json()).data, []);
+});

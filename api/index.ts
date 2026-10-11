@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import * as plywoodsHandler from "@/lib/api-handlers/plywoods";
 import * as postsHandler from "@/lib/api-handlers/posts";
 import * as clientsHandler from "@/lib/api-handlers/clients";
 import * as commentsHandler from "@/lib/api-handlers/comments";
@@ -57,6 +58,8 @@ export async function GET(request: NextRequest, context?: RouteContext) {
         return await drawingRequestsHandler.GET(request);
       case "gallery":
         return await galleryHandler.GET(request);
+      case "plywoods":
+        return await plywoodsHandler.GET();
       case "materials":
         return await materialsHandler.GET(request);
       case "dashboard":
@@ -114,6 +117,8 @@ export async function POST(request: NextRequest, context?: RouteContext) {
         return await uploadHandler.POST(request);
       case "gallery":
         return await galleryHandler.POST(request);
+      case "plywoods":
+        return await plywoodsHandler.POST(request);
       case "materials":
         return await materialsHandler.POST(request);
       case "auth":
@@ -144,6 +149,8 @@ export async function PUT(request: NextRequest, context?: RouteContext) {
     switch (domain) {
       case "posts":
         return await postsHandler.PUT(request);
+      case "plywoods":
+        return await plywoodsHandler.PUT(request);
       case "purchases":
         return await purchasesHandler.PUT(request);
       default:

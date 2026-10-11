@@ -62,7 +62,7 @@ export function QuickModals() {
     siteContactPhone: "",
     postColor: "11 다크그레이",
     boardColor: "PET 18T 화이트",
-    drawingAssignee: "김진우 실장 (로그인 유저)",
+    drawingAssignee: user?.name || "",
     priority: "보통",
     notes: "",
     description: "",
@@ -126,7 +126,7 @@ export function QuickModals() {
         postColor: workForm.postColor,
         boardColor: workForm.boardColor,
         drawingAssignee: workForm.drawingAssignee,
-        assignee: workForm.drawingAssignee || "김진우 실장", // 로그인 유저 자동 지정
+        assignee: workForm.drawingAssignee || user?.name || "", // 로그인 유저 자동 지정
         priority: workForm.priority,
         status: "대기",
         progress: 0,
@@ -150,7 +150,7 @@ export function QuickModals() {
         siteContactPhone: "",
         postColor: "11 다크그레이",
         boardColor: "PET 18T 화이트",
-        drawingAssignee: "김진우 실장 (로그인 유저)",
+        drawingAssignee: user?.name || "",
         priority: "보통",
         notes: "",
         description: "",

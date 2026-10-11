@@ -82,3 +82,10 @@ DB 등록 실패, 구매 부분 수정, 준비완료/시공완료 집계의 차�
 `/api/users` 직원 목록도 검증된 직원 세션이 있어야 조회할 수 있습니다.
 로컬용 서명 키는 `.env.local`에 설정하며 배포 환경에도 별도 `JWT_SECRET` 설정이 필요합니다.
 기존 공개 기본키로 발급한 토큰은 인정하지 않으므로 기존 사용자는 다시 로그인해야 합니다.
+
+
+### 합판 DB 카탈로그
+
+합판 화면은 `/api/plywoods`에서 공식/수동 등록 데이터와 수정 이미지를 조회합니다. 공식 원본 30종은 `bo_plywood_official`, 수동 등록은 `bo_plywood_samples`, 공식 이미지 수정은 `bo_plywood_image_overrides`에 저장합니다. 이미지 파일 내용도 data URL로 DB에 저장됩니다.
+
+새 DB로 옮길 때 `.env.local`의 Turso 설정 후 `node --env-file=.env.local scripts/import-plywoods.mjs`를 실행하세요. 기존 ID는 덮어쓰지 않으므로 다시 실행해도 수정 내용이 유지됩니다. 원본의 중복 품번 BL-30은 서로 다른 ID로 보존합니다. 실제 인증정보는 Git에 올리지 않습니다.

@@ -1,6 +1,6 @@
 "use client";
 
-import { getToday } from "@/lib/date";
+import { getToday, getDaysUntil } from "@/lib/date";
 
 import React, { useState } from "react";
 import { WorkItem, WorkStatus } from "@/types";
@@ -94,21 +94,6 @@ export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) 
       ? columns
       : columns.filter((c) => c.status === mobileActiveTab);
 
-  const getUrgencyInfo = (targetDate: string, priority: WorkItem["priority"]) => {
-    try {
-      const diffDays = Math.ceil(
-        (new Date(targetDate).getTime() - new Date(todayStr).getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      const isUrgent = priority === "긴급" || (diffDays >= 0 && diffDays <= 3);
-      return {
-        isUrgent,
-        diffDays,
-      };
-    } catch {
-      return { isUrgent: priority === "긴급", diffDays: 99 };
-    }
-  };
 
   return (
     <>
@@ -191,7 +176,9 @@ export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) 
                 {/* Task Cards List */}
                 {colItems.map((task) => {
                   const targetDate = task.deliveryDate || task.dueDate;
-                  const { isUrgent, diffDays } = getUrgencyInfo(targetDate, task.priority);
+                  const diffDays = getDaysUntil(targetDate, todayStr);
+                  const isUrgent = task.status !== "시공완료" && (task.priority === "긴급" || (diffDays !== null && diffDays <= 3));
+                  const urgencyLabel = diffDays !== null && diffDays < 0 ? `${Math.abs(diffDays)}일 지연` : task.priority === "긴급" ? "긴급" : diffDays === 0 ? "오늘" : `D-${diffDays}`;
                   const clientName = task.clientName?.trim();
                   const titleIncludesClient = clientName && task.title.replace(/\s/g, "").includes(clientName.replace(/\s/g, ""));
                   const hasPdf = task.attachments?.some((a) => a.fileType === "pdf");
@@ -236,7 +223,7 @@ export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) 
                             <Calendar className="h-3.5 w-3.5 shrink-0" />
                             {task.deadlineType || "마감"} {targetDate ? targetDate.substring(5) : "미정"}
                           </span>
-                          {isUrgent && <span className="rounded bg-rose-50 px-1.5 font-semibold text-rose-700 whitespace-nowrap">{task.priority === "긴급" ? "긴급" : diffDays === 0 ? "오늘" : `D-${diffDays}`}</span>}
+                          {isUrgent && <span className="rounded bg-rose-50 px-1.5 font-semibold text-rose-700 whitespace-nowrap">{urgencyLabel}</span>}
                           <span className="ml-auto flex min-w-0 items-center gap-1 text-slate-500" title={task.assignee || "담당 미정"}>
                             <User className="h-3 w-3 shrink-0" /><span className="truncate max-w-[10rem]">{task.assignee || "담당 미정"}</span>
                           </span>

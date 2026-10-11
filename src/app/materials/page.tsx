@@ -1,129 +1,88 @@
 "use client";
 
+import { useEffect, useState, type CSSProperties } from "react";
+import { Search, Move, Plus, X } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
-
-import React, { useState } from "react";
-import {
-  Search} from "lucide-react";
-import { useData } from "@/context/DataContext";
-
-import { cn } from "@/lib/utils";
+import { plywoodSource, type PlywoodSample } from "@/lib/plywood-catalog";
+import { requestApi } from "@/lib/api-client";
+import { PlywoodRegistration } from "@/components/materials/PlywoodRegistration";
+import styles from "./materials.module.css";
 
 export default function MaterialsPage() {
-  const { materials } = useData();
-  const [selectedCategory, setSelectedCategory] = useState<string>("전체");
-  const [searchQuery, setSearchQuery] = useState("");
-
-  const categories = ["전체", "PET", "LPM", "HPM", "원목/무늬목", "엣지밴딩"];
-
-  const filteredMaterials = materials.filter((m) => {
-    const matchesCat = selectedCategory === "전체" || m.category === selectedCategory;
-    const matchesSearch =
-      m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.manufacturer.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCat && matchesSearch;
-  });
+  const [selectedId, setSelectedId] = useState("balon-08");
+  const [manual, setManual] = useState<PlywoodSample[]>([]);
+  const [editingSample, setEditingSample] = useState<PlywoodSample | null>(null);
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadVersion, setLoadVersion] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    requestApi<PlywoodSample[]>("/api/plywoods").then((result) => { if (active) { setManual(result.data || []); setLoadError(""); } }).catch((error) => { if (active) setLoadError(error.message); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [loadVersion]);
+  const catalog = manual;
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("전체");
+  const [angle, setAngle] = useState({ x: -7, y: -14 });
+  const sample = catalog.find((item) => item.id === selectedId) || catalog[0];
+  const filtered = catalog.filter((item) => (filter !== "텍스처" || item.image) && (filter !== "단색" || !item.image) && `${item.name} ${item.code}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const comparing = compareIds.length > 0;
+  const previewSamples = comparing ? compareIds.map((id) => catalog.find((item) => item.id === id)!).filter(Boolean) : sample ? [sample] : [];
+  const toggleCompare = (id: string) => setCompareIds((ids) => ids.includes(id) ? ids.filter((value) => value !== id) : ids.length < 2 ? [...ids, id] : ids);
+  const boardStyle = (item: PlywoodSample) => ({
+    backgroundColor: item.color, backgroundImage: item.image ? `url("${item.image}")` : undefined,
+    "--rx": `${angle.x}deg`, "--ry": `${angle.y}deg`,
+    "--shine-x": `${50 + angle.y * 2}%`, "--shine-y": `${35 - angle.x * 2}%`,
+    "--shine-opacity": .1 + (1 - item.roughness) * .25,
+  } as CSSProperties);
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="자재 샘플" description="소재와 색상, 규격을 비교하고 필요한 자재를 찾아보세요." />
-
-      <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">자재 샘플을 확인할 수 있습니다. 재고 및 재단 연동은 준비 중입니다.</p>
-
-      {/* Filter and Search */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Category Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap",
-                selectedCategory === cat
-                  ? "bg-slate-900 text-white shadow-xs"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200/60"
-              )}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        {/* Search */}
-        <div className="relative w-full sm:w-64">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
-          <input
-            type="text"
-            placeholder="자재명, 코드, 제조사 검색..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
-      </div>
-
-      {/* Materials Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filteredMaterials.map((mat) => (
-          <div
-            key={mat.id}
-            className="bg-white rounded-2xl border border-slate-200 shadow-2xs hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col justify-between"
-          >
-            {/* Color/Texture Swatch Header */}
-            <div
-              className="h-28 relative flex items-end p-4 border-b border-slate-100"
-              style={{
-                backgroundColor: mat.colorHex,
-              }}
-            >
-              <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-white/90 text-slate-800 shadow-xs backdrop-blur-xs">
-                  {mat.category}
-                </span>
-                <span
-                  className={cn(
-                    "text-xs font-bold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs",
-                    mat.inStock
-                      ? "bg-emerald-500 text-white"
-                      : "bg-slate-500 text-white"
-                  )}
-                >
-                  {mat.inStock ? "재고 보유" : "발주 필요"}
-                </span>
-              </div>
-
-              <div className="bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded-md text-xs font-mono font-bold text-slate-800 shadow-xs">
-                {mat.code}
-              </div>
-            </div>
-
-            {/* Material Body Info */}
-            <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
-              <div>
-                <h4 className="font-bold text-sm text-slate-900">{mat.name}</h4>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">{mat.description}</p>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 space-y-1.5 text-xs text-slate-600">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">제조/공급사:</span>
-                  <span className="font-semibold text-slate-800">{mat.manufacturer}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">규격 두께:</span>
-                  <span className="font-semibold text-slate-800">{mat.thickness}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">표면 마감/질감:</span>
-                  <span className="font-semibold text-indigo-600">{mat.finish}</span>
-                </div>
-              </div>
-            </div>
+    <div className="space-y-4">
+      <PageHeader title="합판 컬러 라이브러리" description="목록에서 합판을 선택하면 옆에서 크게 확인할 수 있습니다." actions={<button type="button" className="action-primary" onClick={() => setRegisterOpen(true)}><Plus size={16} /> 합판 등록</button>} />
+      {loadError && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{loadError} <button type="button" className="underline" onClick={() => setLoadVersion((value) => value + 1)}>다시 불러오기</button></p>}
+      {registerOpen && <PlywoodRegistration onClose={() => setRegisterOpen(false)} onSaved={(item) => { setManual((items) => [item, ...items]); setSelectedId(item.id); setFilter("전체"); setQuery(""); setRegisterOpen(false); }} />}
+      {editingSample && <PlywoodRegistration key={editingSample.id} sample={editingSample} onClose={() => setEditingSample(null)} onSaved={(item) => { setManual((items) => [item, ...items.filter((existing) => existing.id !== item.id)]); setEditingSample(null); }} />}
+      <div className={styles.workspace}>
+        <section className={styles.library} aria-label="합판 목록">
+          <div className={styles.listHeader}>
+            <h2>합판 <span>{filtered.length}</span></h2>
+            <label className={styles.search}><Search size={15} /><input aria-label="합판 이름·품번 검색" placeholder="이름·품번 검색" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+            <div className={styles.filters}>{["전체", "텍스처", "단색"].map((value) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}</button>)}</div>
           </div>
-        ))}
+          <p className={styles.compareHint} aria-live="polite">체크해서 2개 비교 · {compareIds.length}/2 선택</p>
+          <div className={styles.collection}>
+            {filtered.map((item) => <div key={item.id} className={styles.sampleRow}><button type="button" aria-pressed={selectedId === item.id} className={styles.sample} onClick={() => { setCompareIds([]); setSelectedId(item.id); setAngle({ x: -7, y: -14 }); }}>
+              <span className={styles.thumbnail} style={{ backgroundColor: item.color, backgroundImage: item.image ? `url("${item.image}")` : undefined }} />
+              <span className={styles.sampleInfo}><span className={styles.sampleName}>{item.name}</span><span className={styles.sampleCode}>{item.code}{item.origin === "manual" ? " · 수동 등록" : ""}</span></span>
+            </button>
+              <label className={styles.compareCheck} title={compareIds.length === 2 && !compareIds.includes(item.id) ? "선택한 합판을 해제하면 다른 합판을 비교할 수 있습니다." : "비교할 합판 선택"}>
+                <input type="checkbox" aria-label={`${item.name} ${item.code} 비교 선택`} checked={compareIds.includes(item.id)} disabled={compareIds.length === 2 && !compareIds.includes(item.id)} onChange={() => toggleCompare(item.id)} />
+              </label>
+            </div>)}
+            {!filtered.length && <p className="p-4 text-sm text-slate-500">{loading ? "DB에서 합판을 불러오는 중…" : loadError ? "합판 조회에 실패했습니다." : "검색한 합판이 없습니다."}</p>}
+          </div>
+        </section>
+        <section className={styles.preview} aria-label="선택한 합판 미리보기">
+          {comparing && <div className={styles.compareBar}><span>합판 비교 · {compareIds.length}/2</span><button type="button" onClick={() => setCompareIds([])}>비교 닫기 <X size={14} /></button></div>}
+          <div className={`${styles.previewPanels} ${comparing ? styles.comparing : ""}`} onPointerMove={(event) => {
+            if (event.pointerType === "touch") return;
+            const rect = event.currentTarget.getBoundingClientRect();
+            setAngle({ x: -7 - ((event.clientY - rect.top) / rect.height - .5) * 14, y: ((event.clientX - rect.left) / rect.width - .5) * 30 });
+          }} onPointerLeave={() => setAngle({ x: -7, y: -14 })}>
+            {!previewSamples.length && <p className="self-center p-8 text-center text-sm text-slate-500">{loading ? "합판을 불러오는 중…" : "목록에서 합판을 선택해 주세요."}</p>}
+            {previewSamples.map((item) => <div className={styles.previewPanel} key={item.id}>
+              <div className={styles.previewHeader} aria-live="polite"><h2>{item.name}</h2><p>품번 <strong>{item.code}</strong>{item.image ? "" : " · 색상 샘플"}</p><button type="button" className={styles.editImage} aria-label={`${item.name} ${item.code} 이미지 수정`} onClick={() => setEditingSample(item)}>이미지 수정</button>{comparing && <button type="button" className={styles.removeComparison} aria-label={`${item.name} 비교 해제`} onClick={() => toggleCompare(item.id)}><X size={14} /></button>}</div>
+              <div className={styles.scene}><div className={styles.board} style={boardStyle(item)} role="img" aria-label={`${item.name} ${item.code} 판재 미리보기`}><div className={styles.reflection} /></div></div>
+            </div>)}
+            {comparing && previewSamples.length === 1 && <div className={styles.emptyComparison}><Plus size={22} /><p>비교할 합판을<br />하나 더 체크해 주세요</p></div>}
+          </div>
+          <div className={styles.previewFooter}><span><Move size={14} /> 마우스로 표면 살펴보기</span><span>화면 색상은 실물과 다를 수 있습니다.</span></div>
+        </section>
       </div>
+      <p className="text-xs text-slate-500">출처: <a className="underline" href={plywoodSource} target="_blank" rel="noreferrer">BALON 공식 합판 목록</a> · 공식 샘플 30종 · 원본 품번 표기 기준</p>
     </div>
   );
 }

@@ -86,14 +86,10 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      fileUrl: `/uploads/${fileName || "file"}`,
-      name: fileName || "file",
-      fileType: fileType || "file",
-      size: size || "1 MB",
-      uploadedAt: new Date().toISOString().split("T")[0],
-    });
+    return NextResponse.json(
+      { success: false, error: "업로드할 파일 데이터가 없거나 올바르지 않습니다." },
+      { status: 400 }
+    );
   } catch (err: any) {
     console.error("[Upload Error]:", err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

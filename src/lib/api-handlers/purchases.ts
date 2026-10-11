@@ -53,7 +53,7 @@ export async function GET() {
       }
     }
 
-    // Fallback to sample data if DB is empty or not connected
+    // Without a database, show only records entered in this preview process.
     return NextResponse.json({ success: true, data: previewPurchases, isMock: !db });
   } catch (error: any) {
     console.error("[Purchases API GET Error]:", error);

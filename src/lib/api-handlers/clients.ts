@@ -2,13 +2,6 @@ import { NextResponse } from "next/server";
 import { executeQuery, db } from "@/lib/db";
 import { ClientInfo } from "@/types";
 
-const mockClients: ClientInfo[] = [
-  { id: 1, name: "(주)디자인에이치", officePhone: "02-555-1234", companyAddress: "서울시 서초구 반포대로 12", ceoName: "홍길동" },
-  { id: 2, name: "공간디자인 림", officePhone: "02-444-5678", companyAddress: "서울시 성동구 연무장길 45", ceoName: "김림" },
-  { id: 3, name: "한빛 인테리어", officePhone: "031-777-8899", companyAddress: "경기도 성남시 분당구 판교역로 100", ceoName: "이한빛" },
-  { id: 4, name: "더바른 가구디자인", officePhone: "02-333-2211", companyAddress: "서울시 마포구 월드컵북로 88", ceoName: "박바른" },
-];
-
 /**
  * GET /api/clients
  * 기존 Turso DB의 clients 테이블에서 클라이언트 목록을 READ-ONLY(조회 전용)로 가져옵니다.
@@ -45,13 +38,10 @@ export async function GET(request: Request) {
     }
   }
 
-  // Fallback to mock list
-  let filtered = mockClients;
-  if (search) {
-    const queryLower = search.toLowerCase();
-    filtered = mockClients.filter((c) => c.name.toLowerCase().includes(queryLower));
-  }
-  return NextResponse.json({ success: true, clients: filtered, count: filtered.length, isMock: true });
+  return NextResponse.json(
+    { success: false, clients: [], count: 0, message: "거래처 목록을 불러오지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요." },
+    { status: 503 }
+  );
 }
 
 /**

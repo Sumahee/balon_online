@@ -69,7 +69,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
   const [editSiteContactPhone, setEditSiteContactPhone] = useState(liveItem?.siteContactPhone || "");
   const [editPostColor, setEditPostColor] = useState(liveItem?.postColor || "11 다크그레이");
   const [editBoardColor, setEditBoardColor] = useState(liveItem?.boardColor || "PET 18T 화이트");
-  const [editDrawingAssignee, setEditDrawingAssignee] = useState(user?.name || liveItem?.drawingAssignee || liveItem?.assignee || "김진우 실장");
+  const [editDrawingAssignee, setEditDrawingAssignee] = useState(liveItem?.drawingAssignee || liveItem?.assignee || user?.name || "");
   const [clientsList, setClientsList] = useState<ClientInfo[]>([]);
 
   // Load clients list for autocomplete datalist
@@ -93,7 +93,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
     setEditSiteContactPhone(liveItem.siteContactPhone || "");
     setEditPostColor(liveItem.postColor || "11 다크그레이");
     setEditBoardColor(liveItem.boardColor || "PET 18T 화이트");
-    setEditDrawingAssignee(liveItem.drawingAssignee || liveItem.assignee || "김진우 실장");
+    setEditDrawingAssignee(liveItem.drawingAssignee || liveItem.assignee || "");
     setIsEditingSpecs(true);
   };
 
@@ -189,7 +189,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
 
     await addComment(
       liveItem.id,
-      "김진우 실장 (오피스)",
+      user?.name || "미로그인 사용자",
       content || "📷 [사진 첨부]",
       commentAttachedPhotos
     );
@@ -217,7 +217,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
           // Immediately post as comment so user sees it live instantly!
           await addComment(
             liveItem.id,
-            "김진우 실장 (오피스)",
+            user?.name || "미로그인 사용자",
             newCommentText.trim() || "📷 [현장 사진]",
             newPhotoUrls
           );
@@ -643,7 +643,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                       </span>
                     ) : (
                       <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
-                        도면 담당자: {liveItem?.drawingAssignee || liveItem?.assignee || "김진우 실장"}
+                        도면 담당자: {liveItem?.drawingAssignee || liveItem?.assignee || ""}
                       </span>
                     )}
                   </div>
@@ -670,7 +670,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                               setEditSiteContactPhone(liveItem.siteContactPhone || "");
                               setEditPostColor(liveItem.postColor || "11 다크그레이");
                               setEditBoardColor(liveItem.boardColor || "PET 18T 화이트");
-                              setEditDrawingAssignee(liveItem.drawingAssignee || liveItem.assignee || "김진우 실장");
+                              setEditDrawingAssignee(liveItem.drawingAssignee || liveItem.assignee || "");
                             }
                             setIsEditingSpecs(false);
                           }}
@@ -792,16 +792,13 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                     {/* 8. 도면 담당자 */}
                     <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
                       <label className="text-slate-600 block text-[10px] font-bold mb-1">도면 담당자</label>
-                      <select
+                      <input
                         value={editDrawingAssignee}
                         onChange={(e) => setEditDrawingAssignee(e.target.value)}
+                        placeholder="담당자 이름"
+                        aria-label="도면 담당자"
                         className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-bold text-indigo-700 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                      >
-                        <option value="김진우 실장">김진우 실장</option>
-                        <option value="이민아 팀장">이민아 팀장</option>
-                        <option value="박상현 대리">박상현 대리</option>
-                        <option value="정성훈 과장">정성훈 과장</option>
-                      </select>
+                      />
                     </div>
                   </div>
                 ) : (
