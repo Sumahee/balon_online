@@ -36,8 +36,9 @@ export function AsDetailModal({ item, onClose, onEdit, onPrint, onOpenPhoto }: A
           <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
             {[
               ["현장 주소", item.siteAddress], ["연락처", item.contactPhone],
-              ["시공일", item.constructDate], ["A/S 방문 예정일", item.asDate],
-              ["담당 기사", item.technician], ["접수일", item.createdAt?.split("T")[0]],
+              ["최초 시공일", item.constructDate], ["최초 시공자", item.installer],
+              ["A/S 접수일", item.receivedDate || item.createdAt?.split("T")[0]], ["A/S 처리 예정일", item.asDate],
+              ["A/S 처리 담당기사", item.technician], ["A/S 구분", item.serviceType ? `${item.serviceType} A/S${item.serviceType === "유상" ? ` · ${item.paidReason || "사유 미등록"}` : ""}` : "미등록"],
             ].map(([label, value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 break-words font-medium text-slate-900">{value || "미등록"}</dd></div>)}
           </dl>
           <section><h3 className="mb-2 text-sm font-bold text-slate-900">A/S 발생 사유</h3><p className="whitespace-pre-wrap break-words rounded-xl bg-amber-50 p-4 text-sm leading-7 text-slate-800">{item.reason || "등록된 사유가 없습니다."}</p></section>

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { serverStore } from "@/lib/serverStore";
 import { db, executeQuery, executeMutation } from "@/lib/db";
 import { WorkItem, AsItem } from "@/types";
+import { getToday } from "@/lib/date";
+import { ensureAsSchema } from "@/lib/as-schema";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -133,6 +135,7 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json({ success: true, count: items.length, data: items, isDb: false });
   } else if (type === "as") {
+    await ensureAsSchema();
     if (db) {
       let sql = "SELECT * FROM bo_as_items";
       const conditions: string[] = [];
@@ -159,6 +162,11 @@ export async function GET(request: NextRequest) {
           type: "as",
           clientName: String(row.client_name || ""),
           constructDate: String(row.construct_date || ""),
+          installer: String(row.installer || ""),
+          receivedDate: String(row.received_date || String(row.created_at || "").split("T")[0]),
+          asDate: String(row.as_date || ""),
+          serviceType: row.service_type === "유상" || row.service_type === "무상" ? row.service_type : undefined,
+          paidReason: row.paid_reason === "고객과실" || row.paid_reason === "기간만료" ? row.paid_reason : "",
           siteAddress: String(row.site_address || ""),
           reason: String(row.reason || ""),
           resultStatus: (row.result_status || "접수") as any,
@@ -329,9 +337,15 @@ export async function POST(request: NextRequest) {
       }, id);
       return NextResponse.json({ success: true, data: { ...newItem, id } }, { status: 201 });
     } else if (type === "as") {
+      await ensureAsSchema();
       const {
         clientName,
         constructDate,
+        installer,
+        receivedDate,
+        asDate,
+        serviceType,
+        paidReason,
         siteAddress,
         reason,
         resultStatus,
@@ -349,7 +363,9 @@ export async function POST(request: NextRequest) {
       }
 
       const id = body.id || `as-${Date.now()}`;
-      const safeConstructDate = constructDate || new Date().toISOString().split("T")[0];
+      const safeConstructDate = constructDate || "";
+      const safeReceivedDate = receivedDate || getToday();
+      if ((serviceType !== undefined && serviceType !== "유상" && serviceType !== "무상") || (serviceType === "유상" && paidReason !== "고객과실" && paidReason !== "기간만료")) return NextResponse.json({ success: false, message: "유상/무상 구분과 유상 사유를 확인해주세요." }, { status: 400 });
       const safeResultStatus = resultStatus || "접수";
       const safeResolution = resolutionDetails || "";
       const safeTechnician = technician || "";
@@ -360,8 +376,8 @@ export async function POST(request: NextRequest) {
       if (db) {
         await executeMutation(
           `INSERT INTO bo_as_items 
-           (id, type, client_name, construct_date, site_address, reason, result_status, resolution_details, technician, contact_phone, priority, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, type, client_name, construct_date, site_address, reason, result_status, resolution_details, technician, contact_phone, priority, created_at, installer, received_date, as_date, service_type, paid_reason)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
             "as",
@@ -375,6 +391,11 @@ export async function POST(request: NextRequest) {
             safeContact,
             safePriority,
             now,
+            installer || "",
+            safeReceivedDate,
+            asDate || "",
+            serviceType || null,
+            serviceType === "유상" ? paidReason : "",
           ]
         );
       }
@@ -383,6 +404,11 @@ export async function POST(request: NextRequest) {
         type: "as",
         clientName,
         constructDate: safeConstructDate,
+        installer: installer || "",
+        receivedDate: safeReceivedDate,
+        asDate: asDate || "",
+        serviceType,
+        paidReason: serviceType === "유상" ? paidReason : "",
         siteAddress,
         reason,
         resultStatus: safeResultStatus,
@@ -521,6 +547,9 @@ export async function PUT(request: NextRequest) {
       const updated = serverStore.updateWorkItem(id, updates);
       return NextResponse.json({ success: true, data: updated || { id, ...updates } });
     } else if (type === "as") {
+      await ensureAsSchema();
+      if ((updates.serviceType !== undefined && updates.serviceType !== "유상" && updates.serviceType !== "무상") || (updates.serviceType === "유상" && updates.paidReason !== "고객과실" && updates.paidReason !== "기간만료") || (updates.paidReason !== undefined && !["", "고객과실", "기간만료"].includes(updates.paidReason))) return NextResponse.json({ success: false, message: "유상/무상 구분과 유상 사유를 확인해주세요." }, { status: 400 });
+      if (updates.serviceType === "무상") updates.paidReason = "";
       if (db) {
         const fields: string[] = [];
         const args: any[] = [];
@@ -541,6 +570,8 @@ export async function PUT(request: NextRequest) {
         for (const [key, column] of Object.entries({
           clientName: "client_name", constructDate: "construct_date", siteAddress: "site_address",
           reason: "reason", contactPhone: "contact_phone", priority: "priority",
+          installer: "installer", receivedDate: "received_date", asDate: "as_date",
+          serviceType: "service_type", paidReason: "paid_reason",
         })) {
           if (updates[key] !== undefined) { fields.push(`${column} = ?`); args.push(updates[key]); }
         }

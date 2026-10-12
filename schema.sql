@@ -63,6 +63,11 @@ CREATE TABLE IF NOT EXISTS bo_as_items (
     type TEXT DEFAULT 'as',
     client_name TEXT NOT NULL,                     -- 고객사/업체명
     construct_date TEXT NOT NULL,                  -- 원 시공일
+    installer TEXT,
+    received_date TEXT,
+    as_date TEXT,
+    service_type TEXT,
+    paid_reason TEXT,
     site_address TEXT NOT NULL,                    -- 현장 주소
     reason TEXT NOT NULL,                          -- 하자 및 A/S 사유
     result_status TEXT NOT NULL DEFAULT '접수',    -- 접수 -> 처리중 -> 완료

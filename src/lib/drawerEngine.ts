@@ -6,8 +6,23 @@ import {
   SheetEstimate,
   SheetLayout,
 } from "@/types";
+import { buildTemplate } from "./drawerTemplates";
 
 export function calculateDrawer(input: DrawerCalcInput): DrawerCalcResult {
+  if (input.productType && input.productType !== "custom") {
+    const built = buildTemplate(input);
+    const normalized = { ...input, cabinetHeight: built.dimensions.height, cabinetDepth: built.dimensions.depth, boardThickness: 18, railType: "ball3stage" as const };
+    const sheetEstimates = calculateSheetEstimates(built.parts, input.hasGrain ?? false);
+    const totalSheetsAllMaterials = sheetEstimates.reduce((sum, s) => sum + s.sheetCount, 0);
+    return {
+      input: normalized, parts: built.parts, warnings: built.warnings,
+      railSpec: { name: `3단 볼레일 45mm (${built.railLength}mm)`, length: built.railLength, type: "ball3stage" },
+      boxDimensions: built.boxDimensions,
+      hardware: [{ name: "3단 볼레일", spec: `${built.railLength}mm (좌우 1조 = 2개)`, count: input.drawerCount * (input.cabinetQuantity ?? 1), notes: "우라홈 깊이 7mm" }],
+      sheetEstimates, totalSheetsAllMaterials,
+      summaryNote: `${built.label} ${input.cabinetWidth} × ${built.dimensions.height} × ${built.dimensions.depth}mm (W × H × D), ${input.drawerCount}단, ${input.cabinetQuantity ?? 1}세대. 우라홈 깊이 7mm.`,
+    };
+  }
   const {
     cabinetWidth,
     cabinetHeight,
@@ -20,7 +35,6 @@ export function calculateDrawer(input: DrawerCalcInput): DrawerCalcResult {
 
   // 1. 캐비닛 내경 계산
   const innerWidth = cabinetWidth - (2 * boardThickness);
-  const innerHeight = cabinetHeight - (2 * boardThickness);
   const innerDepth = cabinetDepth - boardThickness; // 백판(우라) 제외 실내경
 
   // 2. 레일 규격 선정 (250, 300, 350, 400, 450, 500, 550mm 표준)

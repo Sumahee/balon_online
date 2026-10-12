@@ -9,6 +9,8 @@ import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManage
 import { bodyText } from "@/lib/body-content";
 import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
 import { cn } from "@/lib/utils";
+import { getToday } from "@/lib/date";
+import { AsIntakeFields } from "@/components/as/AsIntakeFields";
 
 export function QuickModals() {
   const { quickModalType, setQuickModalType, addWorkItem, addAsItem, isSaving } = useData();
@@ -72,6 +74,11 @@ export function QuickModals() {
 
   // AS form state
   const [asForm, setAsForm] = useState<{
+    installer: string;
+    receivedDate: string;
+    asDate: string;
+    serviceType?: "유상" | "무상";
+    paidReason?: "고객과실" | "기간만료" | "";
     clientName: string;
     constructDate: string;
     siteAddress: string;
@@ -80,11 +87,16 @@ export function QuickModals() {
     contactPhone: string;
     priority: Priority;
   }>({
+    installer: "",
+    receivedDate: "",
+    asDate: "",
+    serviceType: undefined,
+    paidReason: "",
     clientName: "",
-    constructDate: new Date().toISOString().split("T")[0],
+    constructDate: "",
     siteAddress: "",
     reason: "",
-    technician: "박성훈 반장",
+    technician: "",
     contactPhone: "010-",
     priority: "긴급",
   });
@@ -179,6 +191,11 @@ export function QuickModals() {
         type: "as",
         clientName: asForm.clientName,
         constructDate: asForm.constructDate,
+        installer: asForm.installer,
+        receivedDate: asForm.receivedDate || getToday(),
+        asDate: asForm.asDate,
+        serviceType: asForm.serviceType,
+        paidReason: asForm.paidReason,
         siteAddress: asForm.siteAddress,
         reason: asForm.reason,
         resultStatus: "접수",
@@ -189,11 +206,16 @@ export function QuickModals() {
       });
 
       setAsForm({
+        installer: "",
+        receivedDate: "",
+        asDate: "",
+        serviceType: undefined,
+    paidReason: "",
         clientName: "",
-        constructDate: new Date().toISOString().split("T")[0],
+        constructDate: "",
         siteAddress: "",
         reason: "",
-        technician: "박성훈 반장",
+        technician: "",
         contactPhone: "010-",
         priority: "긴급",
       });
@@ -551,12 +573,13 @@ export function QuickModals() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">시공일자</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">최초 시공일</label>
                 <div className="relative">
                   <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                   <input
                     type="date"
                     value={asForm.constructDate}
+                    aria-label="최초 시공일"
                     onChange={(e) => setAsForm({ ...asForm, constructDate: e.target.value })}
                     className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
                   />
@@ -595,7 +618,8 @@ export function QuickModals() {
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <AsIntakeFields value={{...asForm, receivedDate: asForm.receivedDate || getToday()}} onChange={patch=>setAsForm({...asForm,...patch})} />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">우선 대응도</label>
                 <select
@@ -611,10 +635,11 @@ export function QuickModals() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">담당 기사</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">A/S 처리 담당기사</label>
                 <input
                   type="text"
                   value={asForm.technician}
+                  aria-label="A/S 처리 담당기사"
                   onChange={(e) => setAsForm({ ...asForm, technician: e.target.value })}
                   className="w-full px-2.5 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />

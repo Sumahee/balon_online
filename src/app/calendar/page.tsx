@@ -195,11 +195,11 @@ export default function CalendarPage() {
         siteAddress.toLowerCase().includes(searchQuery.toLowerCase()) ||
         as.reason.toLowerCase().includes(searchQuery.toLowerCase());
 
-      if (matchRegion && matchQuery) {
+      if (matchRegion && matchQuery && as.asDate) {
         events.push({
           id: as.id,
           type: "as",
-          dateStr: as.asDate || as.constructDate,
+          dateStr: as.asDate,
           clientName,
           title: `[A/S] ${as.reason}`,
           location: `🛠️ ${clientName} A/S`,

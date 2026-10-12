@@ -31,6 +31,60 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
 
 const request = (body) => ({ json: async () => body });
 
+test("AS intake persists installation, received and scheduled dates with paid reason", async () => {
+  const writes = [];
+  const handlers = loadModule("src/lib/api-handlers/posts.ts", {
+    "@/lib/db": { db: {}, executeQuery: async () => ({ success: true, rows: [{ id: "as-test", client_name: "고객", construct_date: "2026-01-01", installer: "시공자", received_date: "2026-10-12", as_date: "2026-10-15", technician: "처리기사", service_type: "유상", paid_reason: "기간만료" }] }), executeMutation: async (sql,args) => { writes.push({sql,args}); } },
+    "@/lib/as-schema": { ensureAsSchema: async () => {} },
+  });
+  const response = await handlers.POST(request({ type: "as", clientName: "고객", siteAddress: "현장", reason: "서랍 수리", constructDate: "2026-01-01", installer: "시공자", receivedDate: "2026-10-12", asDate: "2026-10-15", technician: "처리기사", serviceType: "유상", paidReason: "기간만료" }));
+  assert.equal(response.status, 201);
+  assert.deepEqual(Array.from(writes[0].args.slice(12)), ["시공자", "2026-10-12", "2026-10-15", "유상", "기간만료"]);
+  const listed = await (await handlers.GET({url:"http://localhost/api/posts?type=as"})).json();
+  assert.equal(listed.data[0].installer, "시공자");
+  assert.equal(listed.data[0].asDate, "2026-10-15");
+  assert.equal(listed.data[0].paidReason, "기간만료");
+  const invalid = await handlers.POST(request({type:"as",clientName:"고객",siteAddress:"현장",reason:"수리",serviceType:"유상"}));
+  assert.equal(invalid.status,400);
+  await handlers.PUT(request({id:"as-test",type:"as",serviceType:"무상",paidReason:"고객과실"}));
+  assert.equal(writes.at(-1).args[1], "");
+});
+
+test("Excel floor drawer reproduces parts and scales every quantity", () => {
+  const { calculateDrawer } = loadModule("src/lib/drawerEngine.ts");
+  const input = { productType: "ceiling-floor", cabinetWidth: 580, cabinetHeight: 850, cabinetDepth: 600, boardThickness: 18, drawerCount: 2, railType: "ball3stage", marginGap: 3, cabinetQuantity: 1 };
+  const result = calculateDrawer(input);
+  const expected = [[576,180,18,2],[580,400,18,1],[544,55,18,2],[418,380,18,2],[487,144,15,4],[350,145,15,4],[320,50,15,2],[500,332,4.5,2],[556,396,4.5,1]];
+  result.parts.forEach((p, i) => assert.deepEqual([p.width,p.depth,p.thickness,p.count], expected[i]));
+  assert.equal(result.input.cabinetHeight, 444);
+  const batch = calculateDrawer({ ...input, cabinetQuantity: 3, cabinetWidth: 681 });
+  batch.parts.forEach((p,i) => assert.equal(p.count, result.parts[i].count * 3));
+  assert.equal(batch.parts[4].width, 588);
+  assert.equal(batch.hardware[0].count, 6);
+});
+
+test("Excel floating and island templates preserve distinct heights and rail warnings", () => {
+  const { calculateDrawer } = loadModule("src/lib/drawerEngine.ts");
+  const base = { cabinetWidth: 800, cabinetHeight: 908, cabinetDepth: 513, boardThickness: 18, drawerCount: 4, railType: "ball3stage", marginGap: 3 };
+  const handle = calculateDrawer({ ...base, productType: "island-handle" });
+  assert.equal(handle.parts[0].width, 795);
+  assert.equal(handle.parts[0].depth, 145);
+  assert.equal(handle.parts[1].depth, 205);
+  assert.equal(handle.parts.at(-1).depth, 433);
+  assert.equal(handle.railSpec.length, 450);
+  const channel = calculateDrawer({ ...base, productType: "island-channel" });
+  assert.equal(channel.parts[0].depth, 122);
+  assert.equal(channel.parts.find(p => p.name === "목찬넬").count, 3);
+  assert.ok(channel.warnings.length);
+  const floating = calculateDrawer({ ...base, productType: "ceiling-floating", cabinetWidth: 680, drawerCount: 1, cabinetQuantity: 2 });
+  assert.equal(floating.parts[7].count, 2);
+  assert.equal(floating.parts[4].width, 547);
+  assert.equal(floating.parts[8].depth, 184);
+  assert.equal(floating.input.cabinetHeight, 210);
+  assert.throws(() => calculateDrawer({ ...base, productType: "ceiling-floating" }), /지원 단수/);
+  assert.throws(() => calculateDrawer({ ...base, productType: "island-handle", cabinetQuantity: 1.5 }), /세대 수/);
+});
+
 test("drawing authentication leaves the POST body readable and preserves all launch information", async () => {
   let snapshot;
   const handlers = loadModule("src/lib/api-handlers/drawing-requests.ts", {

@@ -78,8 +78,12 @@ export interface AsItem {
   id: string;
   type: 'as';
   clientName: string; // 업체명
-  constructDate: string; // 시공일
-  asDate?: string; // A/S 방문/조치 예정일 (YYYY-MM-DD, 기본값: constructDate)
+  constructDate: string; // 최초 시공일
+  installer?: string; // 최초 시공자
+  receivedDate?: string; // A/S 접수일 (한국 날짜)
+  serviceType?: '유상' | '무상';
+  paidReason?: '고객과실' | '기간만료' | '';
+  asDate?: string; // A/S 처리 예정일 (미정이면 빈 값)
   siteAddress: string; // 현장주소
   reason: string; // A/S 발생 사유
   resultStatus: AsStatus; // 접수 / 처리중 / 완료
@@ -113,6 +117,8 @@ export interface GalleryImage {
 }
 
 export interface DrawerCutPart {
+  edge?: string;
+  machining?: string;
   name: string;
   spec: string;
   count: number;
@@ -131,6 +137,8 @@ export interface DrawerHardware {
 }
 
 export interface DrawerCalcInput {
+  productType?: 'custom' | 'ceiling-floor' | 'ceiling-floating' | 'island-channel' | 'island-handle';
+  cabinetQuantity?: number;
   cabinetWidth: number; // 외경 가로 mm
   cabinetHeight: number; // 외경 높이 mm
   cabinetDepth: number; // 외경 깊이 mm
@@ -177,6 +185,7 @@ export interface SheetEstimate {
 }
 
 export interface DrawerCalcResult {
+  warnings?: string[];
   input: DrawerCalcInput;
   railSpec: {
     name: string;

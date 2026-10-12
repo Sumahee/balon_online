@@ -21,6 +21,7 @@ import {
   Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PurchaseDetailModal } from "./PurchaseDetailModal";
 
 export default function PurchasesPage() {
   const { purchaseItems, addPurchaseItem, updatePurchaseItem, deletePurchaseItem, isSaving } = useData();
@@ -33,6 +34,8 @@ export default function PurchasesPage() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OnlinePurchaseItem | null>(null);
+  const [selectedPurchaseId, setSelectedPurchaseId] = useState<string | null>(null);
+  const selectedPurchase = purchaseItems.find(item => item.id === selectedPurchaseId);
 
   // Lightbox Modal State
   const [lightboxImages, setLightboxImages] = useState<string[] | null>(null);
@@ -292,7 +295,7 @@ export default function PurchasesPage() {
             )}
           >
             <ListIcon className="w-3.5 h-3.5" />
-            <span>엑셀 테이블</span>
+            <span>리스트형</span>
           </button>
           <button
             onClick={() => setViewMode("grid")}
@@ -347,7 +350,7 @@ export default function PurchasesPage() {
                 {filteredItems.map((item) => {
                   const hasPhotos = item.photos && item.photos.length > 0;
                   return (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={item.id} onClick={()=>setSelectedPurchaseId(item.id)} className="hover:bg-blue-50/60 transition-colors cursor-pointer">
                       {/* 쇼핑몰업체 */}
                       <td className="py-3 px-4 font-semibold text-slate-900 whitespace-nowrap">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
@@ -362,7 +365,7 @@ export default function PurchasesPage() {
 
                       {/* 품목 */}
                       <td className="py-3 px-4 font-bold text-slate-900">
-                        {item.itemName}
+                        <button type="button" onClick={()=>setSelectedPurchaseId(item.id)} aria-label={`${item.itemName} 구매 상세보기`} className="text-left hover:text-blue-700 hover:underline focus-visible:outline-2 focus-visible:outline-blue-500">{item.itemName}</button>
                       </td>
 
                       {/* 사이즈 */}
@@ -416,7 +419,7 @@ export default function PurchasesPage() {
                       <td className="py-3 px-4 text-center">
                         {hasPhotos ? (
                           <button
-                            onClick={() => openLightbox(item.photos!)}
+                            onClick={event => { event.stopPropagation(); openLightbox(item.photos!); }}
                             className="relative group inline-block rounded-lg overflow-hidden border border-slate-200 shadow-2xs hover:border-blue-500 transition cursor-pointer"
                           >
                             <img
@@ -436,7 +439,7 @@ export default function PurchasesPage() {
                       </td>
 
                       {/* Actions */}
-                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                      <td onClick={event=>event.stopPropagation()} className="py-3 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => handleOpenEditModal(item)}
@@ -469,12 +472,12 @@ export default function PurchasesPage() {
             return (
               <div
                 key={item.id}
-                className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition flex flex-col overflow-hidden group"
+                onClick={()=>setSelectedPurchaseId(item.id)}
+                className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-blue-300 cursor-pointer transition flex flex-col overflow-hidden group"
               >
                 {/* Card Image Header */}
                 {hasPhotos ? (
                   <div
-                    onClick={() => openLightbox(item.photos!)}
                     className="relative h-44 bg-slate-900 cursor-pointer overflow-hidden group/img"
                   >
                     <img
@@ -486,7 +489,7 @@ export default function PurchasesPage() {
                     <span className="absolute top-3 left-3 px-2.5 py-1 rounded-md text-xs font-bold bg-white/90 text-slate-900 shadow-xs backdrop-blur-xs">
                       {item.mallName}
                     </span>
-                    <button className="absolute top-3 right-3 p-1.5 rounded-full bg-black/40 text-white hover:bg-black/60 transition backdrop-blur-xs">
+                    <button type="button" aria-label={`${item.itemName} 사진 확대`} onClick={event=>{event.stopPropagation(); openLightbox(item.photos!);}} className="absolute top-3 right-3 p-1.5 rounded-full bg-black/40 text-white hover:bg-black/60 transition backdrop-blur-xs">
                       <Maximize2 className="w-4 h-4" />
                     </button>
                     <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-white text-xs font-semibold">
@@ -508,7 +511,7 @@ export default function PurchasesPage() {
                   <div>
                     <div className="flex items-start justify-between gap-2">
                       <h4 className="font-extrabold text-slate-900 text-lg leading-snug">
-                        {item.itemName}
+                        <button type="button" onClick={()=>setSelectedPurchaseId(item.id)} aria-label={`${item.itemName} 구매 상세보기`} className="text-left hover:text-blue-700 hover:underline focus-visible:outline-2 focus-visible:outline-blue-500">{item.itemName}</button>
                       </h4>
                     </div>
                     <p className="text-xs font-semibold text-slate-500 mt-1">{item.storeName}</p>
@@ -549,7 +552,7 @@ export default function PurchasesPage() {
                   </div>
 
                   {/* Footer Actions */}
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                  <div onClick={event=>event.stopPropagation()} className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                     <button
                       onClick={() => handleOpenEditModal(item)}
                       className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
@@ -793,9 +796,14 @@ export default function PurchasesPage() {
         </div>
       )}
 
+      {selectedPurchase && <PurchaseDetailModal item={selectedPurchase}
+        onClose={()=>{ if (lightboxImages) setLightboxImages(null); else setSelectedPurchaseId(null); }}
+        onEdit={()=>{ setSelectedPurchaseId(null); handleOpenEditModal(selectedPurchase); }}
+        onPhoto={index=>openLightbox(selectedPurchase.photos ?? [],index)} />}
+
       {/* Lightbox Photo Viewer Modal */}
       {lightboxImages && lightboxImages.length > 0 && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-md">
+        <div className="fixed inset-0 z-[60] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-md">
           {/* Top Bar */}
           <div className="absolute top-4 left-4 right-4 flex items-center justify-between text-white">
             <span className="text-sm font-semibold">

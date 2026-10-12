@@ -11,7 +11,6 @@ import {
   Sparkles,
   Settings2,
   Box,
-  Eye,
   Grid,
   Maximize2,
   Compass,
@@ -19,7 +18,9 @@ import {
 } from "lucide-react";
 import { DrawerCalcInput, DrawerCalcResult } from "@/types";
 import { calculateDrawer } from "@/lib/drawerEngine";
+import { DRAWER_TEMPLATES, templateDimensions } from "@/lib/drawerTemplates";
 import { cn } from "@/lib/utils";
+import DrawerDrawing from "./DrawerDrawing";
 
 const PRESETS: { label: string; values: DrawerCalcInput }[] = [
   {
@@ -65,18 +66,20 @@ const PRESETS: { label: string; values: DrawerCalcInput }[] = [
 
 export default function DrawerAutomationPage() {
   const [inputs, setInputs] = useState<DrawerCalcInput>({
-    cabinetWidth: 800,
-    cabinetHeight: 850,
-    cabinetDepth: 600,
+    productType: "ceiling-floor",
+    cabinetQuantity: 1,
+    cabinetWidth: 580,
+    cabinetHeight: 444,
+    cabinetDepth: 400,
     boardThickness: 18,
-    drawerCount: 3,
-    railType: "undermount",
+    drawerCount: 2,
+    railType: "ball3stage",
     marginGap: 3,
     hasGrain: true,
   });
 
   const [copied, setCopied] = useState(false);
-  const [viewAngle, setViewAngle] = useState<"front" | "side">("front");
+  const template = DRAWER_TEMPLATES.find(t => t.id === inputs.productType);
 
   // Real-time calculated result
   const result: DrawerCalcResult = useMemo(() => {
@@ -92,7 +95,9 @@ export default function DrawerAutomationPage() {
       `=== [BARON INT] 서랍장 부재 재단 및 부속/원장 산출표 ===`,
       `캐비닛 외경: ${inputs.cabinetWidth} x ${inputs.cabinetHeight} x ${inputs.cabinetDepth} mm (${inputs.boardThickness}T, ${inputs.drawerCount}단)`,
       `적용 레일: ${result.railSpec.name}`,
-      `결 구 뷴: ${inputs.hasGrain !== false ? "결 있음 (90° 회전 금지)" : "결 없음 (90° 회전 최적화 가능)"}`,
+      result.summaryNote,
+      ...(result.warnings ?? []).map(w => `확인 사항: ${w}`),
+      `결 구분: ${inputs.hasGrain !== false ? "결 있음 (90° 회전 금지)" : "결 없음 (90° 회전 최적화 가능)"}`,
       ``,
       `[재단 부재 목록]`,
       `부재명\t수량\t가로(W)\t세로/깊이(D)\t두께(T)\t자재/특이사항`,
@@ -209,12 +214,31 @@ export default function DrawerAutomationPage() {
           </div>
 
           <div className="space-y-4 text-xs">
+            <div>
+              <label htmlFor="product-type" className="block font-bold text-slate-700 mb-1.5">제작 유형 (기존 엑셀 기준)</label>
+              <select id="product-type" value={inputs.productType ?? "custom"} className="w-full rounded-lg border border-slate-200 p-2" onChange={e => {
+                const selected = DRAWER_TEMPLATES.find(t => t.id === e.target.value);
+                if (!selected) { setInputs({ ...PRESETS[0].values, productType: "custom" }); return; }
+                const count = selected.counts[0];
+                const dims = templateDimensions(selected.id, count);
+                setInputs({ ...inputs, productType: selected.id, cabinetWidth: selected.width, cabinetHeight: dims.height, cabinetDepth: dims.depth, drawerCount: count, boardThickness: 18, railType: "ball3stage", cabinetQuantity: inputs.cabinetQuantity ?? 1 });
+              }}>
+                {DRAWER_TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                <option value="custom">일반 서랍 박스 계산</option>
+              </select>
+              <p className="mt-2 text-slate-500">엑셀 유형은 18T 몸통·15T 서랍·4.5T 우라를 적용합니다. 에보라·옴니버스는 원본 치수 확인 후 추가가 필요합니다.</p>
+            </div>
+            {template && <div>
+              <label htmlFor="cabinet-quantity" className="block font-bold text-slate-700 mb-1.5">세대 수 / 제작 수량</label>
+              <input id="cabinet-quantity" type="number" min={1} max={100} value={inputs.cabinetQuantity ?? 1} onChange={e => setInputs({ ...inputs, cabinetQuantity: Math.min(100, Math.max(1, Math.trunc(Number(e.target.value)))) })} className="w-full rounded-lg border border-slate-200 p-2" />
+            </div>}
             {/* Cabinet Outer Width */}
             <div>
               <div className="flex items-center justify-between font-bold text-slate-700 mb-1">
-                <label>가구 외경 가로 (Width)</label>
+                <label htmlFor="cabinet-width">가구 외경 가로 (Width)</label>
                 <span className="text-blue-600 font-mono text-sm">{inputs.cabinetWidth} mm</span>
               </div>
+              <input id="cabinet-width" aria-label="비규격 가로 mm" type="number" min={300} max={1200} step={1} value={inputs.cabinetWidth} onChange={e => setInputs({ ...inputs, cabinetWidth: Math.min(1200, Math.max(300, Number(e.target.value))) })} className="w-full rounded-lg border border-slate-200 p-2 mb-2" />
               <input
                 type="range"
                 min="300"
@@ -232,6 +256,7 @@ export default function DrawerAutomationPage() {
             </div>
 
             {/* Cabinet Outer Height */}
+            {!template && <>
             <div>
               <div className="flex items-center justify-between font-bold text-slate-700 mb-1">
                 <label>가구 외경 높이 (Height)</label>
@@ -298,14 +323,18 @@ export default function DrawerAutomationPage() {
             </div>
 
             {/* Drawer Count */}
+            </>}
             <div>
               <label className="block font-bold text-slate-700 mb-1.5">서랍 단수</label>
               <div className="grid grid-cols-4 gap-1.5">
-                {[1, 2, 3, 4].map((count) => (
+                {(template ? [...template.counts] : [1, 2, 3, 4]).map((count) => (
                   <button
                     key={count}
                     type="button"
-                    onClick={() => setInputs({ ...inputs, drawerCount: count })}
+                    onClick={() => {
+                      const dims = template ? templateDimensions(template.id, count) : null;
+                      setInputs({ ...inputs, drawerCount: count, ...(dims ? { cabinetHeight: dims.height, cabinetDepth: dims.depth } : {}) });
+                    }}
                     className={cn(
                       "py-2 rounded-lg font-bold border transition cursor-pointer text-center",
                       inputs.drawerCount === count
@@ -320,6 +349,7 @@ export default function DrawerAutomationPage() {
             </div>
 
             {/* Rail Selection */}
+            {!template && <>
             <div>
               <label className="block font-bold text-slate-700 mb-1.5">서랍 슬라이드 레일 방식</label>
               <div className="space-y-2">
@@ -372,6 +402,7 @@ export default function DrawerAutomationPage() {
             </div>
 
             {/* Grain Alignment Toggle (원장 결 방향 유무) */}
+            </>}
             <div>
               <label className="block font-bold text-slate-700 mb-1.5 flex items-center justify-between">
                 <span className="flex items-center gap-1">
@@ -418,7 +449,7 @@ export default function DrawerAutomationPage() {
             </div>
 
             {/* Margin gap */}
-            <div>
+            {!template && <div>
               <div className="flex items-center justify-between font-bold text-slate-700 mb-1">
                 <label>도어 상하좌우 유격 여백 (Gap)</label>
                 <span className="font-mono text-slate-900">{inputs.marginGap} mm</span>
@@ -432,243 +463,103 @@ export default function DrawerAutomationPage() {
                 onChange={(e) => setInputs({ ...inputs, marginGap: Number(e.target.value) })}
                 className="w-full accent-slate-700 cursor-pointer"
               />
-            </div>
+            </div>}
           </div>
         </div>
 
         {/* Right Outputs & Visualization (8 Cols) */}
         <div className="lg:col-span-8 space-y-6">
-          {/* Interactive SVG Diagram Visualizer */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          {template && <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-2">
+            <p className="font-bold text-sm">{result.summaryNote}</p>
+            {(result.warnings ?? []).map(w => <p key={w} className="text-xs text-amber-800">확인 사항: {w}</p>)}
+            <p className="text-xs text-slate-500">도면은 구조 참고용입니다. 상단과 하단의 정확한 재단 치수는 부재 목록을 사용해주세요.</p>
+          </div>}
+          <DrawerDrawing key={`${inputs.productType}-${inputs.drawerCount}-${inputs.cabinetWidth}`} result={result} />
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
               <div className="flex items-center gap-2">
-                <Eye className="w-4 h-4 text-blue-600" />
+                <Layers className="w-4 h-4 text-amber-600" />
                 <h3 className="font-bold text-sm text-slate-900">
-                  실시간 2D 가구 구조 도면 (Live CAD View)
+                  부재별 자동 절단 치수표 (Cut List)
                 </h3>
               </div>
-
-              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-xs font-semibold text-slate-600">
-                <button
-                  onClick={() => setViewAngle("front")}
-                  className={cn(
-                    "px-3 py-1 rounded-md transition cursor-pointer",
-                    viewAngle === "front" ? "bg-white text-slate-900 shadow-2xs" : ""
-                  )}
-                >
-                  정면도 (Front)
-                </button>
-                <button
-                  onClick={() => setViewAngle("side")}
-                  className={cn(
-                    "px-3 py-1 rounded-md transition cursor-pointer",
-                    viewAngle === "side" ? "bg-white text-slate-900 shadow-2xs" : ""
-                  )}
-                >
-                  측면 단면도 (Side Section)
-                </button>
-              </div>
+              <span className="text-xs text-slate-500">{inputs.drawerCount}단 · {template ? inputs.cabinetQuantity ?? 1 : 1}세대 총 소요</span>
             </div>
 
-            {/* SVG Visualizer Canvas */}
-            <div className="h-64 sm:h-72 w-full bg-slate-950 rounded-xl p-4 flex items-center justify-center relative overflow-hidden">
-              <div className="absolute top-3 left-3 text-[10px] text-slate-400 font-mono">
-                CAD Scale: 1:10 (Auto) | Rail: {result.railSpec.length}mm
-              </div>
-
-              {viewAngle === "front" ? (
-                /* Front View SVG */
-                <svg
-                  viewBox="0 0 400 240"
-                  className="w-full h-full max-h-56"
-                  style={{ overflow: "visible" }}
-                >
-                  {/* Outer Cabinet Frame */}
-                  <rect
-                    x="50"
-                    y="20"
-                    width="300"
-                    height="190"
-                    rx="2"
-                    fill="#1e293b"
-                    stroke="#475569"
-                    strokeWidth="2"
-                  />
-                  {/* Inner Cavity */}
-                  <rect
-                    x="60"
-                    y="30"
-                    width="280"
-                    height="170"
-                    fill="#0f172a"
-                    stroke="#334155"
-                    strokeWidth="1"
-                  />
-
-                  {/* Drawers front panels based on drawer count */}
-                  {Array.from({ length: inputs.drawerCount }).map((_, i) => {
-                    const drawerSlotH = 160 / inputs.drawerCount;
-                    const drawerY = 35 + i * drawerSlotH;
-                    const drawerH = drawerSlotH - 4;
-
-                    return (
-                      <g key={i}>
-                        {/* Drawer Front Plate */}
-                        <rect
-                          x="64"
-                          y={drawerY}
-                          width="272"
-                          height={drawerH}
-                          rx="3"
-                          fill="#3b82f6"
-                          fillOpacity="0.85"
-                          stroke="#60a5fa"
-                          strokeWidth="1.5"
-                        />
-                        {/* Drawer Handle Representation */}
-                        <rect
-                          x="180"
-                          y={drawerY + drawerH / 2 - 3}
-                          width="40"
-                          height="6"
-                          rx="2"
-                          fill="#94a3b8"
-                        />
-                        {/* Drawer Label */}
-                        <text
-                          x="110"
-                          y={drawerY + drawerH / 2 + 4}
-                          fill="#ffffff"
-                          fontSize="9"
-                          fontWeight="bold"
-                        >
-                          {i + 1}단 서랍 앞판 ({Math.round(result.parts[0].width)} × {Math.round(result.parts[0].depth)}mm)
-                        </text>
-                      </g>
-                    );
-                  })}
-
-                  {/* Dimension Annotations */}
-                  {/* Width callout at top */}
-                  <line x1="50" y1="12" x2="350" y2="12" stroke="#38bdf8" strokeWidth="1.5" />
-                  <circle cx="50" cy="12" r="2" fill="#38bdf8" />
-                  <circle cx="350" cy="12" r="2" fill="#38bdf8" />
-                  <text x="180" y="9" fill="#38bdf8" fontSize="10" fontWeight="bold">
-                    W: {inputs.cabinetWidth} mm
-                  </text>
-
-                  {/* Height callout at right */}
-                  <line x1="365" y1="20" x2="365" y2="210" stroke="#f59e0b" strokeWidth="1.5" />
-                  <circle cx="365" cy="20" r="2" fill="#f59e0b" />
-                  <circle cx="365" cy="210" r="2" fill="#f59e0b" />
-                  <text
-                    x="372"
-                    y="120"
-                    fill="#f59e0b"
-                    fontSize="10"
-                    fontWeight="bold"
-                    transform="rotate(90 372 120)"
-                  >
-                    H: {inputs.cabinetHeight} mm
-                  </text>
-                </svg>
-              ) : (
-                /* Side Section Cut View SVG */
-                <svg
-                  viewBox="0 0 400 240"
-                  className="w-full h-full max-h-56"
-                  style={{ overflow: "visible" }}
-                >
-                  {/* Cabinet Depth Frame */}
-                  <rect
-                    x="60"
-                    y="25"
-                    width="260"
-                    height="180"
-                    fill="#1e293b"
-                    stroke="#475569"
-                    strokeWidth="2"
-                  />
-                  {/* Back panel (우라) */}
-                  <rect x="62" y="32" width="6" height="166" fill="#64748b" />
-
-                  {/* Drawers slide depth depiction */}
-                  {Array.from({ length: inputs.drawerCount }).map((_, i) => {
-                    const slotH = 160 / inputs.drawerCount;
-                    const topY = 35 + i * slotH;
-                    const boxH = slotH - 12;
-
-                    return (
-                      <g key={i}>
-                        {/* Slide Rail Line */}
-                        <rect
-                          x="95"
-                          y={topY + boxH}
-                          width="210"
-                          height="4"
-                          fill="#f59e0b"
-                          rx="1"
-                        />
-                        {/* Drawer Box Body */}
-                        <rect
-                          x="100"
-                          y={topY}
-                          width="200"
-                          height={boxH}
-                          fill="#334155"
-                          stroke="#60a5fa"
-                          strokeWidth="1"
-                          rx="2"
-                        />
-                        {/* Front plate overhang */}
-                        <rect
-                          x="305"
-                          y={topY - 3}
-                          width="12"
-                          height={boxH + 6}
-                          fill="#3b82f6"
-                          rx="1"
-                        />
-                        <text
-                          x="140"
-                          y={topY + boxH / 2 + 3}
-                          fill="#e2e8f0"
-                          fontSize="9"
-                          fontWeight="bold"
-                        >
-                          박스 깊이: {result.boxDimensions.depth}mm
-                        </text>
-                      </g>
-                    );
-                  })}
-
-                  {/* Depth callout bottom */}
-                  <line x1="60" y1="220" x2="320" y2="220" stroke="#10b981" strokeWidth="1.5" />
-                  <circle cx="60" cy="220" r="2" fill="#10b981" />
-                  <circle cx="320" cy="220" r="2" fill="#10b981" />
-                  <text x="170" y="233" fill="#10b981" fontSize="10" fontWeight="bold">
-                    Depth: {inputs.cabinetDepth} mm
-                  </text>
-                </svg>
-              )}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs sm:text-sm">
+                <thead className="bg-slate-100/70 border-b border-slate-200 text-slate-600 font-semibold text-[11px]">
+                  <tr>
+                    <th className="py-3 px-4">부재 명칭</th>
+                    <th className="py-3 px-4">소요 수량</th>
+                    <th className="py-3 px-4">절단 규격 (가로 W × 세로 D)</th>
+                    <th className="py-3 px-4">두께(T)</th>
+                    <th className="py-3 px-4">엣지작업</th>
+                    <th className="py-3 px-4">기타 / 가공</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {result.parts.map((part, pIdx) => (
+                    <tr key={pIdx} className="hover:bg-slate-50 transition">
+                      <td className="py-3 px-4 font-bold text-slate-900">{part.name}</td>
+                      <td className="py-3 px-4">
+                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-bold text-xs">
+                          {part.count}개
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-mono font-bold text-slate-800">
+                        {part.width} × {part.depth} mm
+                      </td>
+                      <td className="py-3 px-4 font-mono text-slate-600">{part.thickness}T</td>
+                      <td className="py-3 px-4 text-slate-500 text-xs">
+                        <span className="font-medium text-slate-700">{part.edge ?? part.spec}</span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 text-xs whitespace-normal">{part.machining ?? part.notes}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-
-            {/* Quick Summary Strip */}
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-800">추천 레일 규격:</span>
-                <span className="font-extrabold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                  {result.railSpec.name}
-                </span>
-              </div>
-              <div className="text-slate-600 text-[11px]">
-                서랍 박스 실외경: <strong>{result.boxDimensions.width}</strong>(W) ×{" "}
-                <strong>{result.boxDimensions.height}</strong>(H) ×{" "}
-                <strong>{result.boxDimensions.depth}</strong>(D) mm
-              </div>
-            </div>
+            {template && <div className="p-4 border-t border-slate-200 bg-blue-50 text-xs text-slate-700 space-y-1">
+              <p className="font-bold">제작 메모</p>
+              <p>우라홈 깊이 7mm</p>
+              <p>3단 볼레일 공제 25~26mm · 원본 메모: 몸통 36 / 레일 25 / 서랍판 30, 합계 91~92mm 제외</p>
+              <p>서랍 내부 15T 사용 시 밑판우라 가로는 외경에서 80mm 공제 (공중형은 제품별 공제 적용)</p>
+              <p>레일 {result.railSpec.length}mm × 45mm · {inputs.drawerCount * (inputs.cabinetQuantity ?? 1)}조 · 1조당 좌우 2개 세트</p>
+              <p>원본 하단 메모의 ‘350mm 댐핑 2조’는 고정 문구입니다. 실제 발주 수량은 위 단수 × 제작 수량을 적용합니다.</p>
+              {inputs.productType === "ceiling-floor" && <p className="text-amber-800">첨부 표의 외경 표기: {inputs.cabinetWidth} × 400 × 406 (W × D × H). 높이 406은 원본 수식 오류로 측판 높이와 맞지 않습니다. 도면은 측판 높이 + 26mm 기준이며 가구발 높이는 확인이 필요합니다.</p>}
+            </div>}
           </div>
 
+          {/* Hardware List (부속 하드웨어) */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div className="p-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Box className="w-4 h-4 text-emerald-600" />
+                <h3 className="font-bold text-sm text-slate-900">
+                  필요 하드웨어 및 결합 철물 (Hardware Bill)
+                </h3>
+              </div>
+            </div>
+
+            <div className="divide-y divide-slate-100 text-xs">
+              {result.hardware.map((hw, hIdx) => (
+                <div key={hIdx} className="p-3.5 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-slate-900 text-xs sm:text-sm">{hw.name}</span>
+                    <span className="text-slate-500 text-[11px] block">{hw.notes}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-bold rounded-lg text-xs">
+                      {hw.count}{template ? "조" : "개"}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">{hw.spec}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
           {/* NEW: 4x8 Full Sheet Calculation Card (원장 소요 장수 및 톱질 횟수 산출) */}
           <div className="bg-gradient-to-br from-amber-500/5 via-white to-amber-500/10 p-5 rounded-2xl border border-amber-200/80 shadow-2xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-amber-200/50">
@@ -787,7 +678,7 @@ export default function DrawerAutomationPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
-                    <span className="text-slate-600 font-medium">9T 밑판</span>
+                    <span className="text-slate-600 font-medium">{template ? "4.5T 우라" : "9T 밑판"}</span>
                   </div>
                 </div>
               </div>
@@ -931,80 +822,7 @@ export default function DrawerAutomationPage() {
           </div>
 
           {/* Cutting List Table (재단 치수표) */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
-              <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-amber-600" />
-                <h3 className="font-bold text-sm text-slate-900">
-                  부재별 자동 절단 치수표 (Cut List)
-                </h3>
-              </div>
-              <span className="text-xs text-slate-500">단수: {inputs.drawerCount}단 총 소요</span>
-            </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs sm:text-sm">
-                <thead className="bg-slate-100/70 border-b border-slate-200 text-slate-600 font-semibold text-[11px]">
-                  <tr>
-                    <th className="py-3 px-4">부재 명칭</th>
-                    <th className="py-3 px-4">소요 수량</th>
-                    <th className="py-3 px-4">절단 규격 (가로 W × 세로 D)</th>
-                    <th className="py-3 px-4">두께(T)</th>
-                    <th className="py-3 px-4">권장 자재 및 메모</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {result.parts.map((part, pIdx) => (
-                    <tr key={pIdx} className="hover:bg-slate-50 transition">
-                      <td className="py-3 px-4 font-bold text-slate-900">{part.name}</td>
-                      <td className="py-3 px-4">
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-bold text-xs">
-                          {part.count}개
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-mono font-bold text-slate-800">
-                        {part.width} × {part.depth} mm
-                      </td>
-                      <td className="py-3 px-4 font-mono text-slate-600">{part.thickness}T</td>
-                      <td className="py-3 px-4 text-slate-500 text-xs">
-                        <span className="font-medium text-slate-700">{part.material}</span>
-                        <span className="text-slate-400 block text-[11px]">{part.notes}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Hardware List (부속 하드웨어) */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-            <div className="p-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Box className="w-4 h-4 text-emerald-600" />
-                <h3 className="font-bold text-sm text-slate-900">
-                  필요 하드웨어 및 결합 철물 (Hardware Bill)
-                </h3>
-              </div>
-            </div>
-
-            <div className="divide-y divide-slate-100 text-xs">
-              {result.hardware.map((hw, hIdx) => (
-                <div key={hIdx} className="p-3.5 flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-slate-900 text-xs sm:text-sm">{hw.name}</span>
-                    <span className="text-slate-500 text-[11px] block">{hw.notes}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-bold rounded-lg text-xs">
-                      {hw.count}개
-                    </span>
-                    <span className="text-[10px] text-slate-400 block mt-0.5">{hw.spec}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>

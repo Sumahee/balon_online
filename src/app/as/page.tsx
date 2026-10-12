@@ -19,6 +19,7 @@ import { useData } from "@/context/DataContext";
 import { AsItem, AsStatus, Priority } from "@/types";
 import { AsDetailModal } from "@/components/as/AsDetailModal";
 import { cn } from "@/lib/utils";
+import { AsIntakeFields } from "@/components/as/AsIntakeFields";
 
 export default function AsBoardPage() {
   const { asItems, updateAsItem, deleteAsItem, advanceAsStatus, setQuickModalType, isSaving } = useData();
@@ -307,14 +308,14 @@ export default function AsBoardPage() {
                 <div className="flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   <span>
-                    시공일: <strong>{item.constructDate}</strong>
+                    최초 시공일: <strong>{item.constructDate || "미등록"}</strong>
                   </span>
                 </div>
 
                 <div className="flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   <span>
-                    담당 기사: <strong>{item.technician || "미지정"}</strong>
+                    A/S 처리 담당기사: <strong>{item.technician || "미지정"}</strong>
                   </span>
                   {item.contactPhone && (
                     <span className="text-slate-400">({item.contactPhone})</span>
@@ -322,9 +323,14 @@ export default function AsBoardPage() {
                 </div>
               </div>
 
+              <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
+                <span>최초 시공자: {item.installer || "미등록"}</span>
+                <span>A/S 접수일: {item.receivedDate || item.createdAt?.split("T")[0] || "미등록"}</span>
+                <span className={item.serviceType === "유상" ? "font-bold text-amber-700" : "font-bold text-blue-700"}>{item.serviceType ? `${item.serviceType} A/S` : "유상/무상 미등록"}{item.serviceType === "유상" && ` · ${item.paidReason || "사유 미등록"}`}</span>
+              </div>
               <p className="line-clamp-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{item.reason}</p>
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                <span>{item.asDate ? `방문 예정 ${item.asDate}` : "방문 일정 미등록"}</span>
+                <span>{item.asDate ? `A/S 처리 예정일 ${item.asDate}` : "A/S 처리 예정일 미정"}</span>
                 <div className="flex items-center gap-3">
                   {(item.resultPhotos?.length || item.images?.length || 0) > 0 && <span>사진 {item.resultPhotos?.length || item.images?.length}장</span>}
                   <span className="font-medium text-blue-700">상세보기 →</span>
@@ -399,6 +405,16 @@ export default function AsBoardPage() {
                   {activeReceipt.siteAddress}
                 </p>
               </div>
+              <dl className="grid grid-cols-2 gap-3 text-xs">
+                {[
+                  ["최초 시공자", activeReceipt.installer],
+                  ["A/S 접수일", activeReceipt.receivedDate || activeReceipt.createdAt?.split("T")[0]],
+                  ["A/S 처리 예정일", activeReceipt.asDate],
+                  ["A/S 처리 담당기사", activeReceipt.technician],
+                  ["A/S 구분", activeReceipt.serviceType],
+                  ...(activeReceipt.serviceType === "유상" ? [["유상 사유", activeReceipt.paidReason]] : []),
+                ].map(([label,value])=><div key={label}><dt className="text-slate-500">{label}</dt><dd className="mt-1 font-bold">{value || "미등록"}</dd></div>)}
+              </dl>
 
               <div className="text-xs space-y-1">
                 <span className="font-bold text-slate-500 text-xs">A/S 접수 및 하자 내용</span>
@@ -445,7 +461,7 @@ export default function AsBoardPage() {
               </button>
             </div>
 
-            <form onSubmit={handleEditSave} className="p-6 space-y-4">
+            <form onSubmit={handleEditSave} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">업체명</label>
@@ -459,7 +475,7 @@ export default function AsBoardPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">시공일</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">최초 시공일</label>
                   <input
                     type="date"
                     value={editingItem.constructDate}
@@ -469,6 +485,7 @@ export default function AsBoardPage() {
                 </div>
               </div>
 
+              <AsIntakeFields value={{...editingItem,receivedDate:editingItem.receivedDate || editingItem.createdAt?.split("T")[0]}} onChange={patch=>setEditingItem({...editingItem,...patch})} />
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">현장 주소</label>
                 <input
@@ -532,7 +549,7 @@ export default function AsBoardPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">담당 기사</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">A/S 처리 담당기사</label>
                   <input
                     type="text"
                     value={editingItem.technician || ""}
