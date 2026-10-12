@@ -29,6 +29,7 @@ import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
 import { getMaterialOrders } from "@/lib/materialUtils";
+import { readPhotoFile } from "@/lib/photo-compression";
 import { bodyText } from "@/lib/body-content";
 import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
 
@@ -199,36 +200,19 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
   };
 
   // Immediate upload & post when user selects photo files from OS dialog ("열기")
-  const handleCommentPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0 || !liveItem) return;
-
-    const newPhotoUrls: string[] = [];
-    let loadedCount = 0;
-
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = async (evt) => {
-        if (evt.target?.result) {
-          newPhotoUrls.push(evt.target.result as string);
-        }
-        loadedCount++;
-        if (loadedCount === files.length && newPhotoUrls.length > 0) {
-          // Immediately post as comment so user sees it live instantly!
-          await addComment(
-            liveItem.id,
-            user?.name || "미로그인 사용자",
-            newCommentText.trim() || "📷 [현장 사진]",
-            newPhotoUrls
-          );
-          setNewCommentText("");
-          setCommentAttachedPhotos([]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-    // reset input
+  const handleCommentPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
     e.target.value = "";
+    if (!files.length || !liveItem) return;
+    try {
+      const photos: string[] = [];
+      for (const file of files) photos.push(await readPhotoFile(file));
+      await addComment(liveItem.id, user?.name || "\uC2DC\uACF5\uAE30\uC0AC", newCommentText.trim() || "[\uC2DC\uACF5 \uC0AC\uC9C4]",photos);
+      setNewCommentText("");
+      setCommentAttachedPhotos([]);
+    } catch {
+      // Keep the draft; DataContext reports compression or database failures.
+    }
   };
 
   const handleRemoveAttachedPhoto = (index: number) => {

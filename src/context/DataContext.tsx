@@ -19,6 +19,9 @@ import {
   getDashboardMetrics,
 } from "@/lib/dataStore";
 
+import { compressPhoto } from "@/lib/photo-compression";
+import { commentGalleryImages } from "@/lib/construction-gallery";
+import type { WorkItemComment } from "@/types";
 import { requestApi } from "@/lib/api-client";
 
 interface DataContextType {
@@ -53,7 +56,7 @@ interface DataContextType {
   deleteComment: (workItemId: string, commentId: string) => Promise<void>;
   deleteCommentImage: (workItemId: string, commentId: string, imageUrl: string) => Promise<void>;
   deletePhotoFromWorkItem: (workItemId: string, photoUrlOrId: string) => Promise<void>;
-  uploadConstructionPhoto: (workItemId: string, fileName: string, fileUrl: string, size?: string) => Promise<void>;
+  uploadConstructionPhoto: (workItemId: string, fileName: string, fileUrl: string, size?: string, author?: string) => Promise<void>;
   quickModalType: "work" | "as" | null;
   setQuickModalType: (type: "work" | "as" | null) => void;
   clearAllData: () => void;
@@ -265,67 +268,33 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     content: string,
     imagesParam?: string[]
   ) => {
-    const newComment = {
-      id: `cmt-${Date.now()}`,
-      workItemId,
-      author,
-      content,
-      createdAt: new Date().toISOString(),
-      images: imagesParam && imagesParam.length > 0 ? imagesParam : undefined,
-    };
-
-    const targetItem = workItems.find((w) => w.id === workItemId);
-
-    setWorkItems((prev) =>
-      prev.map((item) => {
-        if (item.id === workItemId) {
-          const currentComments = item.comments || [];
-          return { ...item, comments: [...currentComments, newComment] };
-        }
-        return item;
-      })
-    );
-
-    // Auto-sync comment images to Gallery repository for searching & management!
-    if (imagesParam && imagesParam.length > 0 && targetItem) {
-      const regionTag = targetItem.region || "반포";
-      const clientTag = targetItem.clientName;
-      const today = new Date().toISOString().split("T")[0];
-
-      imagesParam.forEach((imgUrl, i) => {
-        const newGalleryImage: GalleryImage = {
-          id: `img-cmt-${Date.now()}-${i}`,
-          folderId: "folder-1",
-          title: `${targetItem.title} - 댓글 사진`,
-          url: imgUrl,
-          siteName: `${regionTag} ${targetItem.title} (${clientTag})`,
-          tags: [regionTag, clientTag, "댓글사진", "시공사진", today],
-          dimensions: "1920 x 1080",
-          size: "1.5 MB",
-          createdAt: today,
-        };
-
-        setImages((prev) => [newGalleryImage, ...prev]);
-
-        setFolders((prev) =>
-          prev.map((f) => {
-            if (f.id === "folder-1" || f.id === "folder-all") {
-              return { ...f, itemCount: f.itemCount + 1 };
-            }
-            return f;
-          })
-        );
-      });
+    const compressed: string[] = [];
+    setPendingWrites(count=>count+1);
+    setError(null);
+    try {
+    if ((imagesParam?.length ?? 0)>5) throw new Error("한 번에 사진 5장까지 첨부해주세요.");
+    for (const image of imagesParam ?? []) compressed.push(await compressPhoto(image));
+    const result = await save<{ comment: WorkItemComment }>("/api/comments", "POST", { workItemId, author, content, images: compressed });
+    if (!result.data?.comment) throw new Error("댓글 저장 결과를 확인하지 못했습니다.");
+    const newComment = result.data.comment;
+    const targetItem = workItems.find(w => w.id === workItemId);
+    setWorkItems(prev=>prev.map(item=>item.id === workItemId ? { ...item, comments:[...(item.comments ?? []),newComment] } : item));
+    if (targetItem && compressed.length) {
+      const galleryPhotos = commentGalleryImages(targetItem,{...newComment,images:compressed});
+      setImages(prev=>[...galleryPhotos,...prev]);
+      setFolders(prev=>prev.some(f=>f.id === "folder-construction")
+        ? prev.map(f=>f.id === "folder-construction" ? {...f,itemCount:f.itemCount+galleryPhotos.length} : f)
+        : [...prev,{id:"folder-construction",name:"시공 사진",description:"",itemCount:galleryPhotos.length,createdAt:newComment.createdAt}]);
     }
-
-    fetch("/api/comments", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workItemId, author, content, images: imagesParam }),
-    }).catch(() => {});
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Photo save failed");
+      throw cause;
+    } finally { setPendingWrites(count=>count-1); }
   };
 
   const deleteComment = async (workItemId: string, commentId: string) => {
+    await save(`/api/comments?id=${encodeURIComponent(commentId)}&workItemId=${encodeURIComponent(workItemId)}`,"DELETE");
+    setImages(prev=>prev.filter(image=>!image.id.startsWith(`comment-${commentId}-`)));
     setWorkItems((prev) =>
       prev.map((item) => {
         if (item.id === workItemId) {
@@ -340,6 +309,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteCommentImage = async (workItemId: string, commentId: string, imageUrl: string) => {
+    if (imageUrl.startsWith("/api/gallery?source=comment")) {
+      const index=new URL(imageUrl,"http://localhost").searchParams.get("index");
+      await save(`/api/gallery?type=image&id=${encodeURIComponent(`comment-${commentId}-${index}`)}`,"DELETE");
+      setImages(prev=>prev.filter(image=>image.url !== imageUrl));
+    }
     setWorkItems((prev) =>
       prev.map((item) => {
         if (item.id === workItemId) {
@@ -362,6 +336,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deletePhotoFromWorkItem = async (workItemId: string, photoUrlOrId: string) => {
+    if (photoUrlOrId.startsWith("/api/gallery?source=comment")) {
+      const query=new URL(photoUrlOrId,"http://localhost").searchParams;
+      await deleteCommentImage(workItemId,query.get("id")!,photoUrlOrId);
+      return;
+    }
     setWorkItems((prev) =>
       prev.map((item) => {
         if (item.id === workItemId) {
@@ -388,63 +367,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     workItemId: string,
     fileName: string,
     fileUrl: string,
-    size: string = "2.5 MB"
+    _size: string = "2.5 MB",
+    author: string = "\uC2DC\uACF5\uAE30\uC0AC"
   ) => {
-    const targetItem = workItems.find((w) => w.id === workItemId);
-    const today = new Date().toISOString().split("T")[0];
-
-    const newAttachment = {
-      id: `att-${Date.now()}`,
-      name: fileName,
-      url: fileUrl,
-      fileType: "image" as const,
-      size,
-      uploadedAt: today,
-    };
-
-    // 1. Add attachment to work item
-    setWorkItems((prev) =>
-      prev.map((item) => {
-        if (item.id === workItemId) {
-          return {
-            ...item,
-            attachments: [newAttachment, ...item.attachments],
-          };
-        }
-        return item;
-      })
-    );
-
-    // 2. Automatically generate smart tags & sync to Gallery!
-    if (targetItem) {
-      const regionTag = targetItem.region || "반포";
-      const clientTag = targetItem.clientName;
-      const categoryTag = targetItem.category || "주방가구";
-      const tags = [regionTag, clientTag, categoryTag, "시공완료 사진", "도면연동", today];
-
-      const newGalleryImage: GalleryImage = {
-        id: `img-${Date.now()}`,
-        folderId: "folder-1", // 2026 시공 현장 폴더
-        title: `${targetItem.title} - 시공 완료`,
-        url: fileUrl,
-        siteName: `${regionTag} ${targetItem.title} (${clientTag})`,
-        tags,
-        dimensions: "2400 x 1800",
-        size,
-        createdAt: today,
-      };
-
-      setImages((prev) => [newGalleryImage, ...prev]);
-
-      setFolders((prev) =>
-        prev.map((f) => {
-          if (f.id === "folder-1" || f.id === "folder-all") {
-            return { ...f, itemCount: f.itemCount + 1 };
-          }
-          return f;
-        })
-      );
-    }
+    await addComment(workItemId, author, `[시공 사진] ${fileName}`, [fileUrl]);
   };
 
   const clearAllData = () => {

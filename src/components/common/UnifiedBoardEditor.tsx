@@ -3,7 +3,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Paperclip, FileText, File, Loader2, X, Download } from "lucide-react";
 import { AttachmentItem } from "@/types";
-import { bodyHtml, bodyImageIds, imageMarker, isBodyImage, serializeBody } from "@/lib/body-content";
+import { bodyHtml, serializeBody } from "@/lib/body-content";
 import { cn } from "@/lib/utils";
 
 interface UnifiedBoardEditorProps {
@@ -38,18 +38,16 @@ export function UnifiedBoardEditor({
 
   const editorRef = useRef<HTMLDivElement>(null);
   const savedRange = useRef<Range | null>(null);
-  const [initialHtml] = useState(() => bodyHtml(description, attachments));
+  const [initialHtml] = useState(() => bodyHtml(description, attachments, false));
   const lastEmitted = useRef<string | null>(null);
   const latestAttachments = useRef(attachments);
-  const knownImages = useRef(new Map(attachments.filter(isBodyImage).map((image) => [image.id, image])));
 
   useLayoutEffect(() => {
     latestAttachments.current = attachments;
-    attachments.filter(isBodyImage).forEach((image) => knownImages.current.set(image.id, image));
     const editor = editorRef.current;
     if (!editor) return;
     if (description === lastEmitted.current) return;
-    const html = bodyHtml(description, attachments);
+    const html = bodyHtml(description, attachments, false);
     if (editor.innerHTML !== html) editor.innerHTML = html;
   }, [description, attachments]);
 
@@ -58,22 +56,12 @@ export function UnifiedBoardEditor({
     if (selection?.rangeCount && editorRef.current?.contains(selection.anchorNode)) savedRange.current = selection.getRangeAt(0).cloneRange();
   };
 
-  const emitBody = (currentAttachments = latestAttachments.current) => {
+  const emitBody = () => {
     const editor = editorRef.current;
     if (!editor) return;
     const value = serializeBody(editor);
     lastEmitted.current = value;
     onChangeDescription(value);
-    const ids = new Set(bodyImageIds(value));
-    const retained = currentAttachments.filter((attachment) => !isBodyImage(attachment) || ids.has(attachment.id));
-    for (const id of ids) {
-      const restored = knownImages.current.get(id);
-      if (restored && !retained.some((attachment) => attachment.id === id)) retained.push(restored);
-    }
-    if (retained.length !== currentAttachments.length || retained.some((attachment, index) => attachment.id !== currentAttachments[index]?.id)) {
-      latestAttachments.current = retained;
-      void Promise.resolve(onChangeAttachments(retained)).catch(() => setError("이미지 변경을 반영하지 못했습니다. 다시 시도해 주세요."));
-    }
     rememberCursor();
   };
 
@@ -95,25 +83,6 @@ export function UnifiedBoardEditor({
     editorRef.current?.focus();
   };
 
-  const insertImages = (images: AttachmentItem[], range: Range) => {
-    if (!images.length || !editorRef.current) return;
-    range.deleteContents();
-    for (const image of images) {
-      const fragment = document.createElement("template");
-      fragment.innerHTML = bodyHtml(imageMarker(image.id), [image]);
-      const node = fragment.content.firstChild;
-      if (!node) continue;
-      range.insertNode(node);
-      range.setStartAfter(node);
-      range.collapse(true);
-      const line = document.createElement("br");
-      range.insertNode(line);
-      range.setStartAfter(line);
-      range.collapse(true);
-    }
-    restoreCursor(range);
-  };
-
   const pasteText = (text: string) => {
     const range = insertionRange();
     range.deleteContents();
@@ -132,7 +101,6 @@ export function UnifiedBoardEditor({
 
   const uploadFiles = async (files: FileList | File[]) => {
     if (readOnly || uploadLock.current || files.length === 0) return;
-    const uploadRange = insertionRange();
     uploadLock.current = true;
     setIsUploading(true);
     onUploadingChange?.(true);
@@ -158,10 +126,7 @@ export function UnifiedBoardEditor({
       }
       if (uploaded.length) {
         const combined = [...latestAttachments.current, ...uploaded];
-        uploaded.filter(isBodyImage).forEach((image) => knownImages.current.set(image.id, image));
-        insertImages(uploaded.filter(isBodyImage), uploadRange);
         latestAttachments.current = combined;
-        if (uploaded.some(isBodyImage)) emitBody(combined);
         await onChangeAttachments(latestAttachments.current);
       }
       if (failures.length) setError(`업로드하지 못한 파일: ${failures.join(", ")}. 다시 첨부해 주세요.`);
@@ -246,36 +211,6 @@ export function UnifiedBoardEditor({
           }}
         />
 
-        {/* Files remain inside the body, without a separate attachment panel. */}
-        {attachments.some((attachment) => !isBodyImage(attachment)) && (
-          <div className="mt-4 flex flex-col gap-3">
-            {attachments.filter((attachment) => !isBodyImage(attachment)).map((attachment) => {
-              const type = attachmentType(attachment);
-              return (
-                <div key={attachment.id} className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white">
-                  <div className="flex items-center">
-                    <button type="button" onClick={() => openAttachment(attachment)} aria-label={`${attachment.name} ${type === "image" ? "미리보기" : "열기"}`} className="min-w-0 flex-1 text-left hover:bg-slate-50 transition-colors">
-                        <div className="flex items-center gap-3 p-3 sm:p-4">
-                          <div className={cn("flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl", type === "pdf" ? "bg-[#ef4937] text-white" : "bg-blue-100 text-blue-700")}>
-                            {type === "pdf" ? <><FileText className="h-6 w-6" /><span className="text-[9px] font-bold">PDF</span></> : <File className="h-6 w-6" />}
-                          </div>
-                          <div className="min-w-0"><p className="truncate text-sm sm:text-base font-medium text-slate-900" title={attachment.name}>{attachment.name}</p><p className="mt-1 text-xs sm:text-sm text-slate-400">{attachment.size || (type === "pdf" ? "PDF 문서" : "파일")}</p></div>
-                        </div>
-                    </button>
-                    {type !== "image" && (
-                      <div className="flex shrink-0 items-center gap-1 pr-3">
-                        <a href={attachment.url} download={attachment.name} aria-label={`${attachment.name} 다운로드`} title="다운로드" className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"><Download className="h-5 w-5" /></a>
-                        {!readOnly && <button type="button" disabled={isUploading} onClick={() => void removeAttachment(attachment.id)} aria-label={`${attachment.name} 본문에서 제거`} className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700"><X className="h-4 w-4" /></button>}
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-              );
-            })}
-          </div>
-        )}
-
         {!readOnly && (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
             <button type="button" disabled={isUploading} onMouseDown={(event) => { event.preventDefault(); rememberCursor(); }} onClick={() => fileInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200">
@@ -289,6 +224,37 @@ export function UnifiedBoardEditor({
         {isDragging && <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-blue-50/90 text-sm font-semibold text-blue-700">놓으면 본문에 추가합니다</div>}
         {error && <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p>}
       </div>
+
+        {/* Documents are separate from body text; construction photos use the photo feed. */}
+        {attachments.some(attachment => attachmentType(attachment) !== "image") && (
+          <div className="mt-4 flex flex-col gap-3">
+            {attachments.filter(attachment => attachmentType(attachment) !== "image").map((attachment) => {
+              const type = attachmentType(attachment);
+              return (
+                <div key={attachment.id} className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <div className="flex items-center">
+                    <button type="button" onClick={() => openAttachment(attachment)} aria-label={`${attachment.name} ${type === "image" ? "미리보기" : "열기"}`} className="min-w-0 flex-1 text-left hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center gap-3 p-3 sm:p-4">
+                          <div className={cn("flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl", type === "pdf" ? "bg-[#ef4937] text-white" : "bg-blue-100 text-blue-700")}>
+                            {type === "pdf" ? <><FileText className="h-6 w-6" /><span className="text-[9px] font-bold">PDF</span></> : <File className="h-6 w-6" />}
+                          </div>
+                          <div className="min-w-0"><p className="truncate text-sm sm:text-base font-medium text-slate-900" title={attachment.name}>{attachment.name}</p><p className="mt-1 text-xs sm:text-sm text-slate-400">{attachment.size || (type === "pdf" ? "PDF 문서" : "파일")}</p></div>
+                        </div>
+                    </button>
+                    {(
+                      <div className="flex shrink-0 items-center gap-1 pr-3">
+                        <a href={attachment.url} download={attachment.name} aria-label={`${attachment.name} 다운로드`} title="다운로드" className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"><Download className="h-5 w-5" /></a>
+                        {!readOnly && <button type="button" disabled={isUploading} onClick={() => void removeAttachment(attachment.id)} aria-label={`${attachment.name} 본문에서 제거`} className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700"><X className="h-4 w-4" /></button>}
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+              );
+            })}
+          </div>
+        )}
+
 
       {preview && (
         <div role="dialog" aria-modal="true" aria-label={attachmentType(preview) === "pdf" ? "PDF 미리보기" : "이미지 미리보기"} onClick={() => setPreview(null)} onKeyDown={(event) => { if (event.key === "Escape") setPreview(null); }} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-3 sm:p-6">

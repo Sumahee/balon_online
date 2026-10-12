@@ -520,7 +520,7 @@ export function QuickModals() {
 
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1">
-                  작업 내용 및 첨부 파일 (도면 / 이미지 / PDF) <span className="text-slate-400 font-normal">(파일 드래그&드롭, 이미지 미리보기, PDF 즉시 열기)</span>
+                  작업 내용 및 첨부 파일 (도면 / 이미지 / PDF) <span className="text-slate-400 font-normal">(파일 드래그&드롭, 사진 클릭 시 보기, PDF 즉시 열기)</span>
                 </label>
                 <UnifiedBoardEditor
                   description={workForm.description}

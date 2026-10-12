@@ -15,7 +15,8 @@ export function isBodyImage(attachment: AttachmentItem) {
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
 }
-export function bodyHtml(description: string, attachments: AttachmentItem[]) {
+export function bodyHtml(description: string, attachments: AttachmentItem[], showImages = true) {
+  if (!showImages) return escapeHtml(bodyText(description)).replace(/\n/g, "<br>");
   const images = attachments.filter(isBodyImage);
   const seen = new Set<string>();
   const imageHtml = (attachment: AttachmentItem) => {

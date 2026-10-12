@@ -29,6 +29,7 @@ import {
 import { WorkItem, ClientInfo, DrawingType, WorkStatus, Priority, AttachmentItem } from "@/types";
 import { useData } from "@/context/DataContext";
 import { cn } from "@/lib/utils";
+import { readPhotoFile } from "@/lib/photo-compression";
 import { bodyText } from "@/lib/body-content";
 import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
 
@@ -158,63 +159,33 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activePhotoIndex, allPhotos.length]);
 
-  const handleLocalDeviceFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    Array.from(files).forEach((file, index) => {
-      const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
-      const sizeStr = file.size > 1024 * 1024 ? `${sizeInMB} MB` : `${Math.round(file.size / 1024)} KB`;
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          uploadConstructionPhoto(liveItem.id, file.name, event.target.result as string, sizeStr);
-          if (index === 0) {
-            setPhotoFileName(file.name);
-            setPhotoUrl(event.target.result as string);
-            setPhotoSize(sizeStr);
-          }
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-
-    setPhotoUploadSuccess(true);
-    setTimeout(() => setPhotoUploadSuccess(false), 4000);
+  const handleLocalDeviceFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files=Array.from(e.target.files ?? []);
+    e.target.value="";
+    if (!files.length) return;
+    try {
+      const photos: string[]=[];
+      for (const file of files) photos.push(await readPhotoFile(file));
+      await addComment(liveItem.id,authorName,`[\uC2DC\uACF5 \uC0AC\uC9C4] ${files.map(file=>file.name).join(", ")}`,photos);
+      setPhotoUploadSuccess(true);
+      setTimeout(()=>setPhotoUploadSuccess(false),4000);
+    } catch { /* DataContext shows errors; no success before persistence. */ }
   };
 
   // Immediate upload & post when user selects photo files from OS dialog ("열기")
-  const handleCommentPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const newPhotoUrls: string[] = [];
-    let loadedCount = 0;
-
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = async (evt) => {
-        if (evt.target?.result) {
-          newPhotoUrls.push(evt.target.result as string);
-        }
-        loadedCount++;
-        if (loadedCount === files.length && newPhotoUrls.length > 0) {
-          // Immediately post as comment so user sees it live instantly!
-          await addComment(
-            liveItem.id,
-            authorName,
-            commentText.trim() || "📷 [현장 사진]",
-            newPhotoUrls
-          );
-          setCommentText("");
-          setCommentAttachedPhotos([]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-    // reset input
+  const handleCommentPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
     e.target.value = "";
+    if (!files.length || !liveItem) return;
+    try {
+      const photos: string[] = [];
+      for (const file of files) photos.push(await readPhotoFile(file));
+      await addComment(liveItem.id, authorName, commentText.trim() || "[\uC2DC\uACF5 \uC0AC\uC9C4]",photos);
+      setCommentText("");
+      setCommentAttachedPhotos([]);
+    } catch {
+      // Keep the draft; DataContext reports compression or database failures.
+    }
   };
 
   const handleRemoveAttachedPhoto = (index: number) => {
@@ -347,7 +318,7 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
     if (!photoUrl.trim()) return;
 
     const fileName = photoFileName.trim() || `${item.region || "현장"}_시공완료사진.jpg`;
-    await uploadConstructionPhoto(item.id, fileName, photoUrl.trim(), photoSize);
+    await uploadConstructionPhoto(item.id, fileName, photoUrl.trim(), photoSize, authorName);
     
     setPhotoUploadSuccess(true);
     setPhotoFileName("");

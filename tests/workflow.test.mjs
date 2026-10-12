@@ -31,6 +31,45 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
 
 const request = (body) => ({ json: async () => body });
 
+test("construction photo compression resizes and caps storage before upload", async () => {
+  const draws=[];
+  const canvas={width:0,height:0,getContext:()=>({fillRect(){},drawImage(_image,_x,_y,w,h){draws.push([w,h]);}}),toDataURL(_type,quality){return "data:image/jpeg;base64,"+"A".repeat(Math.ceil(this.width*this.height*quality/3));}};
+  const {compressPhoto}=loadModule("src/lib/photo-compression.ts",{}, {Image:class {naturalWidth=4000;naturalHeight=3000;decode(){return Promise.resolve();}},document:{createElement:()=>canvas}});
+  const source="data:image/jpeg;base64,"+"A".repeat(4000000);
+  const output=await compressPhoto(source);
+  assert.ok(output.length <= 500*1024*4/3);
+  assert.ok(draws.every(([w,h])=>w<=1920 && h<=1920));
+  assert.ok(output.length<source.length);
+});
+
+test("construction gallery derives searchable drawing tags without copying photo data", async () => {
+  const photo="data:image/jpeg;base64,"+Buffer.from("test-image").toString("base64");
+  const row={id:"work-1",comment_id:"cmt-1",author:"기사",content:"시공완료",images:JSON.stringify([photo]),comment_date:"2026-10-12T01:00:00Z",title:"현장",client_name:"업체",site_address:"서울",region:"반포",drawing_type:"천정형",board_color:"화이트",post_color:"다크그레이"};
+  const gallery=loadModule("src/lib/api-handlers/gallery.ts",{"@/lib/db":{db:{},executeQuery:async sql=>({success:true,rows:sql.includes("bo_attachments")?[]:sql.includes("JOIN")?[row]:[{images:row.images}]})}}, {Response});
+  const listed=await (await gallery.GET({url:"http://localhost/api/gallery"})).json();
+  const entry=listed.data.images[0];
+  for (const tag of ["천정형","화이트","다크그레이","업체","서울","기사"]) assert.ok(entry.tags.includes(tag));
+  assert.equal(entry.url,"/api/gallery?source=comment&id=cmt-1&index=0");
+  assert.ok(!JSON.stringify(listed).includes(photo));
+  const image=await gallery.GET({url:"http://localhost"+entry.url});
+  assert.equal(image.headers.get("content-type"),"image/jpeg");
+  assert.equal(await image.text(),"test-image");
+});
+
+test("comment photos persist once and failed writes never report success", async () => {
+  const writes=[];
+  const {POST}=loadModule("src/lib/api-handlers/comments.ts",{"@/lib/db":{executeMutation:async(sql,args)=>{writes.push({sql,args});},executeQuery:async()=>({success:true,rows:[]})}});
+  const image="data:image/jpeg;base64,"+Buffer.from("image").toString("base64");
+  const response=await POST(request({workItemId:"work-1",author:"기사",content:"완료",images:[image]}));
+  const saved=await response.json();
+  assert.equal(writes.length,1);
+  assert.equal(writes[0].args[4],JSON.stringify([image]));
+  assert.match(saved.data.comment.images[0],/^\/api\/gallery\?source=comment/);
+  const failing=loadModule("src/lib/api-handlers/comments.ts",{"@/lib/db":{executeMutation:async()=>{throw new Error("DB failed");}}});
+  assert.equal((await failing.POST(request({workItemId:"work-1",content:"완료",images:[image]}))).status,500);
+  assert.equal((await POST(request({workItemId:"work-1",content:"완료",images:Array(6).fill(image)}))).status,400);
+});
+
 test("AS intake persists installation, received and scheduled dates with paid reason", async () => {
   const writes = [];
   const handlers = loadModule("src/lib/api-handlers/posts.ts", {
@@ -207,12 +246,12 @@ test("ready-to-ship work does not count as completed installation", () => {
 });
 
 
-test("body editor renders inline image previews and named PDF tiles in a larger writing area", () => {
+test("construction photos do not appear in body text or its file list", () => {
   const React = nativeRequire("react");
   const { renderToStaticMarkup } = nativeRequire("react-dom/server");
   const { UnifiedBoardEditor } = loadModule("src/components/common/UnifiedBoardEditor.tsx");
   const html = renderToStaticMarkup(React.createElement(UnifiedBoardEditor, {
-    description: "현장 요청사항", onChangeDescription() {}, onChangeAttachments() {}, minRows: 9,
+    description: "현장 요청사항\n![본문 이미지](attachment:image)", onChangeDescription() {}, onChangeAttachments() {}, minRows: 9,
     attachments: [
       { id: "image", name: "현장.png", url: "/test-image.png", fileType: "image" },
       { id: "pdf", name: "제작도면.pdf", url: "/test-drawing.pdf", fileType: "pdf" },
@@ -220,7 +259,8 @@ test("body editor renders inline image previews and named PDF tiles in a larger 
   }));
   assert.match(html, /contentEditable="true"/);
   assert.match(html, /min-height:15.75rem/);
-  assert.match(html, /<img[^>]+data-body-image="image"/);
+  assert.doesNotMatch(html, /<img/);
+  assert.doesNotMatch(html, /attachment:image/);
   assert.doesNotMatch(html, /현장.png/);
   assert.match(html, /제작도면.pdf 열기/);
   assert.match(html, /download="제작도면.pdf"/);

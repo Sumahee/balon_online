@@ -27,6 +27,7 @@ import { WorkItem, AsItem, AttachmentItem, ClientInfo, DrawingType } from "@/typ
 import { cn } from "@/lib/utils";
 import { CalendarDetailModal } from "@/components/calendar/CalendarDetailModal";
 import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
+import { MobileMonthCalendar } from "@/components/calendar/MobileMonthCalendar";
 
 const REGIONS = ["전체", "반포", "일산", "서초", "한남", "성수", "판교", "분당"];
 
@@ -302,6 +303,8 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-6 pb-12">
+      <MobileMonthCalendar key={`${currentDate.getFullYear()}-${currentDate.getMonth()}`} year={currentDate.getFullYear()} month={currentDate.getMonth()} days={calendarDays} events={filteredEvents} regions={REGIONS} region={selectedRegion} search={searchQuery} onRegion={setSelectedRegion} onSearch={setSearchQuery} onPrevious={handlePrevMonth} onNext={handleNextMonth} onToday={()=>setCurrentDate(new Date(`${getToday()}T00:00:00`))} onAdd={date=>{if(date)setNewDate(date);setIsAddModalOpen(true);}} onOpen={event=>{const original=filteredEvents.find(value=>value.id===event.id && value.type===event.type);if(original?.originalWorkItem)setSelectedItem(original.originalWorkItem);if(original?.originalAsItem)setSelectedAsItem(original.originalAsItem);}} />
+      <div className="hidden lg:block space-y-6">
       <PageHeader title="일정 관리" description="시공·배송·요청 일정을 확인하고 현장별 업무를 열어보세요." actions={<button onClick={() => setIsAddModalOpen(true)} className="action-primary"><Plus className="h-4 w-4" />일정 추가</button>} />
 
       {/* Control Bar: Filters & Month Navigator */}
@@ -536,6 +539,7 @@ export default function CalendarPage() {
       )}
 
       {/* NEW SCHEDULE EVENT MODAL */}
+      </div>
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
           <div className="bg-white w-full max-w-3xl rounded-2xl border border-slate-200 shadow-2xl p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto">
@@ -717,7 +721,7 @@ export default function CalendarPage() {
               {/* UNIFIED BOARD EDITOR (텍스트 + 이미지 + 파일 통합) */}
               <div>
                 <label className="font-bold text-slate-800 block mb-1">
-                  작업 내용 및 첨부 도면/파일 <span className="text-slate-400 font-normal">(파일 드래그&드롭, 이미지 미리보기, PDF 즉시 열기)</span>
+                  작업 내용 및 첨부 도면/파일 <span className="text-slate-400 font-normal">(파일 드래그&드롭, 사진 클릭 시 보기, PDF 즉시 열기)</span>
                 </label>
                 <UnifiedBoardEditor
                   description={newDescription}

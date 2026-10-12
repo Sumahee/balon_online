@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
               workItemId: String(c.work_item_id),
               author: String(c.author),
               content: String(c.content),
-              images,
+              images: images.map((url,index)=>url.startsWith("data:image/") ? `/api/gallery?source=comment&id=${encodeURIComponent(String(c.id))}&index=${index}` : url).filter(Boolean),
               createdAt: String(c.created_at),
             });
             cmtMap.set(String(c.work_item_id), list);

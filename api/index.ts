@@ -193,6 +193,8 @@ export async function DELETE(request: NextRequest, context?: RouteContext) {
         return await postsHandler.DELETE(request);
       case "gallery":
         return await galleryHandler.DELETE(request);
+      case "comments":
+        return await commentsHandler.DELETE(request);
       case "purchases":
         return await purchasesHandler.DELETE(request);
       default:
