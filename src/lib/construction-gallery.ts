@@ -27,7 +27,7 @@ export function galleryFolders(folders: GalleryFolder[], images: GalleryImage[])
 }
 
 export function constructionTags(item: Pick<WorkItem,"clientName"|"siteAddress"|"region"|"drawingType"|"boardColor"|"postColor"|"category">, author: string, date: string) {
-  return [...new Set(["시공사진", "시공완료 사진", item.clientName, item.siteAddress, item.region, item.drawingType, item.boardColor, item.postColor, item.category, author, date].filter((v):v is string=>!!v?.trim()))];
+  return [...new Set(["시공사진", item.clientName, item.siteAddress, item.region, item.drawingType, item.boardColor, item.postColor, item.category, author, date].filter((v):v is string=>!!v?.trim()).map(value => value.trim()))];
 }
 export function commentGalleryImages(item: WorkItem, comment: WorkItemComment): GalleryImage[] {
   return (comment.images ?? []).flatMap((url,index)=>typeof url !== "string" || !url ? [] : [{

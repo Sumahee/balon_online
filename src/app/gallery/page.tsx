@@ -442,7 +442,7 @@ export default function GalleryPage() {
                 {/* Tags and Delete */}
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1">
                   <div className="flex flex-wrap gap-1">
-                    {img.tags.slice(0, 2).map((tag, tIdx) => (
+                    {img.tags.map((tag, tIdx) => (
                       <span
                         key={tIdx}
                         className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded"

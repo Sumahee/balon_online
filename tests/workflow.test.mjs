@@ -111,6 +111,8 @@ test("construction gallery derives searchable drawing tags without copying photo
   const listed=await (await gallery.GET({url:"http://localhost/api/gallery"})).json();
   const entry=listed.data.images[0];
   for (const tag of ["천정형","화이트","다크그레이","업체","서울","기사"]) assert.ok(entry.tags.includes(tag));
+  assert.ok(entry.tags.includes("반포"));
+  assert.ok(!entry.tags.some(tag => /^(도면타입|포스트컬러|합판종류·컬러|지역):/.test(tag)));
   assert.equal(entry.url,"/api/gallery?source=comment&id=cmt-1&index=0");
   assert.ok(!JSON.stringify(listed).includes(photo));
   const image=await gallery.GET({url:"http://localhost"+entry.url});
