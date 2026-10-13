@@ -2,6 +2,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { getToday } from "@/lib/date";
+import { useHolidays } from "@/lib/use-holidays";
 
 interface Event {
   id: string; type: "work" | "as"; dateStr: string; clientName: string; title: string;
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function MobileMonthCalendar(props:Props) {
+  const holidays=useHolidays(props.year);
   const [selected,setSelected]=useState<string | null>(null);
   const [compact,setCompact]=useState(false);
   const list=useRef<HTMLDivElement>(null);
@@ -49,8 +51,9 @@ export function MobileMonthCalendar(props:Props) {
               setSelected(day.dateStr);
               const target=sections.current.get(day.dateStr),viewport=list.current;
               if(selected===day.dateStr && target && viewport) viewport.scrollTo({top:viewport.scrollTop+target.getBoundingClientRect().top-viewport.getBoundingClientRect().top-8,behavior:"smooth"});
-            }} aria-pressed={selected===day.dateStr} aria-label={`${props.month+1}월 ${day.dayNum}일, 일정 ${count}건`} className={`flex min-h-0 flex-col items-center justify-center gap-0.5 rounded-lg text-sm ${!day.isCurrentMonth ? "text-slate-300" : selected===day.dateStr ? "bg-blue-600 text-white" : day.dateStr===getToday() ? "bg-blue-50 text-blue-700 font-bold" : index%7===0 ? "text-rose-600" : index%7===6 ? "text-blue-600" : "text-slate-800"}`}>
-              <span>{day.dayNum}</span><span aria-hidden="true" className={`h-1 w-1 rounded-full ${count && day.isCurrentMonth ? selected===day.dateStr ? "bg-white" : "bg-blue-600" : "bg-transparent"}`} />
+            }} aria-current={day.dateStr===getToday() ? "date" : undefined} aria-pressed={selected===day.dateStr} aria-label={`${props.month+1}월 ${day.dayNum}일, 일정 ${count}건`} className={`flex min-h-0 flex-col items-center justify-center gap-0.5 rounded-lg text-sm ${day.dateStr===getToday() ? "ring-2 ring-inset ring-blue-500" : ""} ${!day.isCurrentMonth ? "text-slate-300" : selected===day.dateStr ? "bg-blue-600 text-white" : day.dateStr===getToday() ? "bg-blue-100 text-blue-800 font-extrabold" : index%7===0 ? "text-rose-600" : index%7===6 ? "text-blue-600" : "text-slate-800"}`}>
+              <span className={holidays[day.dateStr] && selected!==day.dateStr ? "text-red-600 font-bold" : ""}>{day.dayNum}</span>
+              {holidays[day.dateStr] ? <span title={holidays[day.dateStr]} className="block max-w-full truncate rounded-sm bg-red-700 px-0.5 text-[8px] leading-3 text-white">{holidays[day.dateStr]}</span> : <span aria-hidden="true" className={`h-1 w-1 rounded-full ${count && day.isCurrentMonth ? selected===day.dateStr ? "bg-white" : "bg-blue-600" : "bg-transparent"}`} />}
             </button>;
           })}
         </div>
@@ -61,7 +64,7 @@ export function MobileMonthCalendar(props:Props) {
           {dates.map(date=><section key={date} ref={element=>{if(element)sections.current.set(date,element);else sections.current.delete(date);}} className="mb-4" aria-label={`${props.month+1}월 ${Number(date.slice(-2))}일 일정`}>
             <h2 className={`py-2 px-1 text-sm font-bold ${date===selected ? "text-blue-700" : "text-slate-900"}`}>{props.month+1}월 {Number(date.slice(-2))}일</h2>
             {groups.get(date)!.length ? groups.get(date)!.map(event=><button key={`${event.type}-${event.id}`} onClick={()=>props.onOpen(event)} aria-label={`${event.clientName} ${event.title} ${event.status} 상세보기`} title={`${event.title} · ${event.location} · ${event.status}`} className={`mb-1 flex items-center gap-2 w-full rounded-lg bg-white border-l-4 border px-2.5 py-2.5 text-left ${event.type==="as" ? "border-l-rose-500" : event.status==="시공완료" ? "border-l-blue-500" : "border-l-lime-500"}`}>
-              <span className="shrink-0 rounded bg-slate-100 px-1 py-0.5 text-[10px] font-bold text-slate-600">{event.type==="as" ? "A/S" : event.drawingType || "시공"}</span>
+              <span title={event.drawingType || "기타"} aria-label={event.drawingType || "기타"} className={`shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white ${event.drawingType === "천정형" ? "bg-emerald-600" : event.drawingType === "에보라" ? "bg-fuchsia-700" : event.drawingType === "옴니버스" ? "bg-purple-600" : "bg-slate-500"}`}>{event.drawingType?.slice(0,1) || "기"}</span>
               <span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-900">{event.type === "work" ? event.title : event.location}</span>
               <span className="shrink-0 text-[10px] text-slate-500">{event.status}</span>
             </button>) : <p className="rounded-xl bg-white p-4 text-sm text-slate-500">등록된 일정이 없습니다.</p>}

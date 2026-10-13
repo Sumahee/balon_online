@@ -1,6 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import {
   WorkItem,
   AsItem,
@@ -36,6 +37,11 @@ interface DataContextType {
   error: string | null;
   isSaving: boolean;
   reloadData: () => Promise<void>;
+  loadWorkList: (params: string, append?: boolean) => Promise<boolean>;
+  loadWorkDetail: (id: string) => Promise<WorkItem>;
+  loadGallery: (params?: string, append?: boolean) => Promise<boolean>;
+  loadMoreComments: (id:string,offset:number) => Promise<void>;
+  workHasMore: boolean;
   dismissError: () => void;
   addWorkItem: (item: Omit<WorkItem, "id" | "createdAt">) => Promise<void>;
   updateWorkItem: (id: string, updates: Partial<WorkItem>) => Promise<void>;
@@ -74,6 +80,15 @@ const STORAGE_KEYS = {
 };
 
 export const DataProvider = ({ children }: { children: ReactNode }) => {
+  const pathname = usePathname();
+  const workRequest = useRef(0);
+  const galleryRequest = useRef(0);
+  const lastWorkParams=useRef("limit=30");
+  const lastGalleryParams=useRef("");
+  const detailCache = useRef(new Map<string,{item:WorkItem,time:number}>());
+  const detailPending = useRef(new Map<string,Promise<WorkItem>>());
+  const listCache=useRef(new Map<string,{data:WorkItem[];hasMore:boolean;time:number}>());
+  const listPending=useRef(new Map<string,Promise<{data?:WorkItem[];hasMore?:boolean}>>());
   const [workItems, setWorkItems] = useState<WorkItem[]>([]);
   const [asItems, setAsItems] = useState<AsItem[]>([]);
   const [folders, setFolders] = useState<GalleryFolder[]>([]);
@@ -85,40 +100,101 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const [error, setError] = useState<string | null>(null);
   const [pendingWrites, setPendingWrites] = useState(0);
+  const [metricCounts,setMetricCounts]=useState<Pick<DashboardMetrics,"totalProjects"|"inProgressTasks"|"urgentAsCount"|"completionRate"|"todoCount"|"readyCount"> | null>(null);
+  useEffect(()=>{
+    if(pendingWrites || pathname === "/login")return;
+    let active=true;
+    const timer=setTimeout(()=>{void requestApi<NonNullable<typeof metricCounts>>("/api/dashboard").then(result=>{if(active && result.data)setMetricCounts(result.data);}).catch(()=>{});},100);
+    return()=>{active=false;clearTimeout(timer);};
+  },[pendingWrites,pathname]);
+  const [workHasMore,setWorkHasMore]=useState(false);
+  const loadWorkList = useCallback(async (params: string, append = false) => {
+    const version = ++workRequest.current;
+    if(!append) lastWorkParams.current=params;
+    setIsLoading(true);
+    try {
+      const cached=listCache.current.get(params);
+      let result:{data?:WorkItem[];hasMore?:boolean};
+      if(cached && Date.now()-cached.time<30000) result=cached;
+      else {
+        let request=listPending.current.get(params);
+        if(!request){request=requestApi<WorkItem[]>(`/api/posts?type=work&summary=1&${params}`).finally(()=>listPending.current.delete(params));listPending.current.set(params,request);}
+        result=await request;
+        if(listCache.current.size>=12)listCache.current.delete(listCache.current.keys().next().value!);
+        listCache.current.set(params,{data:result.data || [],hasMore:!!result.hasMore,time:Date.now()});
+      }
+      if (version !== workRequest.current) return false;
+      setWorkItems(prev => append ? [...prev,...(result.data || []).filter(item=>!prev.some(old=>old.id===item.id))] : result.data || []);
+      setWorkHasMore(!!result.hasMore);
+      return !!result.hasMore;
+    } catch(cause) { if(version === workRequest.current) setError(cause instanceof Error ? cause.message : "업무 조회 실패"); throw cause; }
+    finally { if(version === workRequest.current) setIsLoading(false); }
+  }, []);
+  const loadWorkDetail = useCallback((id: string): Promise<WorkItem> => {
+    const cached = detailCache.current.get(id);
+    if (cached && Date.now()-cached.time < 30000) { setWorkItems(prev=>prev.map(item=>item.id===id ? cached.item : item)); return Promise.resolve(cached.item); }
+    const pending = detailPending.current.get(id);
+    if (pending) return pending;
+    const request = requestApi<WorkItem[]>(`/api/posts?type=work&id=${encodeURIComponent(id)}`).then(result=>{
+      const item = result.data?.[0]; if (!item) throw new Error("업무를 찾지 못했습니다.");
+      const loaded = {...item,detailsLoaded:true};
+      detailCache.current.set(id,{item:loaded,time:Date.now()});
+      setWorkItems(prev=>prev.map(value=>value.id===id ? loaded : value));
+      return loaded;
+    }).finally(()=>detailPending.current.delete(id));
+    detailPending.current.set(id,request);
+    return request;
+  }, []);
+  const loadGallery = useCallback(async (params = "", append = false) => {
+    const version=++galleryRequest.current;
+    if(!append)lastGalleryParams.current=params;
+    const result = await requestApi<{folders:GalleryFolder[];images:GalleryImage[]}>(`/api/gallery?limit=30&${params}`);
+    if(version !== galleryRequest.current) return false;
+    if(result.data) { setFolders(result.data.folders); setImages(prev=>append ? [...prev,...result.data!.images.filter(image=>!prev.some(old=>old.id===image.id))] : result.data!.images); }
+    return !!result.hasMore;
+  }, []);
+  const loadMoreComments=useCallback(async(id:string,offset:number)=>{
+    const result=await requestApi<WorkItemComment[]>(`/api/comments?workItemId=${encodeURIComponent(id)}&offset=${offset}`);
+    detailCache.current.delete(id);
+    setWorkItems(prev=>prev.map(item=>item.id===id ? {...item,comments:[...(result.data || []).filter(comment=>!item.comments?.some(existing=>existing.id===comment.id)),...(item.comments || [])],commentsHasMore:!!result.hasMore} : item));
+  },[]);
 
   const reloadData = useCallback(async () => {
+    if (pathname === "/calendar" || pathname === "/work") {listCache.current.clear();await loadWorkList(lastWorkParams.current);return;}
+    if(pathname === "/gallery") {await loadGallery(lastGalleryParams.current);setIsLoading(false);return;}
+    if(pathname === "/login") {setIsLoading(false);return;}
     setIsLoading(true);
     setError(null);
     const results = await Promise.allSettled([
-      requestApi<WorkItem[]>("/api/posts?type=work"),
-      requestApi<AsItem[]>("/api/posts?type=as"),
-      requestApi<OnlinePurchaseItem[]>("/api/purchases"),
-      requestApi<{ folders: GalleryFolder[]; images: GalleryImage[] }>("/api/gallery"),
-      requestApi<MaterialSample[]>("/api/materials"),
+      pathname === "/" ? requestApi<WorkItem[]>("/api/posts?type=work&summary=1&mode=active&limit=30") : Promise.resolve({data:undefined}),
+      pathname === "/as" || pathname === "/" ? requestApi<AsItem[]>("/api/posts?type=as") : Promise.resolve({data:undefined}),
+      pathname === "/purchases" ? requestApi<OnlinePurchaseItem[]>("/api/purchases") : Promise.resolve({data:undefined}),
+      Promise.resolve({data:undefined}),
+      pathname === "/materials" ? requestApi<MaterialSample[]>("/api/materials") : Promise.resolve({data:undefined}),
     ]);
     const [work, service, purchases, gallery, samples] = results;
     if (work.status === "fulfilled" && work.value.data) setWorkItems(work.value.data);
+    if(work.status === "fulfilled" && "hasMore" in work.value) setWorkHasMore(!!work.value.hasMore);
     if (service.status === "fulfilled" && service.value.data) setAsItems(service.value.data);
     if (purchases.status === "fulfilled" && purchases.value.data) setPurchaseItems(purchases.value.data);
-    if (gallery.status === "fulfilled" && gallery.value.data) {
-      setFolders(gallery.value.data.folders);
-      setImages(gallery.value.data.images);
-    }
+    void gallery;
     if (samples.status === "fulfilled" && samples.value.data) setMaterials(samples.value.data);
     if (results.some((result) => result.status === "rejected")) {
       setError("일부 데이터를 불러오지 못했습니다. 기존 화면을 유지합니다. 다시 불러오기를 눌러 주세요.");
     }
     setIsLoading(false);
-  }, []);
+  }, [pathname,loadWorkList,loadGallery]);
 
   useEffect(() => {
     let active = true;
-    queueMicrotask(() => { if (active) void reloadData(); });
+    queueMicrotask(() => { if (active && pathname !== "/work" && pathname !== "/calendar" && pathname !== "/gallery") void reloadData(); else if(active && pathname === "/gallery") setIsLoading(false); });
     return () => { active = false; };
-  }, [reloadData]);
+  }, [reloadData,pathname]);
 
   // 호출자는 실패 시 폼을 유지할 수 있도록 오류를 전달받습니다.
   const save = async <T,>(url: string, method: string, body?: unknown) => {
+    detailCache.current.clear();
+    listCache.current.clear();
     setPendingWrites((count) => count + 1);
     setError(null);
     try {
@@ -136,21 +212,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Sync to LocalStorage as auxiliary cache
-  useEffect(() => {
-    if (!isLoading) {
-      try {
-        localStorage.setItem(STORAGE_KEYS.WORK, JSON.stringify(workItems));
-        localStorage.setItem(STORAGE_KEYS.AS, JSON.stringify(asItems));
-        localStorage.setItem(STORAGE_KEYS.FOLDERS, JSON.stringify(folders));
-        localStorage.setItem(STORAGE_KEYS.IMAGES, JSON.stringify(images));
-        localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(materials));
-      } catch (e) {
-        console.warn("Failed saving to localStorage", e);
-      }
-    }
-  }, [workItems, asItems, folders, images, materials, isLoading]);
-
   // 서버 저장이 확인된 데이터만 화면에 반영합니다.
   const addWorkItem = async (item: Omit<WorkItem, "id" | "createdAt">) => {
     const result = await save<WorkItem>("/api/posts", "POST", { ...item, id: crypto.randomUUID(), type: "work" });
@@ -159,6 +220,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const updateWorkItem = async (id: string, updates: Partial<WorkItem>) => {
     await save("/api/posts", "PUT", { ...updates, id, type: "work" });
+    detailCache.current.delete(id);
     setWorkItems((prev) => prev.map((item) => item.id === id ? { ...item, ...updates } : item));
   };
 
@@ -232,7 +294,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteImage = async (id: string) => {
-    const target = galleryImages.find((img) => img.id === id);
+    const target = images.find((img) => img.id === id) || galleryImages.find((img) => img.id === id);
     if (!target) return;
     await save(`/api/gallery?id=${encodeURIComponent(id)}&type=image`, "DELETE");
     setImages((prev) => prev.filter((img) => img.id !== id));
@@ -411,7 +473,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       return pending;
     };
 
-  const metrics = getDashboardMetrics(workItems, asItems);
+  const metrics = {...getDashboardMetrics(workItems, asItems),...(metricCounts || {})};
   const galleryImages = [
     ...images.filter(image => !image.id.startsWith("attachment-")),
     ...workItems.flatMap(item => (item.attachments || []).filter(attachment => attachment.fileType === "image").map(attachment => orderGalleryImage(item, attachment))),
@@ -423,7 +485,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         workItems,
         asItems,
         folders,
-        images: galleryImages,
+        images: pathname === "/gallery" ? images : galleryImages,
         materials,
         purchaseItems,
         metrics,
@@ -431,6 +493,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         error,
         isSaving: pendingWrites > 0,
         reloadData,
+        loadWorkList,
+        loadWorkDetail,
+        loadGallery,
+        loadMoreComments,
+        workHasMore,
         dismissError: () => setError(null),
         addWorkItem: observeAction(addWorkItem),
         updateWorkItem: observeAction(updateWorkItem),

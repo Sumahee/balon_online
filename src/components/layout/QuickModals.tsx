@@ -22,6 +22,7 @@ export function QuickModals() {
   const [clientsList, setClientsList] = useState<ClientInfo[]>([]);
 
   useEffect(() => {
+    if(!quickModalType)return;
     fetch("/api/clients")
       .then((res) => res.json())
       .then((data) => {
@@ -31,7 +32,7 @@ export function QuickModals() {
       })
       .catch(() => {});
 
-  }, []);
+  }, [quickModalType]);
 
   const [customTitle, setCustomTitle] = useState<string | null>(null);
   const [calendarVisible, setCalendarVisible] = useState<boolean | null>(null);

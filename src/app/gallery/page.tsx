@@ -2,7 +2,7 @@
 
 import { PageHeader } from "@/components/common/PageHeader";
 
-import React, { useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   FolderPlus,
   Folder,
@@ -22,17 +22,22 @@ import { useData } from "@/context/DataContext";
 
 import { cn } from "@/lib/utils";
 import { galleryFolders, matchesGalleryFolder, ORDER_FOLDER } from "@/lib/construction-gallery";
+import { compressPhoto } from "@/lib/photo-compression";
 
 import { BulkSelectionBar, useBulkSelection } from "@/components/common/BulkSelection";
 
 function thumbnailUrl(url: string, id: string, width: number) {
   if (url.startsWith("/api/gallery?")) return `${url}&thumbnail=${width}`;
-  if (url.startsWith("data:image/")) return `/api/gallery?source=gallery&id=${encodeURIComponent(id)}&thumbnail=${width}`;
+  if (url.startsWith("data:image/") || url.startsWith("/uploads/")) return `/api/gallery?source=gallery&id=${encodeURIComponent(id)}&thumbnail=${width}`;
   return url;
 }
 
 export default function GalleryPage() {
-  const { folders, images, addFolder, addImage, deleteImage, isSaving } = useData();
+  const { folders, images, addFolder, addImage, deleteImage, isSaving, loadGallery } = useData();
+  const [galleryLoading,setGalleryLoading]=useState(false);
+  const [galleryError,setGalleryError]=useState("");
+  const [hasMore,setHasMore]=useState(false);
+  const offset=useRef(0);
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [selectedFolderId, setSelectedFolderId] = useState<string>("folder-construction");
@@ -44,6 +49,14 @@ export default function GalleryPage() {
   const [selectedColor, setSelectedColor] = useState<string>("all");
   const [hasMirror, setHasMirror] = useState<boolean | null>(null);
   const [hasDrawer, setHasDrawer] = useState<boolean | null>(null);
+  const galleryParams = new URLSearchParams({folder_id:selectedFolderId,q:searchQuery,drawing:selectedType,color:selectedColor}).toString();
+  useEffect(()=>{
+    if(!loadGallery)return;
+    let active=true;
+    const timer=setTimeout(()=>{setGalleryLoading(true);setGalleryError("");offset.current=0;setLightboxIndex(null);void loadGallery(galleryParams).then(more=>{if(active){setHasMore(more);offset.current=30;}}).catch(cause=>{if(active)setGalleryError(cause instanceof Error?cause.message:"사진 조회 실패");}).finally(()=>{if(active)setGalleryLoading(false);});},200);
+    return()=>{active=false;clearTimeout(timer);};
+  },[galleryParams,loadGallery]);
+  const moreImages=async()=>{if(galleryLoading)return;setGalleryLoading(true);try{setHasMore(await loadGallery(`${galleryParams}&offset=${offset.current}`,true));offset.current+=30;}catch(cause){setGalleryError(cause instanceof Error?cause.message:"사진 조회 실패");}finally{setGalleryLoading(false);}};
 
   // Folder creation modal
   const [showFolderModal, setShowFolderModal] = useState(false);
@@ -184,7 +197,7 @@ export default function GalleryPage() {
       await addImage({
         folderId: targetFolderId,
         title: uploadTitle,
-        url: uploadPreview,
+        url: await compressPhoto(uploadPreview),
         siteName: uploadSiteName || "바론 INT 시공 현장",
         tags: Array.from(new Set(autoTags)),
         dimensions: "2400 x 1600",
@@ -369,6 +382,7 @@ export default function GalleryPage() {
 
       <div className="flex flex-wrap justify-between gap-3"><BulkSelectionBar selection={selection} disabled={isSaving} /><div className="flex gap-2"><button type="button" aria-pressed={viewMode === "grid"} onClick={() => setViewMode("grid")} className="action-secondary">격자 보기</button><button type="button" aria-pressed={viewMode === "list"} onClick={() => setViewMode("list")} className="action-secondary">목록 보기</button></div></div>
       {/* Photo Gallery Grid */}
+      {galleryError && <p role="alert" className="text-sm text-rose-700">{galleryError}</p>}
       {filteredImages.length === 0 ? (
         <div className="p-16 border-2 border-dashed border-slate-200 rounded-2xl bg-white text-center flex flex-col items-center justify-center gap-3">
           <div className="p-3 bg-slate-100 rounded-full text-slate-400">
@@ -471,6 +485,8 @@ export default function GalleryPage() {
       )}
 
       {/* Lightbox Modal */}
+      {galleryLoading && <p role="status" className="text-center text-sm text-slate-500">사진 목록 불러오는 중…</p>}
+      {hasMore && <button type="button" disabled={galleryLoading} onClick={()=>void moreImages()} className="action-secondary mx-auto">사진 30장 더보기</button>}
       {currentLightboxImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in">
           {/* Close button */}

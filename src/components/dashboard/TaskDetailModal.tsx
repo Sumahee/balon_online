@@ -1,6 +1,6 @@
 "use client";
+import { WorkDetailGate } from "@/components/common/WorkDetailGate";
 import { getWorkTitle } from "@/lib/work-title";
-import { useModalBack } from "@/lib/use-modal-back";
 import { PdfPreview } from "@/components/common/PdfPreview";
 import { workStatusLabel } from "@/lib/work-status";
 import { isCalendarVisible } from "@/lib/calendar-visibility";
@@ -45,9 +45,9 @@ interface TaskDetailModalProps {
   onClose: () => void;
 }
 
-export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
-  useModalBack(!!item, onClose);
-  const { workItems, updateWorkItem, isSaving, addComment, deleteComment, deleteCommentImage } = useData();
+export function TaskDetailModal({item,onClose}:TaskDetailModalProps) { return <WorkDetailGate item={item} onClose={onClose}>{loaded => <TaskDetailContent item={loaded} onClose={onClose} />}</WorkDetailGate>; }
+function TaskDetailContent({ item, onClose }: TaskDetailModalProps) {
+  const { workItems, updateWorkItem, isSaving, addComment, deleteComment, deleteCommentImage, loadMoreComments } = useData();
   const { user, token } = useAuth();
 
   // Reactive subscription to live item in DataContext
@@ -993,6 +993,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
             </details>
 
             {/* 💬 SNS 게시물/피드 스타일 현장 소통 댓글 섹션 */}
+            {liveItem?.commentsHasMore && <button type="button" disabled={isSaving} onClick={()=>{void loadMoreComments(item.id,liveItem.comments?.length || 0).catch(()=>alert("댓글을 불러오지 못했습니다."));}} className="w-full rounded-lg border bg-white py-2 text-xs">이전 댓글 20개 더보기</button>}
             <section className="sm:hidden px-2 space-y-2" aria-label="시공사진 첨부"><h2 className="text-sm font-bold">시공사진 첨부</h2><ConstructionPhotoDropZone onUpload={handleCommentPhotoSelect} disabled={isSaving} /><button type="button" onClick={() => commentFileInputRef.current?.click()} className="rounded-lg border px-3 py-1.5 text-xs">사진 선택</button></section>
 
             <div className="bg-slate-50 rounded-none sm:rounded-2xl border-y sm:border border-slate-200 px-0 py-3 sm:p-5 space-y-4">

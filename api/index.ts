@@ -58,6 +58,8 @@ export async function GET(request: NextRequest, context?: RouteContext) {
         return await drawingRequestsHandler.GET(request);
       case "gallery":
         return await galleryHandler.GET(request);
+      case "holidays":
+        return await (await import("@/lib/api-handlers/holidays")).GET(request);
       case "plywoods":
         return await plywoodsHandler.GET();
       case "materials":

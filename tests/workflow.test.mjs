@@ -31,6 +31,89 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
 
 const request = (body) => ({ json: async () => body });
 
+test("Korean holidays include substitute holidays and correct three-day lunar spans",()=>{
+  const {koreanHolidays}=loadModule("src/lib/korean-holidays.ts");
+  const holidays=koreanHolidays(2026);
+  assert.equal(holidays["2026-10-09"],"한글날");
+  assert.match(holidays["2026-10-05"],/대체공휴일/);
+  for(const date of ["2026-02-16","2026-02-17","2026-02-18"])assert.equal(holidays[date],"설날");
+  assert.equal(holidays["2026-02-19"],undefined);
+  assert.equal(holidays["2026-06-03"],"지방선거");
+  assert.equal(holidays["2026-05-01"],"노동절");
+  assert.match(koreanHolidays(2027)["2027-05-03"],/대체공휴일/);
+});
+
+test("real SQLite pagination stays small with large photo data and loads files only on demand", async () => {
+  const database=nativeRequire("@libsql/client").createClient({url:"file::memory:"});
+  try {
+    await database.executeMultiple(`CREATE TABLE bo_work_items(id TEXT PRIMARY KEY,type TEXT,title TEXT,client_name TEXT,site_address TEXT,region TEXT,drawing_type TEXT,card_type TEXT,deadline_type TEXT,delivery_date TEXT,category TEXT,assignee TEXT,priority TEXT,status TEXT,progress INTEGER,start_date TEXT,due_date TEXT,created_at TEXT,confirmation_pending INTEGER,calendar_visible INTEGER,post_color TEXT,board_color TEXT,description TEXT,notes TEXT,material_orders TEXT);
+      CREATE TABLE bo_attachments(id TEXT,work_item_id TEXT,name TEXT,file_type TEXT,size TEXT,uploaded_at TEXT,url TEXT);
+      CREATE TABLE bo_work_item_comments(id TEXT,work_item_id TEXT,author TEXT,content TEXT,created_at TEXT,images TEXT);`);
+    for(let index=0;index<65;index++)await database.execute({sql:"INSERT INTO bo_work_items(id,type,title,card_type,status,created_at,description) VALUES (?,'work',?,'도면','오피스','2026-10-13',?)",args:[String(index).padStart(3,"0"),`제목 ${index}`,"긴 본문".repeat(1000)]});
+    const photo="data:image/jpeg;base64,"+Buffer.from("photo".repeat(30000)).toString("base64");
+    await database.execute({sql:"INSERT INTO bo_work_item_comments VALUES ('c','064','기사','사진','2026-10-13',?)",args:[JSON.stringify(Array(10).fill(photo))]});
+    const pdf="data:application/pdf;base64,"+Buffer.from("pdf contents").toString("base64");
+    await database.execute({sql:"INSERT INTO bo_attachments VALUES ('a','064','도면.pdf','pdf','1 KB','2026-10-13',?)",args:[pdf]});
+    const mock={db:database,executeQuery:async(sql,args=[])=>{const result=await database.execute({sql,args});return {success:true,rows:result.rows};},executeMutation:async(sql,args=[])=>{const result=await database.execute({sql,args});return {success:true,rows:result.rows};}};
+    const cache=new Map();
+    const posts=loadModule("src/lib/api-handlers/posts.ts",{"@/lib/db":mock},{Response},cache);
+    const page1=await(await posts.GET({url:"http://localhost/api/posts?type=work&summary=1&limit=30"})).json();
+    const page2=await(await posts.GET({url:"http://localhost/api/posts?type=work&summary=1&limit=30&offset=30"})).json();
+    assert.equal(page1.data.length,30);assert.equal(page2.data.length,30);
+    assert.ok(!page2.data.some(item=>page1.data.some(old=>old.id===item.id)));
+    assert.ok(!JSON.stringify(page1).includes("긴 본문"));
+    const detail=await(await posts.GET({url:"http://localhost/api/posts?type=work&id=064"})).json();
+    assert.ok(!JSON.stringify(detail).includes(photo));assert.ok(!JSON.stringify(detail).includes(pdf));
+    assert.equal(detail.data[0].comments[0].images.length,10);
+    const file=await posts.GET({url:"http://localhost"+detail.data[0].attachments[0].url});
+    assert.equal(await file.text(),"pdf contents");
+    const gallery=loadModule("src/lib/api-handlers/gallery.ts",{"@/lib/db":mock},{Response},cache);
+    const photos=await(await gallery.GET({url:"http://localhost/api/gallery?limit=30&folder_id=folder-construction"})).json();
+    assert.equal(photos.data.images.length,10);assert.ok(!JSON.stringify(photos).includes(photo));
+  } finally { database.close(); }
+});
+
+test("summary work query returns 30 small rows and never reads body attachments or comments", async () => {
+  const queries=[];
+  const rows=Array.from({length:31},(_,index)=>({id:String(index),title:"목록 제목",cardType:"도면",status:"오피스",createdAt:"2026-10-13"}));
+  const {GET}=loadModule("src/lib/api-handlers/posts.ts",{
+    "@/lib/db":{db:{},executeQuery:async(sql,args)=>{queries.push({sql,args});return {success:true,rows};},executeMutation:async()=>({success:true})},
+    "@/lib/work-calendar-schema":{ensureWorkCalendarSchema:async()=>{}},
+    "@/lib/work-confirmation-schema":{ensureWorkConfirmationSchema:async()=>{}},
+  });
+  const result=await (await GET({url:"http://localhost/api/posts?type=work&summary=1&limit=30&from=2026-09-14"})).json();
+  assert.equal(result.data.length,30);
+  assert.equal(result.hasMore,true);
+  assert.equal(queries.length,1);
+  assert.ok(!/SELECT \*|description|notes|bo_attachments|bo_work_item_comments/.test(queries[0].sql));
+  assert.deepEqual(Array.from(queries[0].args),["2026-09-14",31,0]);
+  assert.equal(result.data[0].detailsLoaded,false);
+});
+
+test("work detail restricts related queries to the requested work and recent comments", async () => {
+  const queries=[];
+  const {GET}=loadModule("src/lib/api-handlers/posts.ts",{
+    "@/lib/db":{db:{},executeQuery:async(sql,args)=>{queries.push({sql,args});return {success:true,rows:sql.includes("FROM bo_work_items")?[{id:"chosen",title:"업무",description:"본문"}]:[]};}},
+  });
+  const result=await (await GET({url:"http://localhost/api/posts?type=work&id=chosen"})).json();
+  assert.equal(result.data[0].description,"본문");
+  assert.match(queries[0].sql,/WHERE id = \?/);
+  for(const query of queries.slice(1)){assert.match(query.sql,/WHERE work_item_id IN/);assert.deepEqual(Array.from(query.args),["chosen"]);}
+  assert.match(queries[2].sql,/LIMIT 21/);
+});
+
+test("gallery first page selects photo metadata with a server limit and no full photo URLs", async () => {
+  const queries=[];
+  const {GET}=loadModule("src/lib/api-handlers/gallery.ts",{
+    "@/lib/db":{db:{},executeQuery:async(sql,args)=>{queries.push({sql,args});return {success:true,rows:sql.includes("SELECT DISTINCT")?[]:[{work_id:"w",source:"comment",photo_id:"c",photo_index:4,title:"현장",client_name:"업체",created_at:"2026-10-13"}]};}},
+  },{Response});
+  const result=await(await GET({url:"http://localhost/api/gallery?limit=30&folder_id=folder-construction"})).json();
+  assert.match(queries[0].sql,/LIMIT \? OFFSET \?/);
+  assert.ok(!/SELECT c\.images|photo_url|w\.\*/.test(queries[0].sql));
+  assert.deepEqual(Array.from(queries[0].args).slice(-2),[31,0]);
+  assert.equal(result.data.images[0].url,"/api/gallery?source=comment&id=c&index=4");
+});
+
 test("phone back closes work modal and X removes its temporary history entry", () => {
   for (const phoneBack of [true, false]) {
     const effects = [], frames = [], handlers = new Map();

@@ -5,23 +5,26 @@ import { executeQuery, executeMutation } from "@/lib/db";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workItemId = searchParams.get("workItemId");
+  const offset=Math.max(0,Number(searchParams.get("offset")) || 0);
 
   if (!workItemId) {
     return NextResponse.json({ error: "workItemId is required" }, { status: 400 });
   }
 
   const result = await executeQuery(
-    `SELECT id, work_item_id as workItemId, author, content, images, created_at as createdAt 
-     FROM bo_work_item_comments 
+    `SELECT c.id, c.work_item_id as workItemId, c.author, c.content, c.created_at as createdAt,
+     (SELECT json_group_array(CASE WHEN j.value LIKE 'data:image/%' THEN '/api/gallery?source=comment&id=' || c.id || '&index=' || j.key ELSE j.value END) FROM json_each(CASE WHEN json_valid(c.images) THEN c.images ELSE '[]' END) j) AS images
+     FROM bo_work_item_comments c
      WHERE work_item_id = ? 
-     ORDER BY created_at ASC`,
-    [workItemId]
+     ORDER BY created_at DESC, id DESC LIMIT 21 OFFSET ?`,
+    [workItemId,offset]
   );
 
   return NextResponse.json({
     success: result.success,
     isMock: result.isMock,
-    comments: (result.rows || []).map(row=>{
+    hasMore:result.rows.length>20,
+    data: (result.rows || []).slice(0,20).reverse().map(row=>{
       let images: string[]=[];
       try { images=JSON.parse(String(row.images || "[]")); } catch { images=[String(row.images || "")]; }
       return {...row,images:images.map((url,index)=>url.startsWith("data:image/") ? `/api/gallery?source=comment&id=${encodeURIComponent(String(row.id))}&index=${index}` : url).filter(Boolean)};

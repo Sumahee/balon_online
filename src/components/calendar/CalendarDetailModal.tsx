@@ -1,6 +1,6 @@
 "use client";
+import { WorkDetailGate } from "@/components/common/WorkDetailGate";
 import { getWorkTitle } from "@/lib/work-title";
-import { useModalBack } from "@/lib/use-modal-back";
 import { isCalendarVisible } from "@/lib/calendar-visibility";
 import { ConstructionPhotoDropZone } from "@/components/common/ConstructionPhotoDropZone";
 
@@ -43,9 +43,9 @@ interface CalendarDetailModalProps {
   onClose: () => void;
 }
 
-export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps) {
-  useModalBack(!!item, onClose);
-  const { workItems, addComment, deleteComment, deleteCommentImage, deletePhotoFromWorkItem, uploadConstructionPhoto, updateWorkItem } = useData();
+export function CalendarDetailModal({item,onClose}:CalendarDetailModalProps) { return <WorkDetailGate item={item} onClose={onClose}>{loaded => <CalendarDetailContent item={loaded} onClose={onClose} />}</WorkDetailGate>; }
+function CalendarDetailContent({ item, onClose }: CalendarDetailModalProps) {
+  const { workItems, addComment, deleteComment, deleteCommentImage, deletePhotoFromWorkItem, uploadConstructionPhoto, updateWorkItem, loadMoreComments } = useData();
 
   // Reactive subscription to live item in DataContext
   const liveItem = workItems.find((w) => w.id === item.id) || item;
@@ -778,6 +778,7 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
 
           {/* SECTION 3: SNS COMMENTS TIMELINE FEED & INPUT AT BOTTOM */}
           <div id="cal-sec-comments" className="bg-slate-50 px-0 py-3 sm:p-5 rounded-none sm:rounded-2xl border border-slate-200 space-y-4 text-xs">
+            {liveItem.commentsHasMore && <button type="button" disabled={isSaving} onClick={()=>{void loadMoreComments(liveItem.id,liveItem.comments?.length || 0).catch(()=>alert("댓글을 불러오지 못했습니다."));}} className="w-full rounded-lg border bg-white py-2">이전 댓글 20개 더보기</button>}
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-indigo-600 text-white shadow-xs">

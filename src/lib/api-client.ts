@@ -4,6 +4,7 @@ interface ApiResponse<T> {
   message?: string;
   error?: string;
   isMock?: boolean;
+  hasMore?: boolean;
 }
 
 /** HTTP 오류와 서버가 반환하는 저장 실패를 함께 확인합니다. */

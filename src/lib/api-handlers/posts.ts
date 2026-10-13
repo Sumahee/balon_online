@@ -6,6 +6,7 @@ import { getToday } from "@/lib/date";
 import { ensureAsSchema } from "@/lib/as-schema";
 import { ensureWorkConfirmationSchema } from "@/lib/work-confirmation-schema";
 import { ensureWorkCalendarSchema } from "@/lib/work-calendar-schema";
+import { workSummary, WORK_SUMMARY_COLUMNS } from "@/lib/work-list";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -14,10 +15,53 @@ export async function GET(request: NextRequest) {
   const query = searchParams.get("q")?.toLowerCase();
 
   if (type === "work") {
+    const attachmentId=searchParams.get("attachment_id");
+    if(attachmentId && db) {
+      const result=await executeQuery("SELECT url FROM bo_attachments WHERE id = ?",[attachmentId]);
+      if(!result.success)return new Response("File read failed",{status:503});
+      const url=String(result.rows[0]?.url || "");
+      const data=url.match(/^data:([\w.+/-]+);base64,([A-Za-z0-9+/=]+)$/);
+      if(data)return new Response(Buffer.from(data[2],"base64"),{headers:{"Content-Type":data[1],"Cache-Control":"private, max-age=3600","X-Content-Type-Options":"nosniff"}});
+      if(/^(https?:\/\/|\/uploads\/)/.test(url))return NextResponse.redirect(new URL(url,request.url));
+      return new Response("File not found",{status:404});
+    }
+    const detailId = searchParams.get("id");
+    if (searchParams.get("summary") === "1") {
+      const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit")) || 30));
+      const offset = Math.max(0, Number(searchParams.get("offset")) || 0);
+      const from = searchParams.get("from");
+      const to = searchParams.get("to");
+      const mode = searchParams.get("mode");
+      const category = searchParams.get("category");
+      const filters: string[] = []; const values: (string | number)[] = [];
+      const dateColumn = mode === "calendar" ? "COALESCE(NULLIF(delivery_date,''),due_date)" : "substr(created_at,1,10)";
+      if (from) {filters.push(`${dateColumn} >= ?`);values.push(from);}
+      if (to) {filters.push(`${dateColumn} <= ?`);values.push(to);}
+      if (mode === "active") filters.push("status != '시공완료'");
+      if (mode === "calendar") filters.push("COALESCE(calendar_visible, CASE WHEN card_type = '도면' THEN 1 ELSE 0 END) = 1");
+      if (status && status !== "전체") {filters.push("status = ?");values.push(status);}
+      if (category && category !== "전체") {filters.push("category = ?");values.push(category);}
+      if (query) {filters.push("(LOWER(title) LIKE ? OR LOWER(client_name) LIKE ? OR LOWER(site_address) LIKE ?)");values.push(...Array(3).fill(`%${query}%`));}
+      if (db) {
+        try {
+          await ensureWorkCalendarSchema(); await ensureWorkConfirmationSchema();
+          const result = await executeQuery(`SELECT ${WORK_SUMMARY_COLUMNS} FROM bo_work_items ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`, [...values,limit+1,offset]);
+          if (!result.success) throw new Error("목록 조회 실패");
+          const data = result.rows.slice(0,limit).map(row => ({...row, confirmationPending:Number(row.confirmationPending) === 1, calendarVisible:row.calendarVisible == null ? undefined : Number(row.calendarVisible) === 1, detailsLoaded:false}));
+          return NextResponse.json({success:true,data,hasMore:result.rows.length>limit});
+        } catch { return NextResponse.json({success:false,message:"업무 목록을 불러오지 못했습니다."},{status:503}); }
+      }
+      const matches = serverStore.getWorkItems().filter(item => {
+        const date = mode === "calendar" ? item.deliveryDate || item.dueDate : item.createdAt?.slice(0,10);
+        return (!from || date >= from) && (!to || date <= to) && (mode !== "active" || item.status !== "시공완료") && (mode !== "calendar" || (item.calendarVisible ?? item.cardType === "도면")) && (!status || status === "전체" || item.status === status) && (!category || category === "전체" || item.category === category) && (!query || [item.title,item.clientName,item.siteAddress].some(value=>value?.toLowerCase().includes(query)));
+      }).sort((a,b)=>b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+      return NextResponse.json({success:true,data:matches.slice(offset,offset+limit).map(workSummary),hasMore:matches.length>offset+limit});
+    }
     if (db) {
       let sql = "SELECT * FROM bo_work_items";
       const conditions: string[] = [];
       const args: any[] = [];
+      if (detailId) { conditions.push("id = ?"); args.push(detailId); }
 
       if (status && status !== "전체") {
         conditions.push("status = ?");
@@ -36,8 +80,14 @@ export async function GET(request: NextRequest) {
       if (!res.success) return NextResponse.json({ success: false, message: "업무 데이터를 불러오지 못했습니다." }, { status: 503 });
       if (res.success && res.rows) {
         // Load attachments and comments for live items
-        const attRes = await executeQuery("SELECT * FROM bo_attachments", []);
-        const cmtRes = await executeQuery("SELECT * FROM bo_work_item_comments ORDER BY created_at ASC", []);
+        const ids = res.rows.map(row=>String(row.id));
+        const scope = ids.length ? `WHERE work_item_id IN (${ids.map(()=>"?").join(",")})` : "WHERE 1 = 0";
+        const [attRes,cmtRes] = await Promise.all([
+          executeQuery(`SELECT id,work_item_id,name,file_type,size,uploaded_at,CASE WHEN url LIKE 'data:%' THEN '/api/posts?type=work&attachment_id=' || id ELSE url END AS url FROM bo_attachments ${scope}`, ids),
+          executeQuery(`SELECT c.id,c.work_item_id,c.author,c.content,c.created_at,
+            (SELECT json_group_array(CASE WHEN j.value LIKE 'data:image/%' THEN '/api/gallery?source=comment&id=' || c.id || '&index=' || j.key ELSE j.value END) FROM json_each(CASE WHEN json_valid(c.images) THEN c.images ELSE '[]' END) j) AS images
+            FROM bo_work_item_comments c ${scope} ORDER BY created_at ${detailId ? "DESC LIMIT 21" : "ASC"}`, ids),
+        ]);
         if (!attRes.success || !cmtRes.success) return NextResponse.json({ success: false, message: "첨부파일 또는 댓글을 불러오지 못했습니다." }, { status: 503 });
 
         const attMap = new Map<string, any[]>();
@@ -58,7 +108,7 @@ export async function GET(request: NextRequest) {
 
         const cmtMap = new Map<string, any[]>();
         if (cmtRes.success && cmtRes.rows) {
-          for (const c of cmtRes.rows) {
+          for (const c of detailId ? cmtRes.rows.slice(0,20).reverse() : cmtRes.rows) {
             let images: string[] = [];
             if (c.images) {
               try {
@@ -91,6 +141,8 @@ export async function GET(request: NextRequest) {
           return {
             id: String(row.id),
             type: "work",
+            detailsLoaded: true,
+            commentsHasMore: !!detailId && cmtRes.rows.length > 20,
             title: String(row.title || ""),
             confirmationPending: Number(row.confirmation_pending || 0) === 1,
             calendarVisible: row.calendar_visible == null ? undefined : Number(row.calendar_visible) === 1,
@@ -125,6 +177,7 @@ export async function GET(request: NextRequest) {
     }
 
     let items = serverStore.getWorkItems();
+    if (detailId) items = items.filter(item=>item.id === detailId);
     if (status && status !== "전체") {
       items = items.filter((item) => item.status === status);
     }

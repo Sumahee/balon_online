@@ -23,7 +23,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useData } from "@/context/DataContext";
 import { useAuth } from "@/context/AuthContext";
-import { TaskDetailModal } from "@/components/dashboard/TaskDetailModal";
+import dynamic from "next/dynamic";
+const TaskDetailModal=dynamic(()=>import("@/components/dashboard/TaskDetailModal").then(module=>module.TaskDetailModal),{ssr:false});
 
 interface KanbanBoardProps {
   items: WorkItem[];

@@ -23,7 +23,7 @@ import { GanttChart } from "@/components/dashboard/GanttChart";
 import { KanbanBoard } from "@/components/dashboard/KanbanBoard";
 
 export default function DashboardPage() {
-  const { workItems, asItems, metrics, setQuickModalType } = useData();
+  const { workItems, asItems, metrics, setQuickModalType, workHasMore, loadWorkList, isLoading } = useData();
   const [showGantt, setShowGantt] = useState(false);
 
   const urgentAsList = asItems.filter(
@@ -80,6 +80,7 @@ export default function DashboardPage() {
         </div>
 
         <KanbanBoard items={workItems} />
+        {workHasMore && <button disabled={isLoading} onClick={()=>{void loadWorkList(`mode=active&limit=30&offset=${workItems.length}`,true).catch(()=>{});}} className="action-secondary mx-auto">진행 업무 30건 더보기</button>}
       </section>
 
       <details className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -129,7 +130,7 @@ export default function DashboardPage() {
             <span className="text-xs text-slate-400 font-medium">건 가동 중</span>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-            <span>대기 중 {metrics.kanban.todo.length}건 대기</span>
+            <span>대기 중 {metrics.todoCount ?? metrics.kanban.todo.length}건 대기</span>
             <span className="text-amber-600 font-medium">집중 공정 관리</span>
           </div>
         </div>
@@ -168,7 +169,7 @@ export default function DashboardPage() {
             <span className="text-2xl sm:text-3xl font-extrabold text-emerald-600">
               {metrics.completionRate}%
             </span>
-            <span className="text-xs text-slate-400 font-medium">준비완료 {metrics.kanban.ready.length}건</span>
+            <span className="text-xs text-slate-400 font-medium">준비완료 {metrics.readyCount ?? metrics.kanban.ready.length}건</span>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100">
             <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">

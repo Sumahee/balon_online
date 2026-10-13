@@ -1,7 +1,8 @@
 "use client";
 
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { getToday } from "@/lib/date";
 import {
   Plus,
   Search,
@@ -18,24 +19,43 @@ import { WorkOverview } from "@/components/dashboard/WorkOverview";
 import { KanbanBoard } from "@/components/dashboard/KanbanBoard";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
 import { getMaterialOrders } from "@/lib/materialUtils";
-import { TaskDetailModal } from "@/components/dashboard/TaskDetailModal";
+import dynamic from "next/dynamic";
+const TaskDetailModal=dynamic(()=>import("@/components/dashboard/TaskDetailModal").then(module=>module.TaskDetailModal),{ssr:false});
 
 import { getWorkTitle } from "@/lib/work-title";
 import { workStatusLabel } from "@/lib/work-status";
 import { BulkSelectionBar, useBulkSelection } from "@/components/common/BulkSelection";
 
 export default function WorkBoardPage() {
-  const { workItems, updateWorkItem, deleteWorkItem, advanceWorkStatus, setQuickModalType, isSaving } = useData();
+  const { workItems, updateWorkItem, deleteWorkItem, advanceWorkStatus, setQuickModalType, isSaving, loadWorkList, loadWorkDetail, isLoading } = useData();
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [period, setPeriod] = useState("recent");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("전체");
   const [selectedCategory, setSelectedCategory] = useState<string>("전체");
   const [viewMode, setViewMode] = useState<"kanban" | "table" | "card">("table");
+  useEffect(() => {
+    if (!loadWorkList) return;
+    let active = true;
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams({limit:"30",offset:String(page*30),q:searchQuery,status:selectedStatus,category:selectedCategory});
+      if(period === "recent" && !searchQuery.trim() && viewMode !== "kanban") {
+        const from = new Date(`${getToday()}T12:00:00Z`); from.setUTCDate(from.getUTCDate()-29);
+        params.set("from",from.toISOString().slice(0,10));
+      }
+      if((period === "active" || viewMode === "kanban") && selectedStatus !== "시공완료") params.set("mode","active");
+      void loadWorkList(params.toString()).then(more=>{if(active)setHasMore(more);}).catch(()=>{});
+    }, 250);
+    return () => {active=false;clearTimeout(timer);};
+  }, [loadWorkList,page,period,searchQuery,selectedStatus,selectedCategory,viewMode]);
 
   // Detail Modal & Edit Modal state
   const [selectedTask, setSelectedTask] = useState<WorkItem | null>(null);
   const [editingItem, setEditingItem] = useState<WorkItem | null>(null);
+  const openEdit=async(item:WorkItem)=>{try{setEditingItem(loadWorkDetail ? await loadWorkDetail(item.id) : item);}catch{alert("업무 내용을 불러오지 못했습니다. 다시 시도해주세요.");}};
 
   // Filter items
   const filteredItems = workItems.filter((item) => {
@@ -104,7 +124,11 @@ export default function WorkBoardPage() {
           <button type="button" onClick={() => setQuickModalType("work")} className="action-primary !px-3 !text-xs sm:!text-sm"><Plus className="h-4 w-4" />새 업무 등록</button>
         </div>
       </div>
-      {searchOpen && <input autoFocus type="search" aria-label="업무 검색어" placeholder="업무명, 업체, 현장 검색…" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />}
+      {searchOpen && <input autoFocus type="search" aria-label="업무 검색어" placeholder="업무명, 업체, 현장 검색…" value={searchQuery} onChange={event => {setSearchQuery(event.target.value);setPage(0);}} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <select aria-label="업무 조회 범위" value={period} onChange={event=>{setPeriod(event.target.value);setPage(0);}} className="rounded-lg border bg-white px-2 py-1.5"><option value="recent">최근 30일</option><option value="active">진행 중 전체 기간</option><option value="all">전체 기간</option></select>
+        <div className="flex items-center gap-2"><button disabled={page === 0 || isLoading} onClick={()=>setPage(value=>value-1)} className="disabled:opacity-30 p-1.5">이전</button><span>{page+1}페이지</span><button disabled={!hasMore || isLoading} onClick={()=>setPage(value=>value+1)} className="disabled:opacity-30 p-1.5">다음</button></div>
+      </div>
 
       <section className="work-board-mobile space-y-3" aria-label="모바일 업무 목록">
         <details className="text-xs text-slate-600"><summary className="cursor-pointer">선택 삭제</summary><div className="pt-2"><BulkSelectionBar selection={mobileSelection} disabled={isSaving} /></div></details>
@@ -138,7 +162,7 @@ export default function WorkBoardPage() {
             type="text"
             placeholder="업무명, 업체, 현장주소, 담당자 검색…"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {setSearchQuery(e.target.value);setPage(0);}}
             className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -150,7 +174,7 @@ export default function WorkBoardPage() {
             {["전체", "대기", "오피스", "공장", "준비완료", "시공완료"].map((st) => (
               <button
                 key={st}
-                onClick={() => setSelectedStatus(st)}
+                onClick={() => {setSelectedStatus(st);setPage(0);}}
                 className={cn(
                   "px-3 py-2 rounded-md transition cursor-pointer",
                   selectedStatus === st ? "bg-white text-slate-900 font-bold shadow-2xs" : "hover:text-slate-900"
@@ -164,7 +188,7 @@ export default function WorkBoardPage() {
           {/* Category dropdown */}
           <select
             value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
+            onChange={(e) => {setSelectedCategory(e.target.value);setPage(0);}}
             className="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="전체">모든 구분</option>
@@ -223,7 +247,7 @@ export default function WorkBoardPage() {
 
       {/* Table View */}
       <BulkSelectionBar selection={selection} disabled={isSaving} />
-      <p className="text-sm text-slate-600">전체 {workItems.length}건 · 현재 {filteredItems.length}건 표시</p>
+      <p className="text-sm text-slate-600">현재 페이지 {filteredItems.length}건 표시</p>
 
       {viewMode === "table" && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
@@ -318,7 +342,7 @@ export default function WorkBoardPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setEditingItem(item);
+                              void openEdit(item);
                             }}
                             className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition cursor-pointer"
                             title="수정"
@@ -412,7 +436,7 @@ export default function WorkBoardPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setEditingItem(item);
+                        void openEdit(item);
                       }}
                       className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded-lg cursor-pointer"
                     >

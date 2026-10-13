@@ -9,7 +9,10 @@ import { MobileHeader } from "@/components/layout/MobileHeader";
 import { MobileDrawer } from "@/components/layout/MobileDrawer";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { DataStatus } from "@/components/layout/DataStatus";
-import { QuickModals } from "@/components/layout/QuickModals";
+import dynamic from "next/dynamic";
+import { useData } from "@/context/DataContext";
+const QuickModals=dynamic(()=>import("@/components/layout/QuickModals").then(module=>module.QuickModals),{ssr:false});
+function LazyQuickModals(){const {quickModalType}=useData();return quickModalType ? <QuickModals /> : null;}
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
@@ -53,7 +56,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <MobileBottomNav onOpenDrawer={() => setIsMobileDrawerOpen(true)} />
 
           {/* Global Quick Action Modals */}
-          <QuickModals />
+          <LazyQuickModals />
         </div>
       </DataProvider>
     </AuthProvider>

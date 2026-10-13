@@ -22,7 +22,7 @@ export function galleryFolders(folders: GalleryFolder[], images: GalleryImage[])
   const companyIds = [...new Set(images.filter(image => image.folderId.startsWith(`${ORDER_FOLDER}-`)).map(image => image.folderId))];
   return [make("folder-construction", "시공 사진", "댓글에서 등록한 시공 사진과 도면·자재 정보"), make(ORDER_FOLDER, "업체 발주 자료", "업무 본문에 첨부한 발주·참고 이미지"),
     ...companyIds.map(id => make(id, `${decodeURIComponent(id.slice(ORDER_FOLDER.length + 1))} 발주 자료`, "업체별 업무 발주자료")),
-    ...folders.filter(folder => folder.id !== "folder-construction" && !folder.id.startsWith(ORDER_FOLDER)),
+    ...folders.filter(folder => folder.id !== "folder-construction" && folder.id !== ORDER_FOLDER && !companyIds.includes(folder.id)),
   ];
 }
 

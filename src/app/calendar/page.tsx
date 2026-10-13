@@ -25,12 +25,14 @@ import {
 import { useData } from "@/context/DataContext";
 import { WorkItem, AsItem, AttachmentItem, ClientInfo, DrawingType } from "@/types";
 import { cn } from "@/lib/utils";
-import { CalendarDetailModal } from "@/components/calendar/CalendarDetailModal";
-import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
+import dynamic from "next/dynamic";
+const CalendarDetailModal=dynamic(()=>import("@/components/calendar/CalendarDetailModal").then(module=>module.CalendarDetailModal),{ssr:false});
+const UnifiedBoardEditor=dynamic(()=>import("@/components/common/UnifiedBoardEditor").then(module=>module.UnifiedBoardEditor),{ssr:false});
 import { MobileMonthCalendar } from "@/components/calendar/MobileMonthCalendar";
 
 import { generateWorkTitle, getWorkTitle } from "@/lib/work-title";
 import { isCalendarVisible } from "@/lib/calendar-visibility";
+import { useHolidays } from "@/lib/use-holidays";
 
 const REGIONS = ["전체", "반포", "일산", "서초", "한남", "성수", "판교", "분당"];
 
@@ -92,9 +94,20 @@ interface CalendarEvent {
 
 export default function CalendarPage() {
   const { user } = useAuth();
-  const { workItems, asItems, addWorkItem, isSaving } = useData();
+  const { workItems, asItems, addWorkItem, isSaving, loadWorkList } = useData();
 
   const [currentDate, setCurrentDate] = useState(new Date(`${getToday()}T00:00:00`));
+  const holidays=useHolidays(currentDate.getFullYear());
+  React.useEffect(() => {
+    if(!loadWorkList) return;
+    let active = true;
+    const year=currentDate.getFullYear(), month=currentDate.getMonth();
+    const format=(date:Date)=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+    const start=new Date(year,month,1); start.setDate(1-start.getDay());
+    const end=new Date(start); end.setDate(start.getDate()+41);
+    void (async()=>{let offset=0,more=true;while(active && more){more=await loadWorkList(new URLSearchParams({mode:"calendar",from:format(start),to:format(end),limit:"100",offset:String(offset)}).toString(),offset>0);offset+=100;}})().catch(()=>{});
+    return()=>{active=false;};
+  },[currentDate,loadWorkList]);
   const [viewMode, setViewMode] = useState<"month" | "list">("month");
   const [selectedRegion, setSelectedRegion] = useState("전체");
   const [searchQuery, setSearchQuery] = useState("");
@@ -121,18 +134,19 @@ export default function CalendarPage() {
 
   // Load live clients list from shared DB (READ-ONLY)
   React.useEffect(() => {
+    if(!isAddModalOpen)return;
     fetch("/api/clients")
       .then((r) => r.json())
       .then((data) => {
         if (data.success && Array.isArray(data.clients)) {
           setClientsList(data.clients);
-          if (!newClient && data.clients.length > 0) {
-            setNewClient(data.clients[0].name);
+          if (data.clients.length > 0) {
+            setNewClient(previous=>previous || data.clients[0].name);
           }
         }
       })
       .catch(() => {});
-  }, []);
+  }, [isAddModalOpen]);
 
   // Filtered work & A/S items for Calendar
   const filteredEvents = useMemo(() => {
@@ -392,10 +406,11 @@ export default function CalendarPage() {
               return (
                 <div
                   key={idx}
+                  aria-current={day.dateStr === getToday() ? "date" : undefined}
                   onClick={handleCellClick}
                   className={cn(
                     "min-h-[95px] sm:min-h-[150px] lg:min-h-[180px] xl:min-h-[200px] p-1 sm:p-2.5 flex flex-col justify-between transition group hover:bg-blue-50/40 cursor-pointer relative select-none",
-                    day.isCurrentMonth ? "bg-white" : "bg-slate-50/70 text-slate-400"
+                    day.dateStr === getToday() ? "bg-blue-50 ring-2 ring-inset ring-blue-500" : day.isCurrentMonth ? "bg-white" : "bg-slate-50/70 text-slate-400"
                   )}
                 >
                   <div className="flex items-center justify-between font-mono font-bold mb-1">
@@ -421,6 +436,7 @@ export default function CalendarPage() {
 
                   {/* Day Event List Cards (Work & A/S - 1줄 콤팩트 스타일) */}
                   <div className="flex-1 space-y-1">
+                    {holidays[day.dateStr] && <div title={holidays[day.dateStr]} className="rounded-sm bg-red-700 px-2 py-1 text-[10px] font-bold text-white truncate">{holidays[day.dateStr]}</div>}
                     {dayEvents.slice(0, expandedDays.has(day.dateStr) ? undefined : 4).map((evt) => {
                       if (evt.type === "as" && evt.originalAsItem) {
                         const asItem = evt.originalAsItem;
@@ -468,7 +484,7 @@ export default function CalendarPage() {
                             <div className="flex items-center gap-1.5 min-w-0 truncate">
                               <span
                                 className={cn(
-                                  "text-[9px] px-1 py-0.2 rounded font-extrabold shrink-0 text-white",
+                                  "inline-flex h-4 w-4 items-center justify-center text-[9px] rounded-full font-extrabold shrink-0 text-white",
                                   dType === "천정형"
                                     ? "bg-emerald-600"
                                     : dType === "에보라"
@@ -478,7 +494,7 @@ export default function CalendarPage() {
                                     : "bg-slate-600"
                                 )}
                               >
-                                {dType}
+                                {dType.slice(0,1)}
                               </span>
                               <span className="truncate font-bold">{label}</span>
                             </div>
