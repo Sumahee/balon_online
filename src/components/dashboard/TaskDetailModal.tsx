@@ -394,7 +394,12 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
         className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-5 bg-black/70 backdrop-blur-xs animate-in fade-in overflow-y-auto">
         <div className="w-full sm:max-w-4xl bg-white rounded-none sm:rounded-2xl shadow-2xl border-0 sm:border border-slate-200 overflow-hidden flex flex-col h-[100dvh] sm:h-auto max-h-[100dvh] sm:max-h-[92vh]">
           {/* Top Bar */}
-          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div className="sm:hidden flex items-center gap-2 border-b border-slate-200 px-3 py-2 shrink-0 bg-white">
+            <span className="text-xs text-slate-500 shrink-0">{(liveItem?.deliveryDate || item.dueDate || "").slice(5).replace("-", ".")}</span>
+            <h1 className="min-w-0 flex-1 text-sm font-bold truncate">{getWorkTitle(liveItem || item)}</h1>
+            <button aria-label="상세 닫기" onClick={handleClose} className="p-1.5"><X className="h-5 w-5" /></button>
+          </div>
+          <div className="hidden sm:flex px-6 py-4 border-b border-slate-200 bg-slate-50 items-center justify-between">
             <div className="flex flex-wrap items-center gap-2.5">
               {/* Card Type Selector */}
               <div className="flex items-center gap-1 bg-white border border-slate-200 p-0.5 rounded-lg shadow-2xs">
@@ -442,7 +447,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
           {/* Modal Main Scrollable Content */}
           <div className="flex-1 overflow-y-auto px-0 py-3 sm:p-6 space-y-4">
             {/* Title & Metadata Strip */}
-            <div>
+            <div className="hidden sm:block">
               {isEditingTitle ? (
                 <div className="flex items-center gap-2">
                   <input
@@ -541,7 +546,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
 
             <section className="space-y-3" aria-label="기본정보와 본문">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-base font-bold text-slate-900">기본정보 · 업무 내용</h3>
+                <h3 className="hidden sm:block text-base font-bold text-slate-900">기본정보 · 업무 내용</h3>
                 <div className="flex items-center gap-2">
                   <span role="status" className="text-xs text-slate-500">{isBodyDirty || attachmentDraft !== null ? "저장하지 않은 변경" : descSaved ? "저장되었습니다" : ""}</span>
                   <button type="button" onClick={() => void handleSaveBody()} disabled={isSavingBody || isUploadingBody || isSaving || (!isBodyDirty && attachmentDraft === null)}
@@ -568,7 +573,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
             </section>
 
             {(liveItem?.cardType || "도면") === "도면" && (
-              <details className="rounded-xl border border-indigo-200 bg-indigo-50/30">
+              <details className="hidden sm:block rounded-xl border border-indigo-200 bg-indigo-50/30">
                 <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-indigo-950">도면 정보 · {drawingReq ? "전달 내역 및 도면 확인" : "아직 전달하지 않음"}</summary>
             {/* 🎨 바론 웹 도면 작업 연동 & 수동 전송 / 컨펌 섹션 */}
             <div className="p-4 bg-gradient-to-r from-indigo-50 via-slate-50 to-blue-50 rounded-2xl border border-indigo-200/80 shadow-xs space-y-4">
@@ -988,6 +993,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
             </details>
 
             {/* 💬 SNS 게시물/피드 스타일 현장 소통 댓글 섹션 */}
+            <section className="sm:hidden px-2 space-y-2" aria-label="시공사진 첨부"><h2 className="text-sm font-bold">시공사진 첨부</h2><ConstructionPhotoDropZone onUpload={handleCommentPhotoSelect} disabled={isSaving} /><button type="button" onClick={() => commentFileInputRef.current?.click()} className="rounded-lg border px-3 py-1.5 text-xs">사진 선택</button></section>
 
             <div className="bg-slate-50 rounded-none sm:rounded-2xl border-y sm:border border-slate-200 px-0 py-3 sm:p-5 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-200 pb-3">
@@ -1027,7 +1033,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                   </div>
                 )}
 
-                <ConstructionPhotoDropZone onUpload={handleCommentPhotoSelect} disabled={isSaving} />
+                <div className="hidden sm:block"><ConstructionPhotoDropZone onUpload={handleCommentPhotoSelect} disabled={isSaving} /></div>
                 <div className="flex gap-2">
                   <textarea
                     rows={2}
