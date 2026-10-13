@@ -675,34 +675,22 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
           </div>
 
           {/* SECTION 2: ATTACHED PHOTOS FEED & MULTI-PHOTO UPLOAD */}
-          <div id="cal-sec-photos" className="bg-amber-50/30 p-5 rounded-2xl border border-amber-200/80 space-y-4 text-xs">
-            <div className="flex items-center justify-between border-b border-amber-200/60 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-amber-500 text-white shadow-xs">
-                  <Camera className="w-5 h-5" />
+          <div id="cal-sec-photos" className="bg-amber-50/30 p-3 sm:p-5 rounded-2xl border border-amber-200/80 space-y-3 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/60 pb-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="p-1.5 rounded-lg bg-amber-500 text-white shrink-0">
+                  <Camera className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-                    <span>시공 현장 첨부 사진 피드</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                  <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5 whitespace-nowrap">
+                    <span>시공사진 첨부</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
                       {allPhotos.length}장
                     </span>
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    사진을 클릭하면 크게 확대되며 <strong>이전/다음 연속 슬라이더</strong>로 감상할 수 있습니다.
-                  </p>
                 </div>
               </div>
 
-              {/* Multi photo upload trigger button */}
-              <button
-                type="button"
-                onClick={() => document.getElementById("cal-local-device-photo-input")?.click()}
-                className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
-              >
-                <UploadCloud className="w-4 h-4" />
-                <span>📷 사진 여러 장 선택 업로드</span>
-              </button>
             </div>
 
 <ConstructionPhotoDropZone onUpload={handleCommentPhotoSelect} disabled={isSaving} />
