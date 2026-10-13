@@ -387,8 +387,8 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
   return (
     <>
       <div role="dialog" aria-modal="true" aria-label="업무 상세"
-        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 backdrop-blur-xs animate-in fade-in overflow-y-auto">
-        <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+        className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-5 bg-black/70 backdrop-blur-xs animate-in fade-in overflow-y-auto">
+        <div className="w-full sm:max-w-4xl bg-white rounded-none sm:rounded-2xl shadow-2xl border-0 sm:border border-slate-200 overflow-hidden flex flex-col h-[100dvh] sm:h-auto max-h-[100dvh] sm:max-h-[92vh]">
           {/* Top Bar */}
           <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
             <div className="flex flex-wrap items-center gap-2.5">
@@ -436,7 +436,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
           </div>
 
           {/* Modal Main Scrollable Content */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+          <div className="flex-1 overflow-y-auto px-0 py-3 sm:p-6 space-y-4">
             {/* Title & Metadata Strip */}
             <div>
               {isEditingTitle ? (
@@ -985,7 +985,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
 
             {/* 💬 SNS 게시물/피드 스타일 현장 소통 댓글 섹션 */}
 
-            <div className="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-4">
+            <div className="bg-slate-50 rounded-none sm:rounded-2xl border-y sm:border border-slate-200 px-0 py-3 sm:p-5 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                 <div className="flex items-center gap-2">
                   <div className="p-2 rounded-xl bg-indigo-600 text-white shadow-xs">
@@ -1002,28 +1002,8 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                 </div>
               </div>
 
-              {/* Quick Comment Chips */}
-              <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                <span className="text-xs font-bold text-slate-500 mr-1">⚡ 빠른 댓글:</span>
-                {[
-                  "✅ 현장 시공이 성공적으로 완료되었습니다!",
-                  "🚚 발주 자재 및 하드웨어 출고 완료",
-                  "📐 변경 도면 검토 요청드립니다.",
-                  "⚠️ 현장 실측 치수 재확인이 필요합니다.",
-                ].map((chip) => (
-                  <button
-                    key={chip}
-                    type="button"
-                    onClick={() => handleAddComment(chip)}
-                    className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 text-slate-700 hover:text-indigo-900 text-xs font-semibold transition cursor-pointer shadow-2xs"
-                  >
-                    {chip}
-                  </button>
-                ))}
-              </div>
-
-              {/* Comment Submission Form with Photo Attachment */}
-              <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+{/* Comment Submission Form with Photo Attachment */}
+              <div className="bg-white px-0 py-3 sm:p-3.5 rounded-none sm:rounded-xl border-y sm:border border-slate-200 shadow-2xs space-y-3">
                 {/* Photo attached preview row inside comment form */}
                 {commentAttachedPhotos.length > 0 && (
                   <div className="flex flex-wrap gap-2 p-2 bg-indigo-50/50 rounded-lg border border-indigo-100">
@@ -1099,7 +1079,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                     return (
                       <div
                         key={cmt.id}
-                        className="bg-white p-4 rounded-xl border border-slate-200 space-y-2 shadow-2xs hover:shadow-xs transition"
+                        className="bg-white px-0 py-3 sm:p-4 rounded-none sm:rounded-xl border-y sm:border border-slate-200 space-y-2 shadow-2xs hover:shadow-xs transition"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">

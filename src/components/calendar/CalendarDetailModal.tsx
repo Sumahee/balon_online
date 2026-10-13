@@ -337,8 +337,8 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
   const REGIONS_LIST = ["반포", "일산", "서초", "한남", "성수", "판교", "분당"];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+      <div className="bg-white rounded-none sm:rounded-2xl border-0 sm:border border-slate-200 shadow-2xl w-full sm:max-w-4xl h-[100dvh] sm:h-auto max-h-[100dvh] sm:max-h-[92vh] flex flex-col overflow-hidden">
         {/* Modal Header */}
         <div className="bg-slate-900 text-white p-5 flex items-center justify-between border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
@@ -644,7 +644,7 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
         )}
 
         {/* Modal Main Scrollable Content (Single Continuous SNS Post Feed) */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto px-0 py-3 sm:p-6 space-y-4">
           {/* SECTION 1: UNIFIED BOARD (TEXT + ATTACHMENTS + IMAGES + PDFS) */}
           <div id="cal-sec-blueprint" className="space-y-3 text-xs">
             <div className="flex items-center justify-between">
@@ -770,7 +770,7 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
           </div>
 
           {/* SECTION 3: SNS COMMENTS TIMELINE FEED & INPUT AT BOTTOM */}
-          <div id="cal-sec-comments" className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4 text-xs">
+          <div id="cal-sec-comments" className="bg-slate-50 px-0 py-3 sm:p-5 rounded-none sm:rounded-2xl border border-slate-200 space-y-4 text-xs">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-indigo-600 text-white shadow-xs">
@@ -787,29 +787,7 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
               </div>
             </div>
 
-            {/* Quick Comment Chips */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              <span className="text-xs font-bold text-slate-500 mr-1">⚡ 빠른 댓글:</span>
-              {[
-                "✅ 현장 시공이 성공적으로 완료되었습니다!",
-                "🚚 발주 자재 및 하드웨어 출고 완료",
-                "📐 변경 도면 검토 요청드립니다.",
-                "⚠️ 현장 실측 치수 재확인이 필요합니다.",
-              ].map((chip) => (
-                <button
-                  key={chip}
-                  type="button"
-                  onClick={async () => {
-                    await addComment(liveItem.id, authorName, chip);
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 text-slate-700 hover:text-indigo-900 text-xs font-semibold transition cursor-pointer shadow-2xs"
-                >
-                  {chip}
-                </button>
-              ))}
-            </div>
-
-            {/* Comments List Feed */}
+{/* Comments List Feed */}
             {(!liveItem.comments || liveItem.comments.length === 0) ? (
               <div className="p-6 bg-white rounded-xl border border-dashed border-slate-200 text-center text-slate-400">
                 등록된 댓글이 없습니다.
