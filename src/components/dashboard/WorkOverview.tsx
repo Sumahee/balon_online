@@ -1,4 +1,5 @@
 "use client";
+import { getWorkTitle } from "@/lib/work-title";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -48,7 +49,7 @@ export function WorkOverview() {
           {needsAttention.map((item) => (
             <li key={item.id}>
               <button type="button" onClick={() => setSelectedId(item.id)} className="flex w-full items-center justify-between gap-3 py-3 text-left hover:bg-slate-50 rounded-lg">
-                <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-900">{item.title}</p><p className="mt-1 text-sm text-slate-600">{item.clientName} · {item.assignee || "담당자 미지정"}</p></div>
+                <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-900">{getWorkTitle(item)}</p><p className="mt-1 text-sm text-slate-600">{item.clientName} · {item.assignee || "담당자 미지정"}</p></div>
                 <div className="shrink-0 text-right text-sm"><p className="font-medium text-slate-700">{item.status}</p><p className="mt-1 text-rose-700">{deadline(item) || "마감일 미지정"}</p></div>
               </button>
             </li>

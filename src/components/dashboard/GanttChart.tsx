@@ -1,4 +1,5 @@
 "use client";
+import { getWorkTitle } from "@/lib/work-title";
 
 import React, { useState } from "react";
 import { getToday } from "@/lib/date";
@@ -145,7 +146,7 @@ export function GanttChart({ items, onSelectTask }: GanttChartProps) {
                         {item.clientName || "협력사"}
                       </span>
                       <span className="text-xs font-bold text-slate-900 truncate group-hover:text-blue-600 transition">
-                        {item.title}
+                        {getWorkTitle(item)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-slate-500">
@@ -184,7 +185,7 @@ export function GanttChart({ items, onSelectTask }: GanttChartProps) {
                         left: `${((colStart - 1) / totalDays) * 100}%`,
                         width: `${(colSpan / totalDays) * 100}%`,
                       }}
-                      title={`${item.title} (${item.startDate} ~ ${item.dueDate}) - 진행률 ${item.progress}%`}
+                      title={`${getWorkTitle(item)} (${item.startDate} ~ ${item.dueDate}) - 진행률 ${item.progress}%`}
                     >
                       {/* Inner Progress overlay */}
                       <div
@@ -193,7 +194,7 @@ export function GanttChart({ items, onSelectTask }: GanttChartProps) {
                       />
 
                       <div className="relative z-10 flex items-center justify-between w-full text-[10px] font-bold text-white truncate drop-shadow-xs">
-                        <span className="truncate pr-1">{item.title}</span>
+                        <span className="truncate pr-1">{getWorkTitle(item)}</span>
                         <span className="shrink-0 opacity-90">{item.progress}%</span>
                       </div>
                     </div>

@@ -38,6 +38,9 @@ test("project titles use company and short location while preserving manual titl
   assert.equal(generateWorkTitle("바론", "경기도 고양시 일산 아파트 101동"), "바론, 일산");
   assert.equal(generateWorkTitle("바론", "", "반포"), "바론, 반포");
   assert.equal(getWorkTitle({ title: "직접 수정한 프로젝트", clientName: "바론", siteAddress: "반포동" }), "직접 수정한 프로젝트");
+  assert.equal(getWorkTitle({ title: "바론, 반포동(천정형)", clientName: "바론" }), "바론, 반포동");
+  assert.equal(getWorkTitle({ title: "바론, 반포동 (에보라)", clientName: "바론" }), "바론, 반포동");
+  assert.equal(getWorkTitle({ title: "바론 (추가 발주)", clientName: "바론" }), "바론 (추가 발주)");
 });
 
 test("calendar more button expands all events in the cell and can collapse again", () => {

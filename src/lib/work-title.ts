@@ -17,5 +17,6 @@ export function generateWorkTitle(clientName: string, address: string, region = 
 }
 
 export function getWorkTitle(item: Pick<WorkItem, "title" | "clientName" | "siteAddress" | "region">): string {
-  return item.title?.trim() || generateWorkTitle(item.clientName || "", item.siteAddress || "", item.region || "") || "제목 없는 업무";
+  const title = item.title?.replace(/\s*\((?:천정형|에보라|옴니버스|기타)\)\s*$/, "").trim();
+  return title || generateWorkTitle(item.clientName || "", item.siteAddress || "", item.region || "") || "제목 없는 업무";
 }

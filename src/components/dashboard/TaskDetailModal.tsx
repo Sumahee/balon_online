@@ -1,4 +1,5 @@
 "use client";
+import { getWorkTitle } from "@/lib/work-title";
 import { ConstructionPhotoDropZone } from "@/components/common/ConstructionPhotoDropZone";
 
 
@@ -306,7 +307,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
           if (drawingReq.resultPdfUrl) {
             const newAtt: AttachmentItem = {
               id: `att-dwg-${Date.now()}`,
-              name: `${item.title}_완성도면.pdf`,
+              name: `${getWorkTitle(item)}_완성도면.pdf`,
               url: drawingReq.resultPdfUrl,
               fileType: "pdf",
               size: "도면 파일",

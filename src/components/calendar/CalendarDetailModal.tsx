@@ -1,4 +1,5 @@
 "use client";
+import { getWorkTitle } from "@/lib/work-title";
 import { ConstructionPhotoDropZone } from "@/components/common/ConstructionPhotoDropZone";
 
 
@@ -349,7 +350,7 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
                   {liveItem.deadlineType || "시공일"}
                 </span>
                 <span className="font-extrabold text-white text-base">
-                  {liveItem.title}
+                  {getWorkTitle(liveItem)}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2 font-mono">

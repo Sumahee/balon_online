@@ -1,4 +1,5 @@
 "use client";
+import { getWorkTitle } from "@/lib/work-title";
 
 import { getToday, getDaysUntil } from "@/lib/date";
 
