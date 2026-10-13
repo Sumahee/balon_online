@@ -31,6 +31,25 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
 
 const request = (body) => ({ json: async () => body });
 
+test("calendar defaults to drawing tasks but manual visibility overrides both defaults", () => {
+  const { isCalendarVisible } = loadModule("src/lib/calendar-visibility.ts");
+  assert.equal(isCalendarVisible({cardType:"도면"}), true);
+  assert.equal(isCalendarVisible({cardType:"기타"}), false);
+  assert.equal(isCalendarVisible({cardType:"도면",calendarVisible:false}), false);
+  assert.equal(isCalendarVisible({cardType:"기타",calendarVisible:true}), true);
+});
+
+test("confirmation flag persists independently of office stage", async () => {
+  const { serverStore } = loadModule("src/lib/serverStore.ts");
+  const item = serverStore.addWorkItem({title:"컨펌 검증", status:"오피스", confirmationPending:false}, "confirmation-test");
+  serverStore.updateWorkItem(item.id, {confirmationPending:true});
+  const saved = serverStore.getWorkItems().find(value=>value.id === item.id);
+  assert.equal(saved.status,"오피스");
+  assert.equal(saved.confirmationPending,true);
+  serverStore.updateWorkItem(item.id, {confirmationPending:false});
+  assert.equal(serverStore.getWorkItems().find(value=>value.id === item.id).confirmationPending,false);
+});
+
 test("project titles use company and short location while preserving manual titles", () => {
   const { generateWorkTitle, getWorkTitle } = loadModule("src/lib/work-title.ts");
   assert.equal(generateWorkTitle("바론", "서울특별시 서초구 반포동 원베일리 104동 1201호"), "바론, 반포동");
@@ -47,7 +66,7 @@ test("calendar more button expands all events in the cell and can collapse again
   const states = [];
   let cursor = 0;
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-  const items = Array.from({ length: 7 }, (_, i) => ({ id: `work-${i}`, title: `현장 ${i}`, clientName: "바론", dueDate: today, status: "대기", priority: "보통" }));
+const items = Array.from({ length: 7 }, (_, i) => ({ id: `work-${i}`, title: `현장 ${i}`, clientName: "바론", cardType:"도면", dueDate: today, status: "대기", priority: "보통" }));
   const react = {
     useState: initial => { const index = cursor++; if (!(index in states)) states[index] = typeof initial === "function" ? initial() : initial; return [states[index], value => { states[index] = typeof value === "function" ? value(states[index]) : value; }]; },
     useMemo: callback => callback(), useEffect: () => {},

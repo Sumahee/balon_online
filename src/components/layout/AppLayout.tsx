@@ -31,7 +31,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <Sidebar />
 
           {/* Main Content Area */}
-          <div className="flex-1 flex flex-col min-w-0 lg:pl-64 transition-all duration-300 pb-16 lg:pb-0">
+          <div className="flex-1 flex flex-col min-w-0 lg:pl-64 transition-all duration-300">
             {/* Desktop Top Header (hidden on mobile) */}
             <div className="hidden lg:block">
               <TopBar />

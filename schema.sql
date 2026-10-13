@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS bo_work_items (
     assignee TEXT NOT NULL,                        -- 담당자
     priority TEXT NOT NULL DEFAULT '보통',          -- 긴급, 높음, 보통, 낮음
     status TEXT NOT NULL DEFAULT '대기',           -- 대기 -> 오피스 -> 공장 -> 준비완료 -> 시공완료
+    confirmation_pending INTEGER NOT NULL DEFAULT 0,
+    calendar_visible INTEGER,
     progress INTEGER NOT NULL DEFAULT 0,           -- 진척률 0 ~ 100
     start_date TEXT NOT NULL,                      -- 시작일 (YYYY-MM-DD)
     due_date TEXT NOT NULL,                        -- 마감일 (YYYY-MM-DD)

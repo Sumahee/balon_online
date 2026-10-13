@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu, Building2, Calendar as CalendarIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -11,6 +11,12 @@ interface MobileHeaderProps {
 
 export function MobileHeader({ onOpenDrawer }: MobileHeaderProps) {
   const pathname = usePathname();
+  const [calendarCompact, setCalendarCompact] = useState(false);
+  useEffect(() => {
+    const handle = (event: Event) => setCalendarCompact(Boolean((event as CustomEvent<boolean>).detail));
+    window.addEventListener("mobile-calendar-compact", handle);
+    return () => window.removeEventListener("mobile-calendar-compact", handle);
+  }, []);
 
   const getPageTitle = () => {
     switch (pathname) {
@@ -36,7 +42,7 @@ export function MobileHeader({ onOpenDrawer }: MobileHeaderProps) {
   };
 
   return (
-    <header className="lg:hidden sticky top-0 z-30 h-14 bg-slate-950 text-white border-b border-slate-800 px-3 flex items-center justify-between shadow-md">
+    <header className={`${pathname === "/calendar" && calendarCompact ? "hidden" : "flex"} lg:hidden sticky top-0 z-30 h-14 bg-slate-950 text-white border-b border-slate-800 px-3 items-center justify-between shadow-md`}>
       {/* Left: Circular Hamburger Button 🔘☰ */}
       <div className="flex items-center gap-2.5">
         <button

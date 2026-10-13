@@ -61,6 +61,8 @@ export interface WorkItem {
   assignee: string;
   priority: Priority;
   status: WorkStatus; // 대기 -> 오피스 -> 공장 -> 준비완료 -> 시공완료
+  confirmationPending?: boolean; // 업체 컨펌 대기 표시 (공정 상태와 별도)
+  calendarVisible?: boolean;
   progress: number; // 0 to 100
   startDate: string; // YYYY-MM-DD
   dueDate: string; // YYYY-MM-DD

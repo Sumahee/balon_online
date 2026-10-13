@@ -4,6 +4,8 @@ import { db, executeQuery, executeMutation } from "@/lib/db";
 import { WorkItem, AsItem } from "@/types";
 import { getToday } from "@/lib/date";
 import { ensureAsSchema } from "@/lib/as-schema";
+import { ensureWorkConfirmationSchema } from "@/lib/work-confirmation-schema";
+import { ensureWorkCalendarSchema } from "@/lib/work-calendar-schema";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -90,6 +92,8 @@ export async function GET(request: NextRequest) {
             id: String(row.id),
             type: "work",
             title: String(row.title || ""),
+            confirmationPending: Number(row.confirmation_pending || 0) === 1,
+            calendarVisible: row.calendar_visible == null ? undefined : Number(row.calendar_visible) === 1,
             clientName: String(row.client_name || "(주)바론 협력업체"),
             siteAddress: row.site_address ? String(row.site_address) : undefined,
             region: row.region ? String(row.region) : "반포",
@@ -312,7 +316,12 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      if (db && typeof body.calendarVisible === "boolean") {
+        await ensureWorkCalendarSchema();
+        await executeMutation("UPDATE bo_work_items SET calendar_visible = ? WHERE id = ?", [body.calendarVisible ? 1 : 0, id]);
+      }
       const newItem = serverStore.addWorkItem({
+        calendarVisible: typeof body.calendarVisible === "boolean" ? body.calendarVisible : safeCardType === "도면",
         type: "work",
         title,
         siteContactPhone, postColor, boardColor, drawingAssignee,
@@ -503,6 +512,17 @@ export async function PUT(request: NextRequest) {
         if (updates.notes !== undefined) {
           fields.push("notes = ?");
           args.push(updates.notes);
+        }
+        if (updates.calendarVisible !== undefined) {
+          if (typeof updates.calendarVisible !== "boolean") return NextResponse.json({success:false,message:"달력 표시 값을 확인해주세요."},{status:400});
+          await ensureWorkCalendarSchema();
+          fields.push("calendar_visible = ?"); args.push(updates.calendarVisible ? 1 : 0);
+        }
+        if (updates.confirmationPending !== undefined) {
+          if (typeof updates.confirmationPending !== "boolean") return NextResponse.json({success:false,message:"컨펌 상태를 확인해주세요."},{status:400});
+          await ensureWorkConfirmationSchema();
+          fields.push("confirmation_pending = ?");
+          args.push(updates.confirmationPending ? 1 : 0);
         }
         if (updates.description !== undefined) {
           fields.push("description = ?");

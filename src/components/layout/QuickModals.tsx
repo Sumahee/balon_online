@@ -34,6 +34,7 @@ export function QuickModals() {
   }, []);
 
   const [customTitle, setCustomTitle] = useState<string | null>(null);
+  const [calendarVisible, setCalendarVisible] = useState<boolean | null>(null);
 
   // Work form state
   const [workForm, setWorkForm] = useState<{
@@ -136,6 +137,7 @@ export function QuickModals() {
         region: getProjectLocation(workForm.siteAddress),
         drawingType: workForm.drawingType,
         cardType: workForm.cardType,
+        calendarVisible: calendarVisible ?? workForm.cardType === "도면",
         deadlineType: workForm.deadlineType,
         deliveryDate: workForm.deliveryDate,
         siteContactPhone: workForm.siteContactPhone,
@@ -156,6 +158,8 @@ export function QuickModals() {
         attachments: workForm.attachments,
       });
 
+      setCalendarVisible(null);
+      setCustomTitle(null);
       setWorkForm({
         clientName: "",
         siteAddress: "",
@@ -265,6 +269,7 @@ export function QuickModals() {
         {quickModalType === "work" && (
           <form onSubmit={handleWorkSubmit} className="flex-1 overflow-y-auto flex flex-col min-h-0">
             <div className="p-6 space-y-4 flex-1 overflow-y-auto">
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700"><input type="checkbox" checked={calendarVisible ?? workForm.cardType === "도면"} onChange={e => setCalendarVisible(e.target.checked)} />달력 표시</label>
               {/* 업체명 & 현장 주소/지역 (2열 배치) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>

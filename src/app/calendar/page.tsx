@@ -30,6 +30,7 @@ import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
 import { MobileMonthCalendar } from "@/components/calendar/MobileMonthCalendar";
 
 import { generateWorkTitle, getWorkTitle } from "@/lib/work-title";
+import { isCalendarVisible } from "@/lib/calendar-visibility";
 
 const REGIONS = ["전체", "반포", "일산", "서초", "한남", "성수", "판교", "분당"];
 
@@ -139,6 +140,7 @@ export default function CalendarPage() {
 
     (workItems || []).forEach((item) => {
       if (!item) return;
+      if (!isCalendarVisible(item)) return;
       const title = getWorkTitle(item);
       const clientName = item.clientName || "";
       const region = item.region || "";
@@ -163,34 +165,6 @@ export default function CalendarPage() {
           status: item.status,
           priority: item.priority,
           originalWorkItem: item,
-        });
-      }
-    });
-
-    (asItems || []).forEach((as) => {
-      if (!as) return;
-      const clientName = as.clientName || "";
-      const siteAddress = as.siteAddress || "";
-
-      const matchRegion =
-        selectedRegion === "전체" || siteAddress.includes(selectedRegion);
-      const matchQuery =
-        !searchQuery.trim() ||
-        clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        siteAddress.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        as.reason.toLowerCase().includes(searchQuery.toLowerCase());
-
-      if (matchRegion && matchQuery && as.asDate) {
-        events.push({
-          id: as.id,
-          type: "as",
-          dateStr: as.asDate,
-          clientName,
-          title: `[A/S] ${as.reason}`,
-          location: `🛠️ ${clientName} A/S`,
-          status: as.resultStatus,
-          priority: as.priority,
-          originalAsItem: as,
         });
       }
     });

@@ -198,8 +198,9 @@ export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) 
                         {/* Title is the primary information; do not repeat its client name. */}
                         <h5 className="text-[15px] font-semibold leading-6 text-slate-900 [overflow-wrap:anywhere]">
                           <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedTask(task); }} className="block w-full text-left cursor-pointer hover:text-blue-600" title={task.title}>
-                            <span className="line-clamp-2">{task.title}</span>
+                            <span className="line-clamp-2">{getWorkTitle(task)}</span>
                           </button>
+                          {task.confirmationPending && <span className="inline-flex items-center gap-1 mt-1 rounded-md border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800"><span className="h-1.5 w-1.5 rounded-full bg-amber-500" />컨펌중</span>}
                         </h5>
                         {clientName && !titleIncludesClient && (
                           <div className="flex min-w-0 items-center gap-1 text-xs text-slate-600" title={clientName}>

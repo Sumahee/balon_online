@@ -1,83 +1,31 @@
 "use client";
 
-import React from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, ClipboardList, Wrench, ShoppingBag, Menu } from "lucide-react";
+import { Calendar, ClipboardList, Wrench, ShoppingBag, Menu, X, Images, Calculator, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-interface MobileBottomNavProps {
-  onOpenDrawer: () => void;
-}
-
-export function MobileBottomNav({ onOpenDrawer }: MobileBottomNavProps) {
+export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) {
   const pathname = usePathname();
-
-  const TABS = [
-    {
-      name: "일정",
-      path: "/calendar",
-      icon: Calendar,
-      isHome: true,
-    },
-    {
-      name: "업무목록",
-      path: "/work",
-      icon: ClipboardList,
-    },
-    {
-      name: "A/S관리",
-      path: "/as",
-      icon: Wrench,
-    },
-    {
-      name: "자재구매",
-      path: "/purchases",
-      icon: ShoppingBag,
-    },
+  const [open, setOpen] = useState(false);
+  const tabs = [
+    {name:"일정",path:"/calendar",icon:Calendar},
+    {name:"업무목록",path:"/work",icon:ClipboardList},
+    {name:"A/S 관리",path:"/as",icon:Wrench},
+    {name:"자재구매",path:"/purchases",icon:ShoppingBag},
+    {name:"이미지 모음",path:"/gallery",icon:Images},
+    {name:"서랍장 계산",path:"/drawer",icon:Calculator},
+    {name:"합판 자재",path:"/materials",icon:Layers},
   ];
-
-  return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 border-t border-slate-800/90 backdrop-blur-md px-2 py-1.5 flex items-center justify-around shadow-2xl">
-      {TABS.map((tab) => {
-        const isActive =
-          pathname === tab.path || (tab.isHome && (pathname === "/" || pathname === "/calendar"));
-        const Icon = tab.icon;
-
-        return (
-          <Link
-            key={tab.path}
-            href={tab.path}
-            className={cn(
-              "flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all cursor-pointer",
-              isActive
-                ? "text-blue-400 font-extrabold scale-105"
-                : "text-slate-400 hover:text-slate-200"
-            )}
-          >
-            <div
-              className={cn(
-                "p-1 rounded-lg transition-colors",
-                isActive ? "bg-blue-600/20 border border-blue-500/30" : ""
-              )}
-            >
-              <Icon className="w-5 h-5" />
-            </div>
-            <span className="text-[11px] font-medium tracking-tight mt-0.5">{tab.name}</span>
-          </Link>
-        );
-      })}
-
-      {/* Menu Drawer Button 🔘☰ */}
-      <button
-        onClick={onOpenDrawer}
-        className="flex flex-col items-center justify-center py-1 px-3 rounded-xl text-slate-400 hover:text-white transition-all active:scale-95 cursor-pointer"
-      >
-        <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 text-blue-400 flex items-center justify-center shadow-inner">
-          <Menu className="w-4 h-4" />
-        </div>
-        <span className="text-[11px] font-medium tracking-tight mt-0.5">전체메뉴</span>
-      </button>
-    </nav>
-  );
+  return <div className="lg:hidden">
+    {open && <>
+      <button aria-label="메뉴 닫기" className="fixed inset-0 z-40 bg-black/20" onClick={() => setOpen(false)} />
+      <nav aria-label="모바일 팝업 메뉴" className="fixed right-4 z-50 w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl" style={{bottom:"calc(5rem + env(safe-area-inset-bottom))"}}>
+        {tabs.map(tab => <Link key={tab.path} href={tab.path} onClick={() => setOpen(false)} aria-current={pathname === tab.path ? "page" : undefined} className={cn("flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm", pathname === tab.path ? "bg-blue-50 font-bold text-blue-700" : "text-slate-700 hover:bg-slate-50")}><tab.icon className="h-4 w-4" />{tab.name}</Link>)}
+        <button onClick={() => {setOpen(false);onOpenDrawer();}} className="w-full border-t border-slate-100 px-3 py-2.5 text-left text-sm text-slate-500">계정 · 전체 메뉴</button>
+      </nav>
+    </>}
+    <button type="button" aria-label={open ? "메뉴 닫기" : "메뉴 열기"} aria-expanded={open} onClick={() => setOpen(value => !value)} className="fixed right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg cursor-pointer" style={{bottom:"calc(1rem + env(safe-area-inset-bottom))"}}>{open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button>
+  </div>;
 }

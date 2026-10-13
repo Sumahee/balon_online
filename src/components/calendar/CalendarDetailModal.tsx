@@ -1,5 +1,6 @@
 "use client";
 import { getWorkTitle } from "@/lib/work-title";
+import { isCalendarVisible } from "@/lib/calendar-visibility";
 import { ConstructionPhotoDropZone } from "@/components/common/ConstructionPhotoDropZone";
 
 
@@ -351,6 +352,7 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
                 </span>
                 <span className="font-extrabold text-white text-base">
                   {getWorkTitle(liveItem)}
+                  <label className="inline-flex items-center gap-1 ml-2 text-xs"><input type="checkbox" checked={isCalendarVisible(liveItem)} disabled={isSaving} onChange={e => { void updateWorkItem(liveItem.id, {calendarVisible:e.target.checked}); }} />달력 표시</label>
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2 font-mono">

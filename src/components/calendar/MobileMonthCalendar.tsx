@@ -18,6 +18,7 @@ interface Props {
 
 export function MobileMonthCalendar(props:Props) {
   const [selected,setSelected]=useState<string | null>(null);
+  const [compact,setCompact]=useState(false);
   const list=useRef<HTMLDivElement>(null);
   const sections=useRef(new Map<string,HTMLElement>());
   const prefix=`${props.year}-${String(props.month+1).padStart(2,"0")}-`;
@@ -31,18 +32,14 @@ export function MobileMonthCalendar(props:Props) {
     if (target && viewport) viewport.scrollTo({top:viewport.scrollTop+target.getBoundingClientRect().top-viewport.getBoundingClientRect().top-8,behavior:"smooth"});
   },[selected]);
   return <>
-    <div className="fixed inset-x-0 top-14 bottom-16 z-20 hidden portrait:flex lg:!hidden flex-col bg-slate-50" style={{paddingBottom:"env(safe-area-inset-bottom)"}}>
-      <section aria-label="모바일 월 달력" className="h-1/2 min-h-0 flex flex-col bg-white border-b border-slate-300 px-3 pt-2 pb-1">
+    <div className="fixed inset-x-0 bottom-0 z-20 hidden portrait:flex lg:!hidden flex-col bg-slate-50 transition-[top] duration-200" style={{top:compact ? 0 : 56,paddingBottom:"env(safe-area-inset-bottom)"}}>
+      <section aria-label="모바일 월 달력" className="shrink-0 min-h-0 flex flex-col bg-white border-b border-slate-200 px-2 pt-1 pb-1 transition-[height] duration-200" style={{height:compact ? 210 : 260}}>
         <div className="flex items-center justify-between gap-1 shrink-0">
           <button aria-label="이전 달" onClick={props.onPrevious} className="p-2"><ChevronLeft className="h-5 w-5" /></button>
           <h1 className="font-bold text-base">{props.year}년 {props.month+1}월</h1>
           <button aria-label="다음 달" onClick={props.onNext} className="p-2"><ChevronRight className="h-5 w-5" /></button>
           <button onClick={props.onToday} className="rounded border px-2 py-1 text-xs">오늘</button>
           <button aria-label="모바일 일정 추가" onClick={()=>props.onAdd(selected ?? undefined)} className="p-2 text-blue-600"><Plus className="h-5 w-5" /></button>
-        </div>
-        <div className="flex gap-2 mb-1 shrink-0">
-          <select aria-label="모바일 지역 필터" value={props.region} onChange={e=>props.onRegion(e.target.value)} className="rounded border px-2 py-1 text-xs">{props.regions.map(region=><option key={region}>{region}</option>)}</select>
-          <input aria-label="모바일 일정 검색" placeholder="현장명 / 업체 검색" value={props.search} onChange={e=>props.onSearch(e.target.value)} className="min-w-0 flex-1 rounded border px-2 py-1 text-xs" />
         </div>
         <div className="grid grid-cols-7 text-center text-[11px] text-slate-500 shrink-0 py-1">{["일","월","화","수","목","금","토"].map(day=><span key={day}>{day}</span>)}</div>
         <div className="grid grid-cols-7 flex-1 min-h-0" style={{gridTemplateRows:`repeat(${Math.ceil(props.days.length/7)},minmax(0,1fr))`}}>
@@ -58,9 +55,8 @@ export function MobileMonthCalendar(props:Props) {
           })}
         </div>
       </section>
-      <section aria-label="해당 월 일정 목록" className="h-1/2 min-h-0 flex flex-col">
-        <div className="px-4 py-2 text-xs font-bold text-slate-600 shrink-0">{props.month+1}월 일정 · 날짜를 누르면 해당 일정으로 이동</div>
-        <div ref={list} className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 pb-6" tabIndex={0} aria-label="월 일정 스크롤 목록">
+      <section aria-label="해당 월 일정 목록" className="flex-1 min-h-0 flex flex-col">
+        <div ref={list} onScroll={event => { const next = event.currentTarget.scrollTop > 12; if(next !== compact) {setCompact(next);window.dispatchEvent(new CustomEvent("mobile-calendar-compact",{detail:next}));} }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-2 pb-20" tabIndex={0} aria-label="월 일정 스크롤 목록">
           {!dates.length && <p className="p-5 text-sm text-slate-500">이 달의 일정이 없습니다.</p>}
           {dates.map(date=><section key={date} ref={element=>{if(element)sections.current.set(date,element);else sections.current.delete(date);}} className="mb-4" aria-label={`${props.month+1}월 ${Number(date.slice(-2))}일 일정`}>
             <h2 className={`py-2 px-1 text-sm font-bold ${date===selected ? "text-blue-700" : "text-slate-900"}`}>{props.month+1}월 {Number(date.slice(-2))}일</h2>
@@ -73,6 +69,6 @@ export function MobileMonthCalendar(props:Props) {
         </div>
       </section>
     </div>
-    <div className="fixed inset-x-0 top-14 bottom-16 z-20 hidden landscape:flex lg:!hidden items-center justify-center bg-white p-6 text-center text-sm text-slate-600">모바일 캘린더는 세로 화면을 지원합니다.<br />기기를 세로로 돌려주세요.</div>
+    <div className="fixed inset-x-0 top-14 bottom-0 z-20 hidden landscape:flex lg:!hidden items-center justify-center bg-white p-6 text-center text-sm text-slate-600">모바일 캘린더는 세로 화면을 지원합니다.<br />기기를 세로로 돌려주세요.</div>
   </>;
 }
