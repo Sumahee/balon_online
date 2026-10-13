@@ -31,6 +31,26 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
 
 const request = (body) => ({ json: async () => body });
 
+test("phone back closes work modal and X removes its temporary history entry", () => {
+  for (const phoneBack of [true, false]) {
+    const effects = [], frames = [], handlers = new Map();
+    let closed = 0, backs = 0;
+    const history = {state:{router:"preserved"}, pushState(state) { this.state=state; }, back() { backs++; }};
+    const {useModalBack} = loadModule("src/lib/use-modal-back.ts", {
+      react:{useRef:value=>({current:value}),useEffect:callback=>effects.push(callback)},
+    }, {window:{history,location:{href:"http://localhost/work"},addEventListener:(event,callback)=>handlers.set(event,callback),removeEventListener:event=>handlers.delete(event)},requestAnimationFrame:callback=>{frames.push(callback);return 1;},cancelAnimationFrame() {}});
+    useModalBack(true,()=>closed++);
+    const cleanups=effects.map(effect=>effect());
+    frames[0]();
+    assert.equal(history.state.router,"preserved");
+    assert.ok(history.state.baronModal);
+    if (phoneBack) { history.state={router:"preserved"}; handlers.get("popstate")(); assert.equal(closed,1); }
+    cleanups.forEach(cleanup=>cleanup?.());
+    assert.equal(backs,phoneBack ? 0 : 1);
+    assert.equal(handlers.size,0);
+  }
+});
+
 test("material lists finish as dispatched while drawing tasks finish as installed", () => {
   const { workStatusLabel } = loadModule("src/lib/work-status.ts");
   assert.equal(workStatusLabel({cardType:"자재리스트"}, "시공완료"), "발송 완료");

@@ -6,6 +6,7 @@ import { AttachmentItem } from "@/types";
 import { bodyHtml, bodyImageIds, serializeBody } from "@/lib/body-content";
 import { cn } from "@/lib/utils";
 import { clipboardFiles } from "@/lib/clipboard-files";
+import { PdfPreview } from "@/components/common/PdfPreview";
 
 interface UnifiedBoardEditorProps {
   description: string;
@@ -298,7 +299,7 @@ export function UnifiedBoardEditor({
               <button autoFocus type="button" aria-label="미리보기 닫기" onClick={() => setPreview(null)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><X className="h-5 w-5" /></button>
             </div>
             {attachmentType(preview) === "pdf" ? (
-              <iframe src={preview.url} title={`${preview.name} PDF 미리보기`} className="min-h-0 w-full flex-1 border-0" />
+              <PdfPreview url={preview.url} />
             ) : (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img src={preview.url} alt={preview.name} className="max-h-[78vh] max-w-full object-contain" />

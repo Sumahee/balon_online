@@ -1,5 +1,6 @@
 "use client";
 import { getWorkTitle } from "@/lib/work-title";
+import { useModalBack } from "@/lib/use-modal-back";
 import { isCalendarVisible } from "@/lib/calendar-visibility";
 import { ConstructionPhotoDropZone } from "@/components/common/ConstructionPhotoDropZone";
 
@@ -43,6 +44,7 @@ interface CalendarDetailModalProps {
 }
 
 export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps) {
+  useModalBack(!!item, onClose);
   const { workItems, addComment, deleteComment, deleteCommentImage, deletePhotoFromWorkItem, uploadConstructionPhoto, updateWorkItem } = useData();
 
   // Reactive subscription to live item in DataContext

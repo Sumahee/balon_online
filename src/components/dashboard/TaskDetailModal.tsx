@@ -1,5 +1,7 @@
 "use client";
 import { getWorkTitle } from "@/lib/work-title";
+import { useModalBack } from "@/lib/use-modal-back";
+import { PdfPreview } from "@/components/common/PdfPreview";
 import { workStatusLabel } from "@/lib/work-status";
 import { isCalendarVisible } from "@/lib/calendar-visibility";
 import { ConstructionPhotoDropZone } from "@/components/common/ConstructionPhotoDropZone";
@@ -44,6 +46,7 @@ interface TaskDetailModalProps {
 }
 
 export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
+  useModalBack(!!item, onClose);
   const { workItems, updateWorkItem, isSaving, addComment, deleteComment, deleteCommentImage } = useData();
   const { user, token } = useAuth();
 
@@ -1183,12 +1186,8 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
               </div>
             </div>
 
-            <div className="flex-1 bg-slate-100 relative">
-              <iframe
-                src={activePdfUrl}
-                title={activePdfTitle}
-                className="w-full h-full border-none"
-              />
+            <div className="flex-1 min-h-0 bg-slate-100 relative">
+              <PdfPreview url={activePdfUrl} />
             </div>
           </div>
         </div>
