@@ -3,37 +3,45 @@
 import React, { useState } from "react";
 import { MaterialOrderItem } from "@/types";
 import { getMaterialSummary } from "@/lib/materialUtils";
-import { CheckCircle2, AlertTriangle, Plus, Trash2, Box, Sparkles } from "lucide-react";
+import { Plus, Trash2, Box, X } from "lucide-react";
+import { readMaterialHistory, writeMaterialHistory } from "@/lib/material-history";
 import { cn } from "@/lib/utils";
 
 interface MaterialOrderManagerProps {
   orders: MaterialOrderItem[];
-  onChange: (updatedOrders: MaterialOrderItem[]) => void;
+  onChange: (updatedOrders: MaterialOrderItem[]) => void | Promise<void>;
   title?: string;
   readOnly?: boolean;
+  deferredSave?: boolean;
+  autoFocusInput?: boolean;
 }
-
-const COMMON_PRESETS = [
-  "18T PET 합판",
-  "15T LPM 보드",
-  "19T 원목 무늬목",
-  "5T 강화유리",
-  "언더레일 댐핑",
-  "1mm ABS 엣지",
-  "블룸 댐핑 힌지",
-  "알루미늄 프레임",
-];
 
 export function MaterialOrderManager({
   orders,
   onChange,
   title = "자재 발주 리스트",
   readOnly = false,
+  autoFocusInput = false,
 }: MaterialOrderManagerProps) {
+  const [history, setHistory] = useState<string[]>([]);
+  React.useEffect(() => { setHistory(readMaterialHistory()); }, []);
   const [newItemName, setNewItemName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const savingRef = React.useRef(false);
   const summary = getMaterialSummary(orders);
 
-  const handleAddItem = (nameToAdd?: string) => {
+  const saveOrders = async (updated: MaterialOrderItem[]) => {
+    if (savingRef.current || readOnly) return false;
+    savingRef.current = true;
+    setSaving(true);
+    setError("");
+    try { await onChange(updated); return true; }
+    catch { setError("자재 발주를 저장하지 못했습니다. 입력 내용을 확인하고 다시 시도해 주세요."); return false; }
+    finally { savingRef.current = false; setSaving(false); }
+  };
+
+  const handleAddItem = async (nameToAdd?: string) => {
     const targetName = (nameToAdd || newItemName).trim();
     if (!targetName) return;
 
@@ -44,24 +52,28 @@ export function MaterialOrderManager({
       isOrdered: false,
     };
 
-    onChange([...orders, newItem]);
-    if (!nameToAdd) setNewItemName("");
+    if (await saveOrders([...orders, newItem])) {
+      setHistory(writeMaterialHistory(targetName));
+      if (!nameToAdd) setNewItemName("");
+    }
   };
 
   const handleToggleOrdered = (id: string) => {
     const updated = orders.map((item) =>
       item.id === id ? { ...item, isOrdered: !item.isOrdered } : item
     );
-    onChange(updated);
+    void saveOrders(updated);
   };
 
   const handleDeleteItem = (id: string) => {
     const updated = orders.filter((item) => item.id !== id);
-    onChange(updated);
+    void saveOrders(updated);
   };
 
   return (
-    <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-3 shadow-2xs">
+    <fieldset disabled={saving} aria-busy={saving} className="min-w-0 p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-3 shadow-2xs">
+      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+      {saving && <p role="status" className="text-xs text-slate-500">자재 발주 저장 중…</p>}
       {/* Header & Status Summary */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
         <div className="flex items-center gap-2">
@@ -83,17 +95,10 @@ export function MaterialOrderManager({
           )}
         </div>
 
-        <span className="text-[10px] text-slate-500">
-          품목별 체크박스를 눌러 발주완료 / 미발주 상태를 즉시 전환하세요.
-        </span>
       </div>
 
       {/* Material Items Checklist */}
-      {orders.length === 0 ? (
-        <div className="p-3 text-center text-xs text-slate-400 italic bg-white/70 rounded-xl border border-dashed border-slate-200">
-          등록된 발주 필요 자재가 없습니다. 아래에서 품목을 입력하거나 추천 자재 버튼을 눌러 추가하세요.
-        </div>
-      ) : (
+      {orders.length > 0 && (
         <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
           {orders.map((item) => (
             <div
@@ -158,6 +163,8 @@ export function MaterialOrderManager({
           <div className="flex items-center gap-2">
             <input
               type="text"
+              aria-label="새 발주 품목"
+              autoFocus={autoFocusInput}
               placeholder="새 발주 품목 입력 (예: 18T PET 합판 10장, 강화유리 2장)"
               value={newItemName}
               onChange={(e) => setNewItemName(e.target.value)}
@@ -167,7 +174,7 @@ export function MaterialOrderManager({
                   handleAddItem();
                 }
               }}
-              className="flex-1 px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold"
+              className="min-w-0 flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
             />
             <button
               type="button"
@@ -179,24 +186,9 @@ export function MaterialOrderManager({
             </button>
           </div>
 
-          {/* Preset Recommendation Buttons */}
-          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            <span className="text-[10px] text-slate-500 font-bold flex items-center gap-1 mr-1">
-              <Sparkles className="w-3 h-3 text-amber-500" /> 빠른 입력:
-            </span>
-            {COMMON_PRESETS.map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => handleAddItem(preset)}
-                className="text-[10px] font-semibold px-2 py-0.5 bg-white hover:bg-amber-50 border border-slate-200 hover:border-amber-300 text-slate-700 hover:text-amber-900 rounded-lg transition cursor-pointer"
-              >
-                + {preset}
-              </button>
-            ))}
-          </div>
+          {history.length > 0 && <div className="flex flex-wrap gap-1.5" aria-label="이전에 입력한 품목">{history.map(name => <span key={name} className="inline-flex max-w-full items-center rounded-lg border border-slate-200 bg-white text-xs"><button type="button" onClick={() => setNewItemName(name)} className="truncate px-2 py-1.5 text-slate-700 hover:text-blue-700">{name}</button><button type="button" aria-label={name + " 입력 기록 삭제"} onClick={() => setHistory(writeMaterialHistory(name, true))} className="shrink-0 p-1.5 text-slate-400 hover:text-red-600"><X className="h-3 w-3" /></button></span>)}</div>}
         </div>
       )}
-    </div>
+    </fieldset>
   );
 }

@@ -1,33 +1,33 @@
 "use client";
 
 
-import React, { useEffect, useState } from "react";
-import { getToday } from "@/lib/date";
-import {
-  Plus,
-  Search,
-  LayoutGrid,
-  List,
-  Edit2,
-  Trash2,
-  User,
-  Sliders} from "lucide-react";
-import { useData } from "@/context/DataContext";
-import { WorkItem, Priority, WorkStatus, MaterialOrderItem, POST_BAR_COLORS } from "@/types";
-import { cn } from "@/lib/utils";
-import { WorkOverview } from "@/components/dashboard/WorkOverview";
+import { WorkEditorModal } from "@/components/common/WorkEditorModal";
 import { KanbanBoard } from "@/components/dashboard/KanbanBoard";
-import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
-import { getMaterialOrders } from "@/lib/materialUtils";
+import { WorkOverview } from "@/components/dashboard/WorkOverview";
+import { useData } from "@/context/DataContext";
+import { getToday } from "@/lib/date";
+import { cn } from "@/lib/utils";
+import { Priority,WorkItem,WorkStatus } from "@/types";
+import {
+Edit2,
+LayoutGrid,
+List,
+Plus,
+Search,
+Sliders,
+Trash2,
+User
+} from "lucide-react";
 import dynamic from "next/dynamic";
+import { useEffect,useState } from "react";
 const TaskDetailModal=dynamic(()=>import("@/components/dashboard/TaskDetailModal").then(module=>module.TaskDetailModal),{ssr:false});
 
-import { getWorkTitle } from "@/lib/work-title";
+import { BulkSelectionBar,useBulkSelection } from "@/components/common/BulkSelection";
 import { workStatusLabel } from "@/lib/work-status";
-import { BulkSelectionBar, useBulkSelection } from "@/components/common/BulkSelection";
+import { getWorkTitle } from "@/lib/work-title";
 
 export default function WorkBoardPage() {
-  const { workItems, updateWorkItem, deleteWorkItem, advanceWorkStatus, setQuickModalType, isSaving, loadWorkList, loadWorkDetail, isLoading } = useData();
+  const { workItems, deleteWorkItem, advanceWorkStatus, setQuickModalType, isSaving, loadWorkList, loadWorkDetail, isLoading } = useData();
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [period, setPeriod] = useState("recent");
@@ -103,24 +103,12 @@ export default function WorkBoardPage() {
     }
   };
 
-  const handleEditSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSaving) return;
-    try {
-      if (!editingItem) return;
-      await updateWorkItem(editingItem.id, editingItem);
-      setEditingItem(null);
-    } catch {
-      // DataContext displays the error; leave the form open for retry.
-    }
-  };
-
   return (
-    <div className="work-board space-y-6">
+    <div className="work-board space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h1 className="min-w-0 text-xl sm:text-2xl font-bold tracking-tight text-slate-950">업무 게시판</h1>
         <div className="flex shrink-0 items-center gap-2">
-          <button type="button" aria-label="업무 검색" aria-expanded={searchOpen} onClick={() => setSearchOpen(value => !value)} className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 cursor-pointer"><Search className="h-5 w-5" /></button>
+          <button type="button" aria-label="업무 검색" aria-expanded={searchOpen} onClick={() => setSearchOpen(value => !value)} className="lg:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 cursor-pointer"><Search className="h-5 w-5" /></button>
           <button type="button" onClick={() => setQuickModalType("work")} className="action-primary !px-3 !text-xs sm:!text-sm"><Plus className="h-4 w-4" />새 업무 등록</button>
         </div>
       </div>
@@ -151,7 +139,7 @@ export default function WorkBoardPage() {
         </div>
       </section>
 
-      <div className="work-board-desktop space-y-6">
+      <div className="work-board-desktop space-y-3">
 
       {/* Filter and Search Bar */}
       <div className="filter-panel space-y-3">
@@ -197,6 +185,7 @@ export default function WorkBoardPage() {
             <option value="시공">시공</option>
             <option value="설계">설계</option>
             <option value="납품">납품</option>
+            <option value="기타">기타</option>
           </select>
 
           {/* View toggle */}
@@ -246,7 +235,7 @@ export default function WorkBoardPage() {
       )}
 
       {/* Table View */}
-      <BulkSelectionBar selection={selection} disabled={isSaving} />
+      {(selection.visible.length > 0 || !!selection.message) && <BulkSelectionBar selection={selection} disabled={isSaving} />}
       <p className="text-sm text-slate-600">현재 페이지 {filteredItems.length}건 표시</p>
 
       {viewMode === "table" && (
@@ -256,7 +245,7 @@ export default function WorkBoardPage() {
             <table aria-label="업무 목록" className="data-table min-w-[900px] w-full text-left text-sm">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-xs">
                 <tr>
-                  <th className="py-3.5 px-4">선택</th>
+                  <th className="py-3.5 px-4"><input type="checkbox" aria-label="현재 페이지 전체 선택" checked={selection.allSelected} onChange={selection.toggleAll} disabled={selection.deleting} /></th>
                   <th className="py-3.5 px-4">구분</th>
                   <th className="py-3.5 px-4 min-w-[220px]">업무 / 프로젝트명</th>
                   <th className="py-3.5 px-4">담당자</th>
@@ -288,11 +277,11 @@ export default function WorkBoardPage() {
                       </td>
 
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-1.5 mb-0.5">
+                        {item.clientName && !getWorkTitle(item).includes(item.clientName) && <div className="flex items-center gap-1.5 mb-0.5">
                           <span className="text-xs font-extrabold text-blue-900 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
                             {item.clientName || "협력사"}
                           </span>
-                        </div>
+                        </div>}
                         <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedTask(item); }} className="block text-left font-semibold text-slate-900 hover:text-blue-700 hover:underline">
                           {getWorkTitle(item)}
                         </button>
@@ -465,218 +454,7 @@ export default function WorkBoardPage() {
       </details>
       </div>
 
-      {/* Edit Modal */}
-      {editingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-2xl sm:max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
-              <h3 className="font-bold text-base text-slate-900">업무 상세 정보 수정</h3>
-              <button
-                onClick={() => setEditingItem(null)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-200 transition cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleEditSave} className="flex-1 overflow-y-auto flex flex-col min-h-0">
-              <div className="p-6 space-y-4 flex-1 overflow-y-auto">
-                {/* 업체명 & 현장 주소/지역 */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">업체명</label>
-                    <input
-                      type="text"
-                      required
-                      value={editingItem.clientName}
-                      onChange={(e) => setEditingItem({ ...editingItem, clientName: e.target.value })}
-                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg font-bold text-slate-900"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">현장 주소 / 세부 지역</label>
-                    <input
-                      type="text"
-                      placeholder="예: 서초동 팬트리, 반포동 104동"
-                      value={editingItem.siteAddress || ""}
-                      onChange={(e) => setEditingItem({ ...editingItem, siteAddress: e.target.value })}
-                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg font-bold text-slate-900"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">프로젝트 전체 명칭 (카드 표기명)</label>
-                  <input
-                    type="text"
-                    required
-                    value={editingItem.title}
-                    onChange={(e) => setEditingItem({ ...editingItem, title: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg font-bold text-slate-900"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">상태</label>
-                    <select
-                      value={editingItem.status}
-                      onChange={(e) =>
-                        setEditingItem({
-                          ...editingItem,
-                          status: e.target.value as WorkStatus,
-                        })
-                      }
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
-                    >
-                      <option value="대기">대기</option>
-                      <option value="오피스">오피스</option>
-                      <option value="공장">공장</option>
-                      <option value="준비완료">준비완료</option>
-                      <option value="시공완료">{workStatusLabel(editingItem, "시공완료")} (목록 보관)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">시공일 (마감일)</label>
-                    <input
-                      type="date"
-                      value={editingItem.deliveryDate || editingItem.dueDate}
-                      onChange={(e) =>
-                        setEditingItem({
-                          ...editingItem,
-                          deliveryDate: e.target.value,
-                          dueDate: e.target.value,
-                        })
-                      }
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">우선순위</label>
-                    <select
-                      value={editingItem.priority}
-                      onChange={(e) =>
-                        setEditingItem({
-                          ...editingItem,
-                          priority: e.target.value as Priority,
-                        })
-                      }
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
-                    >
-                      <option value="긴급">긴급</option>
-                      <option value="높음">높음</option>
-                      <option value="보통">보통</option>
-                      <option value="낮음">낮음</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* 🎨 도면 연동 사양 (현장 담당자 연락처, 포스트바, 합판컬러, 도면담당자) */}
-
-                <div className="p-3.5 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-3">
-                  <div className="text-xs font-extrabold text-indigo-950 flex items-center gap-1.5">
-                    <span>🎨 도면 프로그램 연동 상세 사양</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
-                        업체 현장 담당자 연락처 <span className="text-indigo-600 font-normal">(도면 전송용)</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="예: 010-1234-5678"
-                        value={editingItem.siteContactPhone || ""}
-                        onChange={(e) => setEditingItem({ ...editingItem, siteContactPhone: e.target.value })}
-                        className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg font-bold"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">도면 담당자</label>
-                      <input
-                        type="text"
-                        value={editingItem.drawingAssignee || editingItem.assignee}
-                        onChange={(e) => setEditingItem({ ...editingItem, drawingAssignee: e.target.value })}
-                        className="w-full px-3 py-1.5 text-xs border border-indigo-200 rounded-lg font-bold text-indigo-950"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">포스트바 컬러</label>
-                      <select
-                        value={editingItem.postColor || "11 다크그레이"}
-                        onChange={(e) => setEditingItem({ ...editingItem, postColor: e.target.value })}
-                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold bg-white"
-                      >
-                        {POST_BAR_COLORS.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">합판 컬러 (종류)</label>
-                      <input
-                        type="text"
-                        placeholder="예: PET 18T 화이트..."
-                        value={editingItem.boardColor || "PET 18T 화이트"}
-                        onChange={(e) => setEditingItem({ ...editingItem, boardColor: e.target.value })}
-                        className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg font-bold"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-
-                {/* Material Order Section */}
-                <MaterialOrderManager
-                  orders={getMaterialOrders(editingItem)}
-                  onChange={(updated: MaterialOrderItem[]) => {
-                    const allDone = updated.length > 0 && updated.every((o: MaterialOrderItem) => o.isOrdered);
-                    setEditingItem({
-                      ...editingItem,
-                      materialOrders: updated,
-                      materialOrderNeeded: updated.map((o: MaterialOrderItem) => o.name).join(", "),
-                      materialOrderStatus: updated.length === 0 ? "발주불필요" : allDone ? "발주완료" : "발주필요",
-                    });
-                  }}
-                />
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">작업 비고 / 메모</label>
-                  <textarea
-                    rows={3}
-                    value={editingItem.notes || ""}
-                    onChange={(e) => setEditingItem({ ...editingItem, notes: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"
-                  />
-                </div>
-              </div>
-
-              {/* Sticky Footer */}
-              <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 shrink-0 sticky bottom-0 z-10 shadow-md">
-                <button
-                  type="button"
-                  onClick={() => setEditingItem(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200 transition cursor-pointer"
-                >
-                  취소
-                </button>
-                <button
-                  type="submit" disabled={isSaving} aria-busy={isSaving}
-                  className="px-6 py-2 rounded-xl bg-blue-600 text-white text-xs font-extrabold hover:bg-blue-700 shadow-md transition cursor-pointer"
-                >
-                  저장하기
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {editingItem && <WorkEditorModal key={editingItem.id} item={editingItem} onClose={() => setEditingItem(null)} />}
 
       {/* Task Detail Modal */}
       {selectedTask && (

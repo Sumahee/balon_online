@@ -1,4 +1,5 @@
 "use client";
+import { APP_VERSION } from "@/lib/app-version";
 
 import { getToday } from "@/lib/date";
 
@@ -77,7 +78,8 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-30 h-16 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shadow-xs">
       <div className="flex items-center gap-3 text-sm">
-        <span className="font-semibold tracking-wide text-slate-400">BARON</span>
+        <span className="font-semibold tracking-wide text-slate-400">BALON</span>
+        <span className="text-[11px] text-slate-500" aria-label={`Version ${APP_VERSION}`}>{APP_VERSION}</span>
         <span className="text-slate-300">/</span>
         <span className="font-medium text-slate-700">{pageInfo.title}</span>
       </div>

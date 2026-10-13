@@ -31,6 +31,66 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
 
 const request = (body) => ({ json: async () => body });
 
+test("simple work entry saves minimal drafts and keeps production fields on edit", () => {
+  const {createWorkDraft,prepareWorkDraft}=loadModule("src/lib/work-form.ts");
+  const draft=createWorkDraft(undefined,"2026-10-13","현재 계정");
+  draft.clientName="빠른 업체";
+  draft.attachments=[{id:"photo",name:"발주.jpg",url:"/photo.jpg",fileType:"image"}];
+  const saved=prepareWorkDraft(draft);
+  assert.equal(saved.title,"빠른 업체");assert.equal(saved.createdBy,"현재 계정");
+  assert.equal(saved.drawingAssignee,"");assert.equal(saved.attachments.length,1);
+  const edited=createWorkDraft({...saved,createdBy:"원 등록자",installationTeam:"시공 A팀",ceilingHeight:"2450"},"2026-10-14","다른 계정");
+  assert.equal(edited.createdBy,"원 등록자");assert.equal(edited.installationTeam,"시공 A팀");assert.equal(edited.ceilingHeight,"2450");
+});
+
+test("work entry DB round trip preserves team, height and verified registration author", async () => {
+  const database=nativeRequire("@libsql/client").createClient({url:"file::memory:"});
+  try {
+    await database.executeMultiple(`CREATE TABLE bo_work_items(id TEXT PRIMARY KEY,type TEXT,title TEXT,client_name TEXT,site_address TEXT,region TEXT,drawing_type TEXT,card_type TEXT,deadline_type TEXT,delivery_date TEXT,site_contact_phone TEXT,post_color TEXT,board_color TEXT,drawing_assignee TEXT,category TEXT,assignee TEXT,priority TEXT,status TEXT,progress INTEGER,start_date TEXT,due_date TEXT,notes TEXT,description TEXT,material_orders TEXT,created_at TEXT);
+      CREATE TABLE bo_attachments(id TEXT,work_item_id TEXT,name TEXT,file_type TEXT,size TEXT,uploaded_at TEXT,url TEXT);
+      CREATE TABLE bo_work_item_comments(id TEXT,work_item_id TEXT,author TEXT,content TEXT,created_at TEXT,images TEXT);`);
+    const dbMock={db:database,executeQuery:async(sql,args=[])=>{const result=await database.execute({sql,args});return {success:true,rows:result.rows};},executeMutation:async(sql,args=[])=>{const result=await database.execute({sql,args});return {success:true,rows:result.rows};}};
+    const handlers=loadModule("src/lib/api-handlers/posts.ts",{"@/lib/db":dbMock,"./db":dbMock,"./auth":{VERIFY:async()=>new Response(JSON.stringify({user:{name:"로그인 등록자"}}))}},{Response});
+    const created=await handlers.POST(request({type:"work",clientName:"업체",title:"업체",createdBy:"임의값",assignee:"임의값",installationTeam:"시공 A팀",ceilingHeight:"2400",cardType:"도면",calendarVisible:false,confirmationPending:true}));
+    assert.equal(created.status,201);
+    const {data:{id}}=await created.json();
+    await handlers.PUT(request({id,type:"work",createdBy:"다른 사용자",ceilingHeight:"2500",installationTeam:"시공 B팀"}));
+    const detail=await (await handlers.GET({url:"http://localhost/api/posts?type=work&id="+id})).json();
+    assert.equal(detail.data[0].createdBy,"로그인 등록자");
+    assert.equal(detail.data[0].calendarVisible,false);
+    assert.equal(detail.data[0].confirmationPending,true);
+    await handlers.PUT(request({id,type:"work",calendarVisible:true,confirmationPending:false}));
+    const toggled=await (await handlers.GET({url:"http://localhost/api/posts?type=work&id="+id})).json();
+    assert.equal(toggled.data[0].calendarVisible,true);
+    assert.equal(toggled.data[0].confirmationPending,false);
+    assert.equal(detail.data[0].installationTeam,"시공 B팀");
+    assert.equal(detail.data[0].ceilingHeight,"2500");
+    assert.equal(detail.data[0].drawingAssignee,undefined);
+  } finally {database.close();}
+});
+
+test("material input history deduplicates, removes and bounds remembered names", () => {
+  let stored = "[]";
+  const history = loadModule("src/lib/material-history.ts", {}, {localStorage:{getItem:()=>stored,setItem:(_,value)=>{stored=value;}}});
+  history.writeMaterialHistory(" 합판 ");
+  history.writeMaterialHistory("레일");
+  assert.deepEqual(Array.from(history.writeMaterialHistory("합판")), ["합판","레일"]);
+  assert.deepEqual(Array.from(history.writeMaterialHistory("합판",true)), ["레일"]);
+  for(let i=0;i<40;i++) history.writeMaterialHistory(`품목 ${i}`);
+  assert.equal(history.readMaterialHistory().length,30);
+  stored = "invalid JSON";
+  assert.equal(history.readMaterialHistory().length,0);
+});
+
+test("drawing catalog maps online labels to baron web codes and preserves custom colors", () => {
+  const {drawingColorCode,POST_COLORS,BOARD_COLORS}=loadModule("src/lib/drawing-colors.ts");
+  for(const [code,label] of POST_COLORS) assert.equal(drawingColorCode(label,"post"),code);
+  for(const [code,label] of BOARD_COLORS) assert.equal(drawingColorCode(label,"board"),code);
+  assert.equal(drawingColorCode(undefined,"post"),"NONE");
+  assert.equal(drawingColorCode("11 다크그레이","post"),"DARK_GRAY");
+  assert.equal(drawingColorCode("주문 컬러","board"),"주문 컬러");
+});
+
 test("Korean holidays include substitute holidays and correct three-day lunar spans",()=>{
   const {koreanHolidays}=loadModule("src/lib/korean-holidays.ts");
   const holidays=koreanHolidays(2026);
@@ -163,9 +223,13 @@ test("confirmation flag persists independently of office stage", async () => {
 test("project titles use company and short location while preserving manual titles", () => {
   const { generateWorkTitle, getWorkTitle } = loadModule("src/lib/work-title.ts");
   assert.equal(generateWorkTitle("바론", "서울특별시 서초구 반포동 원베일리 104동 1201호"), "바론, 반포동");
-  assert.equal(generateWorkTitle("바론", "강원도 춘천시 중앙로 123"), "바론, 강원도");
+  assert.equal(generateWorkTitle("바론", "강원도 춘천시 중앙로 123"), "바론, 춘천시");
   assert.equal(generateWorkTitle("바론", "경기도 고양시 일산 아파트 101동"), "바론, 일산");
   assert.equal(generateWorkTitle("바론", "", "반포"), "바론, 반포");
+  assert.equal(generateWorkTitle("바론", "서울시 강남구 테헤란로 123"), "바론, 강남구");
+  assert.equal(generateWorkTitle("바론", "서울특별시 강남구 역삼1동 101동"), "바론, 역삼1동");
+  assert.equal(generateWorkTitle("바론", "서울시"), "바론");
+  assert.equal(generateWorkTitle("바론", "서울특별시 서초구 도로 12 (반포동)"), "바론, 반포동");
   assert.equal(getWorkTitle({ title: "직접 수정한 프로젝트", clientName: "바론", siteAddress: "반포동" }), "직접 수정한 프로젝트");
   assert.equal(getWorkTitle({ title: "바론, 반포동(천정형)", clientName: "바론" }), "바론, 반포동");
   assert.equal(getWorkTitle({ title: "바론, 반포동 (에보라)", clientName: "바론" }), "바론, 반포동");
@@ -273,10 +337,93 @@ test("work registration images are order materials and never construction photos
 });
 
 test("new work defaults to ceiling drawing type and gallery opens construction folder", () => {
-  const form = readFileSync("src/components/layout/QuickModals.tsx", "utf8");
-  assert.equal((form.match(/drawingType: "천정형"/g) || []).length, 2);
-  assert.match(readFileSync("src/app/calendar/page.tsx", "utf8"), /useState<DrawingType>\("천정형"\)/);
+  const { createWorkDraft } = loadModule("src/lib/work-form.ts");
+  assert.equal(createWorkDraft(undefined, "2026-10-13", "담당자").drawingType, "천정형");
+  assert.equal(createWorkDraft(undefined, "2026-10-13", "담당자", "2026-11-02").drawingType, "천정형");
   assert.match(readFileSync("src/app/gallery/page.tsx", "utf8"), /useState<string>\("folder-construction"\)/);
+});
+
+test("shared work save preserves start date and attachments while synchronizing body and deadline", () => {
+  const { createWorkDraft, prepareWorkDraft } = loadModule("src/lib/work-form.ts");
+  const item = {id:"w", title:"기존 업무",clientName:"업체",assignee:"업무 담당",drawingAssignee:"설계 담당",startDate:"2026-09-01",dueDate:"2026-10-01",status:"공장",description:"기존 본문",attachments:[{id:"pdf",url:"/api/file",name:"도면.pdf"}],materialOrderNeeded:"합판,레일",materialOrderStatus:"발주필요"};
+  const draft=createWorkDraft(item,"2026-10-13","로그인 사용자");
+  draft.deliveryDate="2026-10-20";draft.description="새 본문";draft.status="시공완료";draft.drawingAssignee="새 설계 담당";
+  const saved=prepareWorkDraft(draft);
+  assert.equal(saved.startDate,"2026-09-01");assert.equal(saved.dueDate,"2026-10-20");
+  assert.equal(saved.description,saved.notes);assert.equal(saved.progress,100);
+  assert.equal(saved.assignee,"업무 담당");assert.equal(saved.drawingAssignee,"새 설계 담당");
+  assert.equal(saved.attachments[0].id,"pdf");assert.equal(saved.materialOrders.length,2);
+  assert.equal(saved.materialOrderStatus,"발주필요");
+  draft.materialOrders.forEach(order=>order.isOrdered=true);
+  assert.equal(prepareWorkDraft(draft).materialOrderStatus,"발주완료");
+  draft.deliveryDate="2026-02-30";assert.throws(()=>prepareWorkDraft(draft),/예정일/);
+  draft.deliveryDate="2026-10-20";draft.clientName=" ";assert.throws(()=>prepareWorkDraft(draft),/업체명/);
+});
+
+test("calendar date is the only difference between new work entry defaults", () => {
+  const { createWorkDraft } = loadModule("src/lib/work-form.ts");
+  const quick=createWorkDraft(undefined,"2026-10-13","담당");
+  const calendar=createWorkDraft(undefined,"2026-10-13","담당","2026-11-05");
+  assert.equal(calendar.deliveryDate,"2026-11-05");
+  calendar.deliveryDate=quick.deliveryDate;calendar.dueDate=quick.dueDate;
+  assert.deepEqual(calendar,quick);
+});
+
+test("nested editor back protects unsaved changes and leaves detail open", () => {
+  const effects=[],frames=[],handlers=new Map();let detailClosed=0,editorClosed=0,allow=false;
+  const history={state:{},pushState(state){this.state=state;},back(){}};
+  const {useModalBack}=loadModule("src/lib/use-modal-back.ts",{react:{useRef:value=>({current:value}),useEffect:fn=>effects.push(fn)}},{window:{history,location:{href:"http://localhost/work"},addEventListener:(name,fn)=>handlers.set(name,fn),removeEventListener:name=>handlers.delete(name)},requestAnimationFrame:fn=>{frames.push(fn);return frames.length;},cancelAnimationFrame(){}});
+  useModalBack(true,()=>detailClosed++);const outer=effects.splice(0).map(fn=>fn());frames.shift()();const parentState=history.state;
+  useModalBack(true,()=>{if(!allow)return false;editorClosed++;return true;});const inner=effects.splice(0).map(fn=>fn());frames.shift()();const editorState=history.state;
+  history.state=parentState;handlers.get("popstate")();assert.equal(history.state.baronModal,editorState.baronModal);assert.equal(detailClosed,0);assert.equal(editorClosed,0);
+  allow=true;history.state=parentState;handlers.get("popstate")();assert.equal(editorClosed,1);assert.equal(detailClosed,0);
+  inner.forEach(fn=>fn?.());outer.forEach(fn=>fn?.());
+});
+
+test("work editor keeps failed drafts and locks duplicate save attempts", async () => {
+  const React=nativeRequire("react");const slots=[];let cursor=0,closed=0,calls=0,fail=true,resolveSave;
+  const hookReact={...React,useEffect(){},useRef(value){const index=cursor++;return slots[index] ?? (slots[index]={current:value});},useState(value){const index=cursor++;if(!(index in slots))slots[index]=typeof value==="function"?value():value;return [slots[index],next=>{slots[index]=typeof next==="function"?next(slots[index]):next;}];}};
+  const {WorkEditorModal}=loadModule("src/components/common/WorkEditorModal.tsx",{
+    react:hookReact,"@/context/AuthContext":{useAuth:()=>({user:{name:"담당자"}})},"@/lib/use-modal-back":{useModalBack(){}},
+    "@/context/DataContext":{useData:()=>({addWorkItem:async()=>{},updateWorkItem:async()=>{calls++;if(fail)throw Error("저장 실패 검증");await new Promise(resolve=>resolveSave=resolve);}})},
+  });
+  const item={id:"fixture",title:"업무",clientName:"업체",assignee:"담당자",status:"대기",deliveryDate:"2026-10-13",attachments:[]};
+  const render=()=>{cursor=0;return WorkEditorModal({item,onClose:()=>closed++});};
+  const walk=node=>Array.isArray(node)?node.flatMap(walk):node&&typeof node==="object"?[node,...walk(node.props?.children)]:[];
+  const find=(tree,predicate)=>walk(tree).find(predicate);
+  let tree=render();find(tree,node=>node.props?.label==="현장 주소").props.children.props.onChange({target:{value:"수정한 현장"}});
+  tree=render();await find(tree,node=>node.type==="form").props.onSubmit({preventDefault(){}});
+  tree=render();assert.equal(closed,0);assert.match(find(tree,node=>node.props?.role==="alert").props.children,/저장/);assert.equal(find(tree,node=>node.props?.label==="현장 주소").props.children.props.value,"수정한 현장");
+  find(tree,node=>node.type==="button"&&node.props?.children==="취소").props.onClick();tree=render();assert.ok(find(tree,node=>node.props?.role==="alertdialog"));assert.equal(closed,0);
+  find(tree,node=>node.type==="button"&&node.props?.children==="계속 작성").props.onClick();tree=render();
+  fail=false;const submit=find(tree,node=>node.type==="form").props.onSubmit;
+  const pending=submit({preventDefault(){}});await submit({preventDefault(){}});assert.equal(calls,2);assert.equal(closed,0);resolveSave();await pending;assert.equal(closed,1);
+});
+
+test("detail edit opens the shared editor with the live work item", () => {
+  const React=nativeRequire("react");const slots=[];let cursor=0;
+  const hookReact={...React,useEffect(){},useMemo:fn=>fn(),useRef:value=>({current:value}),useState(value){const index=cursor++;if(!(index in slots))slots[index]=typeof value==="function"?value():value;return [slots[index],next=>{slots[index]=typeof next==="function"?next(slots[index]):next;}];}};
+  const item={id:"fixture",title:"업무",clientName:"업체",assignee:"담당자",status:"대기",dueDate:"2026-10-13",cardType:"도면",attachments:[],comments:[]};
+  function SharedEditor() {return null;}
+  const {TaskDetailModal}=loadModule("src/components/dashboard/TaskDetailModal.tsx",{react:hookReact,"@/context/AuthContext":{useAuth:()=>({user:{name:"담당자"}})},"@/context/DataContext":{useData:()=>({workItems:[item],isSaving:false})},"@/components/common/WorkEditorModal":{WorkEditorModal:SharedEditor}});
+  const render=()=>{cursor=0;const gate=TaskDetailModal({item,onClose(){}});const content=gate.props.children(item);return content.type(content.props);};
+  const walk=node=>Array.isArray(node)?node.flatMap(walk):node&&typeof node==="object"?[node,...walk(node.props?.children)]:[];
+  let tree=render();walk(tree).find(node=>node.type==="button"&&node.props.children==="업무 수정").props.onClick();tree=render();
+  const editor=walk(tree).find(node=>node.type===SharedEditor);assert.ok(editor);assert.equal(editor.props.item.id,item.id);
+  editor.props.onClose();assert.ok(!walk(render()).some(node=>node.type===SharedEditor));
+});
+
+test("inline material add retains input after failure and clears it only after saved", async () => {
+  const React=nativeRequire("react");const slots=[];let cursor=0,fail=true,saved;
+  const hookReact={...React,useEffect(){},useRef(value){const index=cursor++;return slots[index]??(slots[index]={current:value});},useState(value){const index=cursor++;if(!(index in slots))slots[index]=value;return [slots[index],next=>slots[index]=typeof next==="function"?next(slots[index]):next];}};
+  const {MaterialOrderManager}=loadModule("src/components/dashboard/MaterialOrderManager.tsx",{react:hookReact});
+  const render=()=>{cursor=0;return MaterialOrderManager({orders:[],autoFocusInput:true,onChange:async orders=>{if(fail)throw Error("failure");saved=orders;}});};
+  const walk=node=>Array.isArray(node)?node.flatMap(walk):node&&typeof node==="object"?[node,...walk(node.props?.children)]:[];
+  const input=tree=>walk(tree).find(node=>node.type==="input"&&node.props.type==="text");
+  let tree=render();input(tree).props.onChange({target:{value:"합판 10장"}});tree=render();
+  const button=walk(tree).find(node=>node.type==="button"&&walk(node).some(child=>child.type==="span"&&child.props.children==="품목 추가"));
+  await button.props.onClick();tree=render();assert.equal(input(tree).props.value,"합판 10장");assert.ok(walk(tree).some(node=>node.props?.role==="alert"));
+  fail=false;await button.props.onClick();tree=render();assert.equal(saved[0].name,"합판 10장");assert.equal(input(tree).props.value,"");
 });
 
 test("comment photos persist once and failed writes never report success", async () => {
@@ -387,7 +534,7 @@ test("drawing launch link contains only a short-lived random key and stores the 
   assert.equal(url.search, "");
   const saved = writes.find(write => write.sql.startsWith("INSERT"));
   assert.notEqual(saved.args[1], token);
-  assert.deepEqual(JSON.parse(saved.args[2]), snapshot);
+  assert.deepEqual(JSON.parse(saved.args[2]), {...snapshot, postColor:"DARK_GRAY"});
   assert.ok(saved.args[3] >= before + 15 * 60 * 1000);
   assert.ok(saved.args[3] <= Date.now() + 15 * 60 * 1000);
 });
@@ -443,6 +590,8 @@ test("memory work IDs remain stable from creation through update and deletion", 
 
 test("a failed work DB insert does not return a success response", async () => {
   const handlers = loadModule("src/lib/api-handlers/posts.ts", {
+    "./auth": { VERIFY: async () => new Response(JSON.stringify({user:{name:"등록자"}})) },
+    "@/lib/work-entry-schema": { ensureWorkEntrySchema: async () => {} },
     "@/lib/db": { db: {}, executeMutation: async () => { throw new Error("offline"); } },
   });
   const result = await handlers.POST(request({ type: "work", title: "현장 업무", assignee: "담당자" }));

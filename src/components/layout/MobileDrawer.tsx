@@ -1,4 +1,5 @@
 "use client";
+import { APP_VERSION } from "@/lib/app-version";
 
 import React from "react";
 import Link from "next/link";
@@ -104,7 +105,7 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-black text-base text-white tracking-wider">BARON</span>
+                <span className="font-black text-base text-white tracking-wider">BALON</span>
                 <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
                   MOBILE
                 </span>
@@ -211,8 +212,8 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
 
         {/* Drawer Footer */}
         <div className="p-4 border-t border-slate-800 text-center text-xs text-slate-500">
-          <p className="font-semibold text-slate-400">BARON INT ONLINE</p>
-          <p className="text-[10px] mt-0.5 text-slate-500">Mobile Responsive v2.0</p>
+          <p className="font-semibold text-slate-400">BALON INT ONLINE</p>
+          <p className="text-[10px] mt-0.5 text-slate-500">{APP_VERSION}</p>
         </div>
       </div>
     </div>

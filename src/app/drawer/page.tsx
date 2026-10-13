@@ -92,7 +92,7 @@ export default function DrawerAutomationPage() {
 
   const handleCopyClipboard = () => {
     const textLines = [
-      `=== [BARON INT] 서랍장 부재 재단 및 부속/원장 산출표 ===`,
+      `=== [BALON INT] 서랍장 부재 재단 및 부속/원장 산출표 ===`,
       `캐비닛 외경: ${inputs.cabinetWidth} x ${inputs.cabinetHeight} x ${inputs.cabinetDepth} mm (${inputs.boardThickness}T, ${inputs.drawerCount}단)`,
       `적용 레일: ${result.railSpec.name}`,
       result.summaryNote,

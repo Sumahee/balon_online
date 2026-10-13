@@ -1,3 +1,5 @@
+import { ensureWorkEntrySchema } from "@/lib/work-entry-schema";
+import { VERIFY } from "./auth";
 import { NextRequest, NextResponse } from "next/server";
 import { serverStore } from "@/lib/serverStore";
 import { db, executeQuery, executeMutation } from "@/lib/db";
@@ -148,7 +150,7 @@ export async function GET(request: NextRequest) {
             calendarVisible: row.calendar_visible == null ? undefined : Number(row.calendar_visible) === 1,
             clientName: String(row.client_name || "(주)바론 협력업체"),
             siteAddress: row.site_address ? String(row.site_address) : undefined,
-            region: row.region ? String(row.region) : "반포",
+            region: row.region ? String(row.region) : "",
             drawingType: row.drawing_type ? (String(row.drawing_type) as any) : undefined,
             cardType: (row.card_type || "도면") as any,
             deadlineType: (row.deadline_type || "시공일") as any,
@@ -156,6 +158,7 @@ export async function GET(request: NextRequest) {
             siteContactPhone: row.site_contact_phone ? String(row.site_contact_phone) : undefined,
             postColor: row.post_color ? String(row.post_color) : undefined,
             boardColor: row.board_color ? String(row.board_color) : undefined,
+            createdBy: String(row.created_by || ""), installationTeam: String(row.installation_team || ""), ceilingHeight: String(row.ceiling_height || ""),
             drawingAssignee: row.drawing_assignee ? String(row.drawing_assignee) : undefined,
             category: (row.category || "제작") as any,
             assignee: String(row.assignee || "담당자 미지정"),
@@ -268,6 +271,11 @@ export async function POST(request: NextRequest) {
     const { type } = body;
 
     if (type === "work") {
+      const session = await VERIFY(request);
+      if (!session.ok) return session;
+      const { user: author } = await session.json();
+      body.createdBy = String(author.name || author.loginId || "");
+      body.assignee = body.createdBy;
       const {
         title,
         clientName,
@@ -302,7 +310,7 @@ export async function POST(request: NextRequest) {
 
       const id = body.id || `work-${Date.now()}`;
       const safeClient = clientName || "(주)바론 협력사";
-      const safeRegion = region || "반포";
+      const safeRegion = region || "";
       const safeDrawingType = drawingType || "옴니버스";
       const safeCardType = cardType || "도면";
       const safeDeadlineType = deadlineType || "시공일";
@@ -319,10 +327,11 @@ export async function POST(request: NextRequest) {
       const now = new Date().toISOString();
 
       if (db) {
+        await ensureWorkEntrySchema();
         await executeMutation(
           `INSERT INTO bo_work_items 
-           (id, type, title, client_name, site_address, region, drawing_type, card_type, deadline_type, delivery_date, site_contact_phone, post_color, board_color, drawing_assignee, category, assignee, priority, status, progress, start_date, due_date, notes, description, material_orders, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, type, title, client_name, site_address, region, drawing_type, card_type, deadline_type, delivery_date, site_contact_phone, post_color, board_color, drawing_assignee, category, assignee, priority, status, progress, start_date, due_date, notes, description, material_orders, created_at, created_by, installation_team, ceiling_height)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
             "work",
@@ -349,6 +358,7 @@ export async function POST(request: NextRequest) {
             safeDesc,
             safeOrders,
             now,
+            body.createdBy || "", body.installationTeam || "", body.ceilingHeight || "",
           ]
         );
         if (Array.isArray(attachments) && attachments.length > 0) {
@@ -373,7 +383,13 @@ export async function POST(request: NextRequest) {
         await ensureWorkCalendarSchema();
         await executeMutation("UPDATE bo_work_items SET calendar_visible = ? WHERE id = ?", [body.calendarVisible ? 1 : 0, id]);
       }
+      if (db && typeof body.confirmationPending === "boolean") {
+        await ensureWorkConfirmationSchema();
+        await executeMutation("UPDATE bo_work_items SET confirmation_pending = ? WHERE id = ?", [body.confirmationPending ? 1 : 0, id]);
+      }
       const newItem = serverStore.addWorkItem({
+        confirmationPending: body.confirmationPending === true,
+        createdBy: body.createdBy || "", installationTeam: body.installationTeam || "", ceilingHeight: body.ceilingHeight || "",
         calendarVisible: typeof body.calendarVisible === "boolean" ? body.calendarVisible : safeCardType === "도면",
         type: "work",
         title,
@@ -491,7 +507,8 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, type, ...updates } = body;
+    const { id, type, createdBy: _createdBy, ...updates } = body;
+    void _createdBy; // Registration author never changes during editing.
 
     if (!id || !type) {
       return NextResponse.json({ success: false, message: "id and type are required" }, { status: 400 });
@@ -501,6 +518,13 @@ export async function PUT(request: NextRequest) {
       if (db) {
         const fields: string[] = [];
         const args: any[] = [];
+
+        if (updates.installationTeam !== undefined || updates.ceilingHeight !== undefined) {
+          await ensureWorkEntrySchema();
+          for (const [key, column] of Object.entries({installationTeam:"installation_team",ceilingHeight:"ceiling_height"})) {
+            if (updates[key] !== undefined) { fields.push(`${column} = ?`); args.push(updates[key]); }
+          }
+        }
 
         if (updates.status) {
           fields.push("status = ?");

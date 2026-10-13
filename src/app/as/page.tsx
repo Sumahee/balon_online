@@ -379,7 +379,7 @@ export default function AsBoardPage() {
             <div className="p-8 space-y-6 text-slate-900" id="printable-as-receipt">
               <div className="border-b-2 border-slate-900 pb-4 flex items-center justify-between">
                 <div>
-                  <h1 className="text-2xl font-extrabold tracking-wider">BARON INT</h1>
+                  <h1 className="text-2xl font-extrabold tracking-wider">BALON INT</h1>
                   <p className="text-xs text-slate-500">맞춤 가구 시공 A/S 현장 작업 지시서</p>
                 </div>
                 <div className="text-right text-xs">

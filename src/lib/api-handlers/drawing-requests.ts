@@ -83,6 +83,7 @@ export async function POST(request: Request) {
       postColor,
       boardColor,
       drawingAssignee,
+      ceilingHeight,
       title,
       description,
     } = body;
@@ -132,6 +133,7 @@ export async function POST(request: Request) {
           postColor,
           boardColor,
           drawingAssignee,
+      ceilingHeight,
           title,
           description,
           status: "pending",
@@ -155,6 +157,7 @@ export async function POST(request: Request) {
       postColor,
       boardColor,
       drawingAssignee,
+      ceilingHeight,
       title,
       description,
       status: "pending",
