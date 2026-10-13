@@ -3,7 +3,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Paperclip, FileText, File, Loader2, X, Download } from "lucide-react";
 import { AttachmentItem } from "@/types";
-import { bodyHtml, serializeBody } from "@/lib/body-content";
+import { bodyHtml, bodyImageIds, serializeBody } from "@/lib/body-content";
 import { cn } from "@/lib/utils";
 import { clipboardFiles } from "@/lib/clipboard-files";
 
@@ -39,7 +39,7 @@ export function UnifiedBoardEditor({
 
   const editorRef = useRef<HTMLDivElement>(null);
   const savedRange = useRef<Range | null>(null);
-  const [initialHtml] = useState(() => bodyHtml(description, attachments, false));
+  const [initialHtml] = useState(() => bodyHtml(description, attachments));
   const lastEmitted = useRef<string | null>(null);
   const latestAttachments = useRef(attachments);
 
@@ -48,7 +48,7 @@ export function UnifiedBoardEditor({
     const editor = editorRef.current;
     if (!editor) return;
     if (description === lastEmitted.current) return;
-    const html = bodyHtml(description, attachments, false);
+    const html = bodyHtml(description, attachments);
     if (editor.innerHTML !== html) editor.innerHTML = html;
   }, [description, attachments]);
 
@@ -63,6 +63,12 @@ export function UnifiedBoardEditor({
     const value = serializeBody(editor);
     lastEmitted.current = value;
     onChangeDescription(value);
+    const imageIds = new Set(bodyImageIds(value));
+    const remaining = latestAttachments.current.filter(attachment => attachmentType(attachment) !== "image" || imageIds.has(attachment.id));
+    if (remaining.length !== latestAttachments.current.length) {
+      latestAttachments.current = remaining;
+      void Promise.resolve(onChangeAttachments(remaining)).catch(() => setError("이미지 제거를 저장하지 못했습니다. 다시 시도해 주세요."));
+    }
     rememberCursor();
   };
 
@@ -106,6 +112,7 @@ export function UnifiedBoardEditor({
     setIsUploading(true);
     onUploadingChange?.(true);
     setError(null);
+    const cursor = insertionRange();
     const uploaded: AttachmentItem[] = [];
     const failures: string[] = [];
     try {
@@ -128,6 +135,27 @@ export function UnifiedBoardEditor({
       if (uploaded.length) {
         const combined = [...latestAttachments.current, ...uploaded];
         latestAttachments.current = combined;
+        const images = uploaded.filter(attachment => attachmentType(attachment) === "image");
+        if (images.length && editorRef.current) {
+          const range = editorRef.current.contains(cursor.startContainer) ? cursor : insertionRange();
+          range.deleteContents();
+          const fragment = document.createDocumentFragment();
+          for (const attachment of images) {
+            const image = document.createElement("img");
+            image.src = attachment.url;
+            image.alt = attachment.name;
+            image.dataset.bodyImage = attachment.id;
+            image.draggable = false;
+            image.style.cssText = "display:block;max-width:100%;height:auto;margin:12px 0;border:0";
+            fragment.append(image, document.createElement("br"));
+          }
+          const last = fragment.lastChild!;
+          range.insertNode(fragment);
+          range.setStartAfter(last);
+          range.collapse(true);
+          restoreCursor(range);
+          emitBody();
+        }
         await onChangeAttachments(latestAttachments.current);
       }
       if (failures.length) setError(`업로드하지 못한 파일: ${failures.join(", ")}. 다시 첨부해 주세요.`);
@@ -174,6 +202,9 @@ export function UnifiedBoardEditor({
               const range = document.createRange();
               range.selectNode(target);
               restoreCursor(range);
+            } else if (target instanceof HTMLImageElement && readOnly) {
+              const attachment = attachments.find(item => item.id === target.dataset.bodyImage);
+              if (attachment) openAttachment(attachment);
             }
           }}
           onKeyDown={(event) => {
@@ -226,21 +257,6 @@ export function UnifiedBoardEditor({
         {isDragging && <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-blue-50/90 text-sm font-semibold text-blue-700">놓으면 본문에 추가합니다</div>}
         {error && <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p>}
       </div>
-
-      {!readOnly && attachments.some(attachment => attachmentType(attachment) === "image") && (
-        <div aria-label="첨부 이미지 미리보기" className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {attachments.filter(attachment => attachmentType(attachment) === "image").map(attachment => (
-            <div key={attachment.id} className="relative overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <button type="button" onClick={() => openAttachment(attachment)} aria-label={`${attachment.name} 이미지 미리보기`} className="w-full text-left">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={attachment.url} alt={attachment.name} loading="lazy" decoding="async" className="h-32 w-full object-contain bg-slate-50" />
-                <span className="block truncate px-3 py-2 text-xs text-slate-600">{attachment.name}</span>
-              </button>
-              <button type="button" disabled={isUploading} onClick={() => void removeAttachment(attachment.id)} aria-label={`${attachment.name} 이미지 제거`} className="absolute right-1 top-1 rounded-lg bg-white/90 p-1.5 text-slate-500 hover:text-rose-700"><X className="h-4 w-4" /></button>
-            </div>
-          ))}
-        </div>
-      )}
 
         {/* Documents are separate from body text; construction photos use the photo feed. */}
         {attachments.some(attachment => attachmentType(attachment) !== "image") && (

@@ -514,7 +514,7 @@ export default function CalendarPage() {
 
                       return null;
                     })}
-                    {dayEvents.length > 4 && <button type="button" aria-expanded={expandedDays.has(day.dateStr)} onClick={e => { e.stopPropagation(); setExpandedDays(prev => { const next = new Set(prev); if (next.has(day.dateStr)) next.delete(day.dateStr); else next.add(day.dateStr); return next; }); }} className="w-full py-1.5 text-left text-xs font-bold text-blue-700 hover:bg-blue-50 rounded">{expandedDays.has(day.dateStr) ? "접기" : `더보기... (+${dayEvents.length - 4}건)`}</button>}
+                    {dayEvents.length > 4 && <button type="button" aria-expanded={expandedDays.has(day.dateStr)} onClick={e => { e.stopPropagation(); setExpandedDays(prev => { const next = new Set(prev); if (next.has(day.dateStr)) next.delete(day.dateStr); else next.add(day.dateStr); return next; }); }} className="w-full py-1.5 text-left text-xs font-bold text-blue-700 hover:bg-blue-50 rounded cursor-pointer">{expandedDays.has(day.dateStr) ? "접기" : `더보기... (+${dayEvents.length - 4}건)`}</button>}
                   </div>
                 </div>
               );

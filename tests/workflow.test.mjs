@@ -308,7 +308,7 @@ test("ready-to-ship work does not count as completed installation", () => {
 });
 
 
-test("editable body previews attached screenshots separately from text and documents", () => {
+test("editable body renders screenshots inline while documents remain separate", () => {
   const React = nativeRequire("react");
   const { renderToStaticMarkup } = nativeRequire("react-dom/server");
   const { UnifiedBoardEditor } = loadModule("src/components/common/UnifiedBoardEditor.tsx");
@@ -321,10 +321,11 @@ test("editable body previews attached screenshots separately from text and docum
   }));
   assert.match(html, /contentEditable="true"/);
   assert.match(html, /min-height:15.75rem/);
-  assert.match(html, /aria-label="첨부 이미지 미리보기"/);
+  assert.doesNotMatch(html, /aria-label="첨부 이미지 미리보기"/);
+  assert.match(html, /data-body-image="image"/);
   assert.match(html, /src="\/test-image.png"/);
   assert.doesNotMatch(html, /attachment:image/);
-  assert.match(html, /현장.png 이미지 미리보기/);
+  assert.doesNotMatch(html, /현장.png 이미지 미리보기/);
   assert.match(html, /제작도면.pdf 열기/);
   assert.match(html, /download="제작도면.pdf"/);
   assert.match(html, /aria-label="제작도면.pdf 다운로드"/);
