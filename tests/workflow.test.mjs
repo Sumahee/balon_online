@@ -31,6 +31,68 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
 
 const request = (body) => ({ json: async () => body });
 
+test("project titles use company and short location while preserving manual titles", () => {
+  const { generateWorkTitle, getWorkTitle } = loadModule("src/lib/work-title.ts");
+  assert.equal(generateWorkTitle("바론", "서울특별시 서초구 반포동 원베일리 104동 1201호"), "바론, 반포동");
+  assert.equal(generateWorkTitle("바론", "강원도 춘천시 중앙로 123"), "바론, 강원도");
+  assert.equal(generateWorkTitle("바론", "경기도 고양시 일산 아파트 101동"), "바론, 일산");
+  assert.equal(generateWorkTitle("바론", "", "반포"), "바론, 반포");
+  assert.equal(getWorkTitle({ title: "직접 수정한 프로젝트", clientName: "바론", siteAddress: "반포동" }), "직접 수정한 프로젝트");
+});
+
+test("calendar more button expands all events in the cell and can collapse again", () => {
+  const states = [];
+  let cursor = 0;
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const items = Array.from({ length: 7 }, (_, i) => ({ id: `work-${i}`, title: `현장 ${i}`, clientName: "바론", dueDate: today, status: "대기", priority: "보통" }));
+  const react = {
+    useState: initial => { const index = cursor++; if (!(index in states)) states[index] = typeof initial === "function" ? initial() : initial; return [states[index], value => { states[index] = typeof value === "function" ? value(states[index]) : value; }]; },
+    useMemo: callback => callback(), useEffect: () => {},
+  };
+  const { default: Calendar } = loadModule("src/app/calendar/page.tsx", {
+    react,
+    "@/context/AuthContext": { useAuth: () => ({ user: { name: "직원" } }) },
+    "@/context/DataContext": { useData: () => ({ workItems: items, asItems: [], isSaving: false }) },
+  });
+  const nodes = tree => !tree || typeof tree !== "object" ? [] : Array.isArray(tree) ? tree.flatMap(nodes) : [tree, ...nodes(tree.props?.children)];
+  const render = () => { cursor = 0; return nodes(Calendar()); };
+  let tree = render();
+  assert.equal(tree.filter(node => typeof node.props?.title === "string" && node.props.title.startsWith("[천정형] 현장")).length, 4);
+  const more = tree.find(node => node.type === "button" && node.props["aria-expanded"] === false);
+  assert.ok(more);
+  let stopped = false;
+  more.props.onClick({ stopPropagation: () => { stopped = true; } });
+  assert.ok(stopped);
+  tree = render();
+  assert.equal(tree.filter(node => typeof node.props?.title === "string" && node.props.title.startsWith("[천정형] 현장")).length, 7);
+  tree.find(node => node.type === "button" && node.props["aria-expanded"] === true).props.onClick({ stopPropagation() {} });
+  assert.equal(render().filter(node => typeof node.props?.title === "string" && node.props.title.startsWith("[천정형] 현장")).length, 4);
+});
+
+test("gallery thumbnail returns a smaller WebP and keeps original available", async () => {
+  const sharp = nativeRequire("sharp");
+  const { photoResponse } = loadModule("src/lib/gallery-thumbnail.ts", {}, { Response, Uint8Array });
+  const source = await sharp({ create: { width: 1200, height: 900, channels: 3, background: "#abc" } }).png().toBuffer();
+  const url = `data:image/png;base64,${source.toString("base64")}`;
+  const thumbnail = await photoResponse(url, "http://localhost/api/gallery", 160, "test");
+  assert.equal(thumbnail.headers.get("Content-Type"), "image/webp");
+  const metadata = await sharp(Buffer.from(await thumbnail.arrayBuffer())).metadata();
+  assert.equal(metadata.width, 160);
+  assert.equal(metadata.height, 120);
+  const original = await photoResponse(url, "http://localhost/api/gallery", null, "test");
+  assert.equal(original.headers.get("Content-Type"), "image/png");
+  assert.equal(Buffer.compare(Buffer.from(await original.arrayBuffer()), source), 0);
+});
+
+test("gallery attachment deletion reports database failures instead of success", async () => {
+  const { DELETE } = loadModule("src/lib/api-handlers/gallery.ts", {
+    "@/lib/db": { db: {}, executeQuery: async () => ({ success: true, rows: [{ id: "photo" }] }), executeMutation: async () => { throw new Error("offline"); } },
+  });
+  const result = await DELETE({ url: "http://localhost/api/gallery?type=image&id=attachment-photo" });
+  assert.equal(result.status, 500);
+  assert.equal((await result.json()).success, false);
+});
+
 test("construction photo compression resizes and caps storage before upload", async () => {
   const draws=[];
   const canvas={width:0,height:0,getContext:()=>({fillRect(){},drawImage(_image,_x,_y,w,h){draws.push([w,h]);}}),toDataURL(_type,quality){return "data:image/jpeg;base64,"+"A".repeat(Math.ceil(this.width*this.height*quality/3));}};
@@ -246,7 +308,7 @@ test("ready-to-ship work does not count as completed installation", () => {
 });
 
 
-test("construction photos do not appear in body text or its file list", () => {
+test("editable body previews attached screenshots separately from text and documents", () => {
   const React = nativeRequire("react");
   const { renderToStaticMarkup } = nativeRequire("react-dom/server");
   const { UnifiedBoardEditor } = loadModule("src/components/common/UnifiedBoardEditor.tsx");
@@ -259,14 +321,25 @@ test("construction photos do not appear in body text or its file list", () => {
   }));
   assert.match(html, /contentEditable="true"/);
   assert.match(html, /min-height:15.75rem/);
-  assert.doesNotMatch(html, /<img/);
+  assert.match(html, /aria-label="첨부 이미지 미리보기"/);
+  assert.match(html, /src="\/test-image.png"/);
   assert.doesNotMatch(html, /attachment:image/);
-  assert.doesNotMatch(html, /현장.png/);
+  assert.match(html, /현장.png 이미지 미리보기/);
   assert.match(html, /제작도면.pdf 열기/);
   assert.match(html, /download="제작도면.pdf"/);
   assert.match(html, /aria-label="제작도면.pdf 다운로드"/);
   assert.match(html, />PDF<\/span>/);
   assert.match(html, /본문에 사진·파일 추가/);
+});
+
+test("clipboard captures accept item files and browser file-list fallback without duplicates", () => {
+  const { clipboardFiles } = loadModule("src/lib/clipboard-files.ts");
+  const screenshot = { name: "image.png", type: "image/png" };
+  const text = { kind: "string", getAsFile: () => null };
+  const image = { kind: "file", getAsFile: () => screenshot };
+  assert.deepEqual(Array.from(clipboardFiles({ items: [text, image], files: [screenshot] })), [screenshot]);
+  assert.deepEqual(Array.from(clipboardFiles({ items: [text], files: [screenshot] })), [screenshot]);
+  assert.equal(clipboardFiles({ items: [text], files: [] }).length, 0);
 });
 
 test("only drawing tasks display drawing integration, and body comes before optional details", () => {

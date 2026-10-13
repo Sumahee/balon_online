@@ -22,9 +22,18 @@ import { useData } from "@/context/DataContext";
 
 import { cn } from "@/lib/utils";
 
-export default function GalleryPage() {
-  const { folders, images, addFolder, addImage, deleteImage } = useData();
+import { BulkSelectionBar, useBulkSelection } from "@/components/common/BulkSelection";
 
+function thumbnailUrl(url: string, id: string, width: number) {
+  if (url.startsWith("/api/gallery?")) return `${url}&thumbnail=${width}`;
+  if (url.startsWith("data:image/")) return `/api/gallery?source=gallery&id=${encodeURIComponent(id)}&thumbnail=${width}`;
+  return url;
+}
+
+export default function GalleryPage() {
+  const { folders, images, addFolder, addImage, deleteImage, isSaving } = useData();
+
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [selectedFolderId, setSelectedFolderId] = useState<string>("folder-all");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
@@ -99,6 +108,8 @@ export default function GalleryPage() {
 
     return true;
   });
+
+  const selection = useBulkSelection(filteredImages.map(image => image.id), deleteImage);
 
   const activeFolder = folders.find((f) => f.id === selectedFolderId);
 
@@ -353,6 +364,7 @@ export default function GalleryPage() {
         </div>
       )}
 
+      <div className="flex flex-wrap justify-between gap-3"><BulkSelectionBar selection={selection} disabled={isSaving} /><div className="flex gap-2"><button type="button" aria-pressed={viewMode === "grid"} onClick={() => setViewMode("grid")} className="action-secondary">격자 보기</button><button type="button" aria-pressed={viewMode === "list"} onClick={() => setViewMode("list")} className="action-secondary">목록 보기</button></div></div>
       {/* Photo Gallery Grid */}
       {filteredImages.length === 0 ? (
         <div className="p-16 border-2 border-dashed border-slate-200 rounded-2xl bg-white text-center flex flex-col items-center justify-center gap-3">
@@ -373,23 +385,26 @@ export default function GalleryPage() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className={viewMode === "list" ? "space-y-2" : "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"}>
           {filteredImages.map((img, idx) => (
             <div
               key={img.id}
-              className="group bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs hover:shadow-lg transition-all duration-300 flex flex-col"
+              className={cn("group bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs hover:shadow-lg transition-all duration-300 flex", viewMode === "list" ? "flex-row items-center" : "flex-col")}
             >
+              <label className="p-3 flex items-center gap-2 text-xs"><input type="checkbox" aria-label={`${img.title} 선택`} checked={selection.selected.has(img.id)} disabled={selection.deleting} onChange={() => selection.toggle(img.id)} /><span className="sr-only">사진 선택</span></label>
               {/* Thumbnail Container */}
               <div
                 onClick={() => setLightboxIndex(idx)}
-                className="relative aspect-4/3 bg-slate-100 overflow-hidden cursor-pointer"
+                className={cn("relative bg-slate-100 overflow-hidden cursor-pointer shrink-0", viewMode === "list" ? "w-20 h-16 sm:w-28 sm:h-20 rounded-lg" : "aspect-4/3")}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={img.url}
+                  src={thumbnailUrl(img.url, img.id, viewMode === "list" ? 160 : 480)}
                   alt={img.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   loading="lazy"
+                  decoding="async"
+                  onError={e => { if (e.currentTarget.getAttribute("src") !== img.url) e.currentTarget.src = img.url; }}
                 />
 
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
@@ -405,7 +420,7 @@ export default function GalleryPage() {
               </div>
 
               {/* Card Meta */}
-              <div className="p-3.5 flex-1 flex flex-col justify-between space-y-2">
+              <div className="p-3.5 min-w-0 flex-1 flex flex-col justify-between space-y-2">
                 <div>
                   <h3
                     onClick={() => setLightboxIndex(idx)}

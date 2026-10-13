@@ -3,10 +3,18 @@ import { serverStore } from "@/lib/serverStore";
 import { db, executeQuery, executeMutation } from "@/lib/db";
 import { commentGalleryImages } from "@/lib/construction-gallery";
 import type { WorkItem } from "@/types";
+import { photoResponse } from "@/lib/gallery-thumbnail";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const folderId = searchParams.get("folder_id") || undefined;
+  const thumbnail = searchParams.has("thumbnail") ? (Number(searchParams.get("thumbnail")) <= 160 ? 160 : 480) : null;
+  if (searchParams.get("source") === "gallery") {
+    const image = serverStore.getImages().find(image => image.id === searchParams.get("id"));
+    if (!image) return new Response("Photo not found", { status: 404 });
+    try { return await photoResponse(image.url, request.url, thumbnail, image.id); }
+    catch { return new Response("Photo read failed", { status: 503 }); }
+  }
 
   if (db) {
     try {
@@ -20,10 +28,7 @@ export async function GET(request: NextRequest) {
         const urls=attachment ? [String(result.rows[0]?.url || "")] : JSON.parse(String(result.rows[0]?.images || "[]"));
         const url=urls[index];
         if (typeof url !== "string") return new Response("Photo not found",{status:404});
-        const match=url.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
-        if (match) return new Response(Buffer.from(match[2],"base64"),{headers:{"Content-Type":match[1],"Cache-Control":"private, max-age=3600","X-Content-Type-Options":"nosniff"}});
-        if (/^(https?:\/\/|\/uploads\/)/.test(url)) return NextResponse.redirect(new URL(url,request.url));
-        return new Response("Invalid photo",{status:400});
+        return await photoResponse(url, request.url, thumbnail, `${searchParams.get("source")}:${id}:${index}`);
       }
       const comments=await executeQuery(`SELECT c.id AS comment_id, c.author, c.content, c.images, c.created_at AS comment_date, w.* FROM bo_work_item_comments c JOIN bo_work_items w ON w.id = c.work_item_id WHERE c.images IS NOT NULL ORDER BY c.created_at DESC`);
       if (!comments.success) throw new Error("시공 사진 조회 실패");
@@ -107,6 +112,16 @@ export async function DELETE(request: NextRequest) {
   }
 
   if (type === "image") {
+    if (db && id.startsWith("attachment-")) {
+      try {
+        const photoId = id.slice("attachment-".length);
+        const existing = await executeQuery("SELECT id FROM bo_attachments WHERE id = ? AND file_type = 'image'", [photoId]);
+        if (!existing.success) throw new Error("Photo lookup failed");
+        if (!existing.rows.length) return NextResponse.json({success:false,message:"사진을 찾지 못했습니다."},{status:404});
+        await executeMutation("DELETE FROM bo_attachments WHERE id = ? AND file_type = 'image'", [photoId]);
+        return NextResponse.json({success:true});
+      } catch { return NextResponse.json({success:false,message:"사진 삭제 실패"},{status:500}); }
+    }
     if (db && id.startsWith("comment-")) {
       try {
         const match=id.match(/^comment-(.+)-(\d+)$/);

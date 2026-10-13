@@ -66,7 +66,7 @@ export function MobileMonthCalendar(props:Props) {
             <h2 className={`py-2 px-1 text-sm font-bold ${date===selected ? "text-blue-700" : "text-slate-900"}`}>{props.month+1}월 {Number(date.slice(-2))}일</h2>
             {groups.get(date)!.length ? groups.get(date)!.map(event=><button key={`${event.type}-${event.id}`} onClick={()=>props.onOpen(event)} aria-label={`${event.clientName} ${event.title} ${event.status} 상세보기`} title={`${event.title} · ${event.location} · ${event.status}`} className={`mb-1 flex items-center gap-2 w-full rounded-lg bg-white border-l-4 border px-2.5 py-2.5 text-left ${event.type==="as" ? "border-l-rose-500" : event.status==="시공완료" ? "border-l-blue-500" : "border-l-lime-500"}`}>
               <span className="shrink-0 rounded bg-slate-100 px-1 py-0.5 text-[10px] font-bold text-slate-600">{event.type==="as" ? "A/S" : event.drawingType || "시공"}</span>
-              <span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-900">{event.clientName || event.title} · {event.location}</span>
+              <span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-900">{event.type === "work" ? event.title : event.location}</span>
               <span className="shrink-0 text-[10px] text-slate-500">{event.status}</span>
             </button>) : <p className="rounded-xl bg-white p-4 text-sm text-slate-500">등록된 일정이 없습니다.</p>}
           </section>)}

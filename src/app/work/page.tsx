@@ -21,6 +21,9 @@ import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManage
 import { getMaterialOrders } from "@/lib/materialUtils";
 import { TaskDetailModal } from "@/components/dashboard/TaskDetailModal";
 
+import { getWorkTitle } from "@/lib/work-title";
+import { BulkSelectionBar, useBulkSelection } from "@/components/common/BulkSelection";
+
 export default function WorkBoardPage() {
   const { workItems, updateWorkItem, deleteWorkItem, advanceWorkStatus, setQuickModalType, isSaving } = useData();
 
@@ -44,6 +47,8 @@ export default function WorkBoardPage() {
 
     return matchesSearch && matchesStatus && matchesCategory;
   });
+
+  const selection = useBulkSelection(filteredItems.map(item => item.id), deleteWorkItem);
 
   const getPriorityBadge = (priority: Priority) => {
     switch (priority) {
@@ -182,6 +187,7 @@ export default function WorkBoardPage() {
       )}
 
       {/* Table View */}
+      <BulkSelectionBar selection={selection} disabled={isSaving} />
       <p className="text-sm text-slate-600">전체 {workItems.length}건 · 현재 {filteredItems.length}건 표시</p>
 
       {viewMode === "table" && (
@@ -191,6 +197,7 @@ export default function WorkBoardPage() {
             <table aria-label="업무 목록" className="data-table min-w-[900px] w-full text-left text-sm">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-xs">
                 <tr>
+                  <th className="py-3.5 px-4">선택</th>
                   <th className="py-3.5 px-4">구분</th>
                   <th className="py-3.5 px-4 min-w-[220px]">업무 / 프로젝트명</th>
                   <th className="py-3.5 px-4">담당자</th>
@@ -203,7 +210,7 @@ export default function WorkBoardPage() {
               <tbody className="divide-y divide-slate-100">
                 {filteredItems.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
+                    <td colSpan={8} className="py-8 text-center text-slate-400 text-xs">
                       검색 조건에 맞는 업무가 없습니다.
                     </td>
                   </tr>
@@ -214,6 +221,7 @@ export default function WorkBoardPage() {
                       onClick={() => setSelectedTask(item)}
                       className="hover:bg-blue-50/50 transition group cursor-pointer"
                     >
+                      <td className="py-3 px-4" onClick={e => e.stopPropagation()}><input type="checkbox" aria-label={`${getWorkTitle(item)} 선택`} checked={selection.selected.has(item.id)} disabled={selection.deleting} onChange={() => selection.toggle(item.id)} /></td>
                       <td className="py-3 px-4">
                         <span className="text-xs whitespace-nowrap font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
                           {item.category}
@@ -227,7 +235,7 @@ export default function WorkBoardPage() {
                           </span>
                         </div>
                         <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedTask(item); }} className="block text-left font-semibold text-slate-900 hover:text-blue-700 hover:underline">
-                          {item.title}
+                          {getWorkTitle(item)}
                         </button>
 
                       </td>
@@ -285,7 +293,7 @@ export default function WorkBoardPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (confirm(`'${item.title}' 업무를 삭제하시겠습니까?`)) {
+                              if (confirm(`'${getWorkTitle(item)}' 업무를 삭제하시겠습니까?`)) {
                                 deleteWorkItem(item.id);
                               }
                             }}
@@ -314,6 +322,7 @@ export default function WorkBoardPage() {
               onClick={() => setSelectedTask(item)}
               className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs hover:shadow-md hover:border-blue-400 transition space-y-3 flex flex-col justify-between cursor-pointer group"
             >
+              <label onClick={e => e.stopPropagation()} className="flex items-center gap-2 text-xs"><input type="checkbox" aria-label={`${getWorkTitle(item)} 선택`} checked={selection.selected.has(item.id)} disabled={selection.deleting} onChange={() => selection.toggle(item.id)} />선택</label>
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs whitespace-nowrap font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
@@ -330,7 +339,7 @@ export default function WorkBoardPage() {
                 </div>
 
                 <h3 className="font-bold text-sm text-slate-900 group-hover:text-blue-600 transition line-clamp-2">
-                  {item.title}
+                  {getWorkTitle(item)}
                 </h3>
                 {item.notes && (
                   <p className="text-xs text-slate-500 mt-1 line-clamp-2 italic">

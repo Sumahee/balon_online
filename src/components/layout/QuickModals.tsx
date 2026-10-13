@@ -12,18 +12,14 @@ import { cn } from "@/lib/utils";
 import { getToday } from "@/lib/date";
 import { AsIntakeFields } from "@/components/as/AsIntakeFields";
 
+import { generateWorkTitle, getProjectLocation } from "@/lib/work-title";
+
 export function QuickModals() {
   const { quickModalType, setQuickModalType, addWorkItem, addAsItem, isSaving } = useData();
   const { user } = useAuth();
 
   // Dynamic Client and Staff lists loaded from shared DB
   const [clientsList, setClientsList] = useState<ClientInfo[]>([]);
-
-  useEffect(() => {
-    if (user?.name) {
-      setWorkForm((prev) => ({ ...prev, drawingAssignee: user.name }));
-    }
-  }, [user?.name]);
 
   useEffect(() => {
     fetch("/api/clients")
@@ -36,6 +32,8 @@ export function QuickModals() {
       .catch(() => {});
 
   }, []);
+
+  const [customTitle, setCustomTitle] = useState<string | null>(null);
 
   // Work form state
   const [workForm, setWorkForm] = useState<{
@@ -54,7 +52,7 @@ export function QuickModals() {
     description: string;
     attachments: AttachmentItem[];
     materialOrders: MaterialOrderItem[];
-  }>({
+  }>(() => ({
     clientName: "",
     siteAddress: "",
     drawingType: "옴니버스",
@@ -70,7 +68,15 @@ export function QuickModals() {
     description: "",
     attachments: [],
     materialOrders: [],
-  });
+  }));
+
+  useEffect(() => {
+    let active = true;
+    if (user?.name) {
+      queueMicrotask(() => { if (active) setWorkForm((prev) => ({ ...prev, drawingAssignee: user.name })); });
+    }
+    return () => { active = false; };
+  }, [user?.name]);
 
   // AS form state
   const [asForm, setAsForm] = useState<{
@@ -103,9 +109,7 @@ export function QuickModals() {
 
   if (!quickModalType) return null;
 
-  const autoTitlePreview = `${workForm.clientName.trim() || "업체명"}${
-    workForm.siteAddress.trim() ? ` ${workForm.siteAddress.trim()}` : ""
-  }(${workForm.drawingType})`;
+  const autoTitlePreview = generateWorkTitle(workForm.clientName, workForm.siteAddress);
 
   const handleWorkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,8 +121,8 @@ export function QuickModals() {
       }
 
       const todayStr = new Date().toISOString().split("T")[0];
-      const siteStr = workForm.siteAddress.trim() ? ` ${workForm.siteAddress.trim()}` : "";
-      const autoTitle = `${workForm.clientName.trim()}${siteStr}(${workForm.drawingType})`;
+      const autoTitle = (customTitle ?? autoTitlePreview).trim();
+      if (!autoTitle) { alert("프로젝트명을 입력해 주세요."); return; }
 
       const hasOrders = workForm.materialOrders.length > 0;
       const isAllDone = hasOrders && workForm.materialOrders.every((o) => o.isOrdered);
@@ -129,7 +133,7 @@ export function QuickModals() {
         title: autoTitle,
         clientName: workForm.clientName.trim(),
         siteAddress: workForm.siteAddress.trim(),
-        region: workForm.siteAddress.trim().split(" ")[0] || "서울/수도권",
+        region: getProjectLocation(workForm.siteAddress),
         drawingType: workForm.drawingType,
         cardType: workForm.cardType,
         deadlineType: workForm.deadlineType,
@@ -308,7 +312,7 @@ export function QuickModals() {
               {/* 도면 타입 선택 (천정형, 에보라, 옴니버스, 기타) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  도면 세부 타입 선택 (자동 프로젝트명 표기용) <span className="text-rose-500">*</span>
+                  도면 세부 타입 선택 <span className="text-rose-500">*</span>
                 </label>
                 <div className="grid grid-cols-4 gap-2">
                   {DRAWING_TYPES.map((dt) => {
@@ -336,11 +340,10 @@ export function QuickModals() {
               <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                 <span className="text-blue-900 font-bold flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>카드 표기 프로젝트명 (자동기입):</span>
+                  <span>프로젝트명 (자동 생성 · 수정 가능):</span>
                 </span>
-                <span className="font-extrabold text-blue-950 bg-white px-2.5 py-1 rounded-lg border border-blue-200 shadow-2xs font-mono text-xs truncate max-w-full">
-                  {autoTitlePreview}
-                </span>
+                <input aria-label="프로젝트명" required value={customTitle ?? autoTitlePreview} onChange={e => setCustomTitle(e.target.value)} className="flex-1 min-w-0 bg-white px-2.5 py-2 rounded-lg border border-blue-200 text-sm" />
+                <button type="button" onClick={() => setCustomTitle(null)} className="text-blue-700 font-bold">자동 생성</button>
               </div>
 
               {/* 카드 타입 & 마감 시공일 & 우선순위 */}

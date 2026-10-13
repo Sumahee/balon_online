@@ -358,7 +358,7 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
                   {liveItem.deadlineType || "시공일"}
                 </span>
                 <span className="font-extrabold text-white text-base">
-                  {liveItem.clientName} {liveItem.siteAddress || liveItem.region} ({liveItem.drawingType || "천정형"})
+                  {liveItem.title}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2 font-mono">

@@ -5,6 +5,7 @@ import { Paperclip, FileText, File, Loader2, X, Download } from "lucide-react";
 import { AttachmentItem } from "@/types";
 import { bodyHtml, serializeBody } from "@/lib/body-content";
 import { cn } from "@/lib/utils";
+import { clipboardFiles } from "@/lib/clipboard-files";
 
 interface UnifiedBoardEditorProps {
   description: string;
@@ -205,8 +206,9 @@ export function UnifiedBoardEditor({
             if (readOnly) return;
             event.preventDefault();
             rememberCursor();
-            const files = Array.from(event.clipboardData.items).filter((item) => item.kind === "file").map((item) => item.getAsFile()).filter((file): file is File => file !== null);
-            if (files.length) void uploadFiles(files);
+            const files = clipboardFiles(event.clipboardData);
+            if (files.length && uploadLock.current) setError("사진 업로드가 끝난 후 다시 붙여넣어 주세요.");
+            else if (files.length) void uploadFiles(files);
             else pasteText(event.clipboardData.getData("text/plain"));
           }}
         />
@@ -217,13 +219,28 @@ export function UnifiedBoardEditor({
               {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
               {isUploading ? "업로드 중…" : "본문에 사진·파일 추가"}
             </button>
-            <span className="text-xs text-slate-500">끌어놓기 · 이미지 붙여넣기</span>
+            <span className="text-xs text-slate-500">화면 캡처(Win+Shift+S) 후 작성란에 Ctrl+V · 끌어놓기</span>
             <input ref={fileInputRef} type="file" multiple aria-label="본문에 추가할 파일 선택" className="hidden" onChange={(event) => { if (event.target.files) void uploadFiles(event.target.files); event.target.value = ""; }} />
           </div>
         )}
         {isDragging && <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-blue-50/90 text-sm font-semibold text-blue-700">놓으면 본문에 추가합니다</div>}
         {error && <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p>}
       </div>
+
+      {!readOnly && attachments.some(attachment => attachmentType(attachment) === "image") && (
+        <div aria-label="첨부 이미지 미리보기" className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {attachments.filter(attachment => attachmentType(attachment) === "image").map(attachment => (
+            <div key={attachment.id} className="relative overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <button type="button" onClick={() => openAttachment(attachment)} aria-label={`${attachment.name} 이미지 미리보기`} className="w-full text-left">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={attachment.url} alt={attachment.name} loading="lazy" decoding="async" className="h-32 w-full object-contain bg-slate-50" />
+                <span className="block truncate px-3 py-2 text-xs text-slate-600">{attachment.name}</span>
+              </button>
+              <button type="button" disabled={isUploading} onClick={() => void removeAttachment(attachment.id)} aria-label={`${attachment.name} 이미지 제거`} className="absolute right-1 top-1 rounded-lg bg-white/90 p-1.5 text-slate-500 hover:text-rose-700"><X className="h-4 w-4" /></button>
+            </div>
+          ))}
+        </div>
+      )}
 
         {/* Documents are separate from body text; construction photos use the photo feed. */}
         {attachments.some(attachment => attachmentType(attachment) !== "image") && (

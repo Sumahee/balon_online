@@ -29,27 +29,11 @@ import { CalendarDetailModal } from "@/components/calendar/CalendarDetailModal";
 import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
 import { MobileMonthCalendar } from "@/components/calendar/MobileMonthCalendar";
 
+import { generateWorkTitle, getWorkTitle } from "@/lib/work-title";
+
 const REGIONS = ["전체", "반포", "일산", "서초", "한남", "성수", "판교", "분당"];
 
-// Helper to extract clean vendor name & ~동 / ~구 location
-function getCalendarCardLabel(item: WorkItem) {
-  const rawClient = item?.clientName || "(주)바론 협력사";
-  const cleanClient =
-    rawClient.replace(/\(주\)/g, "").replace(/인테리어/g, "").trim() || rawClient;
-
-  let location = "";
-  const fullStr = `${item?.siteAddress || ""} ${item?.title || ""}`;
-  const match = fullStr.match(/([가-힣]{2,8}(?:동|구))/);
-  if (match && match[1]) {
-    location = match[1];
-  } else if (item?.region) {
-    location = item.region.endsWith("동") || item.region.endsWith("구") ? item.region : `${item.region}동`;
-  } else {
-    location = "서초동";
-  }
-
-  return `${cleanClient}, ${location}`;
-}
+const getCalendarCardLabel = getWorkTitle;
 
 // Helper to get Drawing Type
 function getDrawingType(item: WorkItem): "천정형" | "에보라" | "옴니버스" | "기타" {
@@ -117,7 +101,7 @@ export default function CalendarPage() {
   // Selected item for Detail Modal
   const [selectedItem, setSelectedItem] = useState<WorkItem | null>(null);
   const [selectedAsItem, setSelectedAsItem] = useState<AsItem | null>(null);
-  const [selectedDayEvents, setSelectedDayEvents] = useState<{ dateStr: string; events: CalendarEvent[] } | null>(null);
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
 
   // New item modal state
@@ -155,7 +139,7 @@ export default function CalendarPage() {
 
     (workItems || []).forEach((item) => {
       if (!item) return;
-      const title = item.title || "";
+      const title = getWorkTitle(item);
       const clientName = item.clientName || "";
       const region = item.region || "";
 
@@ -264,14 +248,14 @@ export default function CalendarPage() {
     e.preventDefault();
     if (isSaving) return;
     try {
-      if (!newTitle.trim()) return;
+      if (!(newTitle.trim() || generateWorkTitle(newClient, newSiteAddress, newRegion))) return;
 
       const safeClient = newClient.trim() || "(주)바론 협력업체";
       const todayStr = getToday();
 
       await addWorkItem({
         type: "work",
-        title: newTitle.trim(),
+        title: newTitle.trim() || generateWorkTitle(newClient, newSiteAddress, newRegion),
         clientName: safeClient,
         siteAddress: newSiteAddress.trim(),
         region: newRegion,
@@ -462,8 +446,8 @@ export default function CalendarPage() {
                   </div>
 
                   {/* Day Event List Cards (Work & A/S - 1줄 콤팩트 스타일) */}
-                  <div className="flex-1 space-y-1 overflow-y-auto max-h-36 sm:max-h-44 lg:max-h-56 scrollbar-none">
-                    {dayEvents.slice(0, 4).map((evt) => {
+                  <div className="flex-1 space-y-1">
+                    {dayEvents.slice(0, expandedDays.has(day.dateStr) ? undefined : 4).map((evt) => {
                       if (evt.type === "as" && evt.originalAsItem) {
                         const asItem = evt.originalAsItem;
                         return (
@@ -530,6 +514,7 @@ export default function CalendarPage() {
 
                       return null;
                     })}
+                    {dayEvents.length > 4 && <button type="button" aria-expanded={expandedDays.has(day.dateStr)} onClick={e => { e.stopPropagation(); setExpandedDays(prev => { const next = new Set(prev); if (next.has(day.dateStr)) next.delete(day.dateStr); else next.add(day.dateStr); return next; }); }} className="w-full py-1.5 text-left text-xs font-bold text-blue-700 hover:bg-blue-50 rounded">{expandedDays.has(day.dateStr) ? "접기" : `더보기... (+${dayEvents.length - 4}건)`}</button>}
                   </div>
                 </div>
               );
@@ -565,7 +550,7 @@ export default function CalendarPage() {
                   <input
                     type="text"
                     required
-                    value={newTitle}
+                    value={newTitle || generateWorkTitle(newClient, newSiteAddress, newRegion)}
                     onChange={(e) => setNewTitle(e.target.value)}
                     placeholder="예: 반포자이 102동 주방 아일랜드 서랍장 시공"
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -708,7 +693,7 @@ export default function CalendarPage() {
                   <label className="font-bold text-slate-700 block mb-1">마감 구분</label>
                   <select
                     value={newDeadlineType}
-                    onChange={(e) => setNewDeadlineType(e.target.value as any)}
+                    onChange={(e) => setNewDeadlineType(e.target.value as "시공일" | "배송일" | "요청일")}
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
                   >
                     <option value="시공일">시공일</option>
@@ -868,93 +853,6 @@ export default function CalendarPage() {
             >
               ✕
             </button>
-          </div>
-        </div>
-      )}
-      {/* DAY ALL EVENTS POPUP MODAL (+N개 더보기) */}
-      {selectedDayEvents && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white w-full max-w-lg rounded-2xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
-              <div className="flex items-center gap-2 font-bold text-sm">
-                <CalendarIcon className="w-5 h-5 text-blue-400" />
-                <span>{selectedDayEvents.dateStr} 전체 일정 목록 ({selectedDayEvents.events.length}건)</span>
-              </div>
-              <button
-                onClick={() => setSelectedDayEvents(null)}
-                className="text-slate-400 hover:text-white p-1 rounded cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-6 space-y-2.5 overflow-y-auto flex-1">
-              {selectedDayEvents.events.map((evt) => {
-                if (evt.type === "as" && evt.originalAsItem) {
-                  const asItem = evt.originalAsItem;
-                  return (
-                    <div
-                      key={evt.id}
-                      onClick={() => {
-                        setSelectedDayEvents(null);
-                        setSelectedAsItem(asItem);
-                      }}
-                      className="p-3 bg-rose-50 border border-rose-200 hover:bg-rose-100 rounded-xl transition cursor-pointer flex items-center justify-between text-xs"
-                    >
-                      <div>
-                        <div className="flex items-center gap-1.5 font-extrabold text-rose-950">
-                          <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px]">🛠️ A/S</span>
-                          <span>{asItem.clientName} ({asItem.siteAddress})</span>
-                        </div>
-                        <p className="text-slate-600 text-[11px] mt-1 line-clamp-1">{asItem.reason}</p>
-                      </div>
-                      <span className="text-[10px] font-bold px-2 py-1 rounded bg-white text-rose-700 border border-rose-200 shrink-0">
-                        {asItem.resultStatus}
-                      </span>
-                    </div>
-                  );
-                }
-
-                if (evt.originalWorkItem) {
-                  const item = evt.originalWorkItem;
-                  const label = getCalendarCardLabel(item);
-                  const dType = getDrawingType(item);
-
-                  return (
-                    <div
-                      key={item.id}
-                      onClick={() => {
-                        setSelectedDayEvents(null);
-                        setSelectedItem(item);
-                      }}
-                      className="p-3 bg-slate-50 border border-slate-200 hover:bg-blue-50 hover:border-blue-300 rounded-xl transition cursor-pointer flex items-center justify-between text-xs"
-                    >
-                      <div>
-                        <div className="flex items-center gap-1.5 font-bold text-slate-900">
-                          {renderDrawingTypeBadge(dType)}
-                          <span>{label}</span>
-                        </div>
-                        <p className="text-slate-500 text-[11px] mt-1">{item.title}</p>
-                      </div>
-                      <span className="text-[10px] font-bold px-2 py-1 rounded bg-blue-100 text-blue-800 shrink-0">
-                        {item.status}
-                      </span>
-                    </div>
-                  );
-                }
-
-                return null;
-              })}
-            </div>
-
-            <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <button
-                onClick={() => setSelectedDayEvents(null)}
-                className="px-5 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl cursor-pointer"
-              >
-                닫기
-              </button>
-            </div>
           </div>
         </div>
       )}
