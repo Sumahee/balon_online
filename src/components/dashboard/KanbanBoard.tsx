@@ -1,5 +1,6 @@
 "use client";
 import { getWorkTitle } from "@/lib/work-title";
+import { workStatusLabel } from "@/lib/work-status";
 
 import { getToday, getDaysUntil } from "@/lib/date";
 
@@ -86,7 +87,7 @@ export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) 
   ];
 
   if (showCompleted) {
-    columns.push({ status: "시공완료", title: "시공완료", subtext: "완료 업무 기록", icon: CheckCircle2,
+    columns.push({ status: "시공완료", title: "완료", subtext: "시공·발송 완료 기록", icon: CheckCircle2,
       headerBg: "bg-emerald-50", borderAccent: "border-emerald-500", textColor: "text-emerald-800" });
   }
 
@@ -380,7 +381,7 @@ export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) 
                                 title="시공을 완료하면 완료 업무 목록에 보관됩니다"
                               >
                                 <CheckCircle2 className="w-4 h-4 text-emerald-700" />
-                                <span>시공완료 처리</span>
+                                <span>{workStatusLabel(task, "시공완료")} 처리</span>
                               </button>
                               <button
                                 onClick={() =>

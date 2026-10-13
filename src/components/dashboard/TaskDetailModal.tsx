@@ -1,5 +1,6 @@
 "use client";
 import { getWorkTitle } from "@/lib/work-title";
+import { workStatusLabel } from "@/lib/work-status";
 import { isCalendarVisible } from "@/lib/calendar-visibility";
 import { ConstructionPhotoDropZone } from "@/components/common/ConstructionPhotoDropZone";
 
@@ -528,7 +529,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                   <select aria-label="현재 업무 상태" value={liveItem?.status || item.status} disabled={isSaving}
                     onChange={(event) => handleStageChange(event.target.value as WorkStatus)}
                     className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 font-semibold text-slate-800">
-                    {STAGES.map((stage) => <option key={stage} value={stage}>{stage}</option>)}
+                    {STAGES.map((stage) => <option key={stage} value={stage}>{workStatusLabel(liveItem || item, stage)}</option>)}
                   </select>
                   <button type="button" aria-pressed={!!liveItem?.confirmationPending} disabled={isSaving} onClick={() => { void updateWorkItem(item.id, { confirmationPending: !liveItem?.confirmationPending }); }} className={cn("rounded-lg border px-2.5 py-1.5 text-xs font-bold cursor-pointer disabled:opacity-50", liveItem?.confirmationPending ? "border-amber-400 bg-amber-100 text-amber-800 shadow-sm" : "border-slate-200 bg-slate-100 text-slate-500")}><span className={cn("inline-block mr-1.5 h-2 w-2 rounded-full", liveItem?.confirmationPending ? "bg-amber-500" : "bg-slate-300")} />컨펌중</button>
                 </label>

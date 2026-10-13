@@ -21,6 +21,7 @@ import { getMaterialOrders } from "@/lib/materialUtils";
 import { TaskDetailModal } from "@/components/dashboard/TaskDetailModal";
 
 import { getWorkTitle } from "@/lib/work-title";
+import { workStatusLabel } from "@/lib/work-status";
 import { BulkSelectionBar, useBulkSelection } from "@/components/common/BulkSelection";
 
 export default function WorkBoardPage() {
@@ -120,7 +121,7 @@ export default function WorkBoardPage() {
             </button>
             <button type="button" onClick={() => setSelectedTask(item)} aria-label={`${getWorkTitle(item)} 일정과 상태 상세보기`} className="shrink-0 w-16 text-right cursor-pointer">
               <span className="block mb-1 text-xs tabular-nums text-slate-600">{shortDate(item.deliveryDate || item.dueDate)}</span>
-              <span className={cn("inline-block rounded px-1.5 py-0.5 text-[10px] font-bold border", getStatusBadge(item.status))}>{shortStatus(item.status)}</span>
+              <span className={cn("inline-block rounded px-1.5 py-0.5 text-[10px] font-bold border", getStatusBadge(item.status))}>{item.cardType === "자재리스트" && item.status === "시공완료" ? "발송완료" : shortStatus(item.status)}</span>
             </button>
           </div>)}
         </div>
@@ -308,7 +309,7 @@ export default function WorkBoardPage() {
                           )}
                           title="클릭하여 상태 변경"
                         >
-                          {item.status} ↻
+                          {workStatusLabel(item, item.status)} ↻
                         </button>
                       </td>
 
@@ -404,7 +405,7 @@ export default function WorkBoardPage() {
                       getStatusBadge(item.status)
                     )}
                   >
-                    상태: {item.status} ↻
+                    상태: {workStatusLabel(item, item.status)} ↻
                   </button>
 
                   <div className="flex items-center gap-1">
@@ -509,7 +510,7 @@ export default function WorkBoardPage() {
                       <option value="오피스">오피스</option>
                       <option value="공장">공장</option>
                       <option value="준비완료">준비완료</option>
-                      <option value="시공완료">🏗️ 시공완료 (목록 보관)</option>
+                      <option value="시공완료">{workStatusLabel(editingItem, "시공완료")} (목록 보관)</option>
                     </select>
                   </div>
 

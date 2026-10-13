@@ -31,6 +31,13 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
 
 const request = (body) => ({ json: async () => body });
 
+test("material lists finish as dispatched while drawing tasks finish as installed", () => {
+  const { workStatusLabel } = loadModule("src/lib/work-status.ts");
+  assert.equal(workStatusLabel({cardType:"자재리스트"}, "시공완료"), "발송 완료");
+  assert.equal(workStatusLabel({cardType:"자재리스트"}, "준비완료"), "출고대기");
+  assert.equal(workStatusLabel({cardType:"도면"}, "시공완료"), "시공완료");
+});
+
 test("calendar defaults to drawing tasks but manual visibility overrides both defaults", () => {
   const { isCalendarVisible } = loadModule("src/lib/calendar-visibility.ts");
   assert.equal(isCalendarVisible({cardType:"도면"}), true);
