@@ -1,6 +1,5 @@
 "use client";
 
-import { PageHeader } from "@/components/common/PageHeader";
 
 import React, { useState } from "react";
 import {
@@ -28,6 +27,7 @@ export default function WorkBoardPage() {
   const { workItems, updateWorkItem, deleteWorkItem, advanceWorkStatus, setQuickModalType, isSaving } = useData();
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("전체");
   const [selectedCategory, setSelectedCategory] = useState<string>("전체");
   const [viewMode, setViewMode] = useState<"kanban" | "table" | "card">("table");
@@ -49,6 +49,10 @@ export default function WorkBoardPage() {
   });
 
   const selection = useBulkSelection(filteredItems.map(item => item.id), deleteWorkItem);
+  const mobileItems = workItems.filter(item => [getWorkTitle(item), item.clientName, item.siteAddress, item.region, item.assignee, item.category].some(value => (value || "").toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase())));
+  const mobileSelection = useBulkSelection(mobileItems.map(item => item.id), deleteWorkItem);
+  const shortDate = (value?: string) => value?.match(/^\d{4}-(\d{2})-(\d{2})/)?.slice(1).map(Number).join(".") || "—";
+  const shortStatus = (status: WorkStatus) => ({ 대기: "대기", 오피스: "사무", 공장: "제작", 준비완료: "준비", 시공완료: "완료" })[status];
 
   const getPriorityBadge = (priority: Priority) => {
     switch (priority) {
@@ -91,8 +95,38 @@ export default function WorkBoardPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="업무 게시판" description="업무를 검색하고 담당자, 마감일, 진행 상태를 한눈에 확인하세요." actions={<><button onClick={() => setQuickModalType("work")} className="action-primary"><Plus className="h-4 w-4" />새 업무 등록</button></>} />
+    <div className="work-board space-y-6">
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="min-w-0 text-xl sm:text-2xl font-bold tracking-tight text-slate-950">업무 게시판</h1>
+        <div className="flex shrink-0 items-center gap-2">
+          <button type="button" aria-label="업무 검색" aria-expanded={searchOpen} onClick={() => setSearchOpen(value => !value)} className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 cursor-pointer"><Search className="h-5 w-5" /></button>
+          <button type="button" onClick={() => setQuickModalType("work")} className="action-primary !px-3 !text-xs sm:!text-sm"><Plus className="h-4 w-4" />새 업무 등록</button>
+        </div>
+      </div>
+      {searchOpen && <input autoFocus type="search" aria-label="업무 검색어" placeholder="업무명, 업체, 현장 검색…" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />}
+
+      <section className="work-board-mobile space-y-3" aria-label="모바일 업무 목록">
+        <details className="text-xs text-slate-600"><summary className="cursor-pointer">선택 삭제</summary><div className="pt-2"><BulkSelectionBar selection={mobileSelection} disabled={isSaving} /></div></details>
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
+          {mobileItems.length === 0 && <p className="p-6 text-center text-sm text-slate-500">{searchQuery.trim() ? "검색 결과가 없습니다." : "등록된 업무가 없습니다."}</p>}
+          {mobileItems.map(item => <div key={item.id} className="flex items-center gap-2 px-3 py-3">
+            <input type="checkbox" aria-label={`${getWorkTitle(item)} 선택`} checked={mobileSelection.selected.has(item.id)} disabled={mobileSelection.deleting} onChange={() => mobileSelection.toggle(item.id)} className="h-4 w-4 shrink-0" />
+            <button type="button" onClick={() => setSelectedTask(item)} className="min-w-0 flex-1 text-left cursor-pointer">
+              <span className="flex items-center gap-1.5 min-w-0 mb-1">
+                <span className="truncate max-w-[65%] rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-bold text-blue-900">{item.clientName || "협력사"}</span>
+                <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{item.category || "기타"}</span>
+              </span>
+              <span className="block break-words text-sm font-semibold leading-5 text-slate-900">{getWorkTitle(item)}</span>
+            </button>
+            <button type="button" onClick={() => setSelectedTask(item)} aria-label={`${getWorkTitle(item)} 일정과 상태 상세보기`} className="shrink-0 w-16 text-right cursor-pointer">
+              <span className="block mb-1 text-xs tabular-nums text-slate-600">{shortDate(item.deliveryDate || item.dueDate)}</span>
+              <span className={cn("inline-block rounded px-1.5 py-0.5 text-[10px] font-bold border", getStatusBadge(item.status))}>{shortStatus(item.status)}</span>
+            </button>
+          </div>)}
+        </div>
+      </section>
+
+      <div className="work-board-desktop space-y-6">
 
       {/* Filter and Search Bar */}
       <div className="filter-panel space-y-3">
@@ -404,6 +438,7 @@ export default function WorkBoardPage() {
         <summary>오늘 확인할 업무</summary>
         <div className="pt-4"><WorkOverview /></div>
       </details>
+      </div>
 
       {/* Edit Modal */}
       {editingItem && (

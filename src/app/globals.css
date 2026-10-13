@@ -100,6 +100,13 @@ button:disabled {
 .action-primary:hover { background: #1d4ed8; }
 .action-secondary { background: white; color: #334155; border: 1px solid #cbd5e1; }
 .action-secondary:hover { background: #f1f5f9; }
+.work-board { container-type: inline-size; }
+.work-board-mobile { display: block; }
+.work-board-desktop { display: none; }
+@container (min-width: 900px) {
+  .work-board-mobile { display: none; }
+  .work-board-desktop { display: block; }
+}
 .filter-panel { padding: 1rem; background: white; border: 1px solid #e2e8f0; border-radius: .875rem; }
 .filter-panel input, .filter-panel select { min-height: 42px; }
 .summary-disclosure { border: 1px solid #e2e8f0; border-radius: .875rem; background: white; padding: 1rem; }
