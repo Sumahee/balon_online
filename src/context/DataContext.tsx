@@ -273,7 +273,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setPendingWrites(count=>count+1);
     setError(null);
     try {
-    if ((imagesParam?.length ?? 0)>5) throw new Error("한 번에 사진 5장까지 첨부해주세요.");
+    if ((imagesParam?.length ?? 0)>10) throw new Error("한 번에 사진 10장까지 첨부해주세요.");
     for (const image of imagesParam ?? []) compressed.push(await compressPhoto(image));
     const result = await save<{ comment: WorkItemComment }>("/api/comments", "POST", { workItemId, author, content, images: compressed });
     if (!result.data?.comment) throw new Error("댓글 저장 결과를 확인하지 못했습니다.");

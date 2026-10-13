@@ -156,7 +156,8 @@ test("comment photos persist once and failed writes never report success", async
   assert.match(saved.data.comment.images[0],/^\/api\/gallery\?source=comment/);
   const failing=loadModule("src/lib/api-handlers/comments.ts",{"@/lib/db":{executeMutation:async()=>{throw new Error("DB failed");}}});
   assert.equal((await failing.POST(request({workItemId:"work-1",content:"완료",images:[image]}))).status,500);
-  assert.equal((await POST(request({workItemId:"work-1",content:"완료",images:Array(6).fill(image)}))).status,400);
+  assert.equal((await POST(request({workItemId:"work-1",content:"완료",images:Array(10).fill(image)}))).status,200);
+  assert.equal((await POST(request({workItemId:"work-1",content:"완료",images:Array(11).fill(image)}))).status,400);
 });
 
 test("AS intake persists installation, received and scheduled dates with paid reason", async () => {

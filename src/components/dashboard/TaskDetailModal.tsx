@@ -1,4 +1,6 @@
 "use client";
+import { ConstructionPhotoDropZone } from "@/components/common/ConstructionPhotoDropZone";
+
 
 import { getToday } from "@/lib/date";
 
@@ -189,10 +191,9 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
   };
 
   // Immediate upload & post when user selects photo files from OS dialog ("열기")
-  const handleCommentPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    e.target.value = "";
-    if (!files.length || !liveItem) return;
+  const handleCommentPhotoSelect = async (files: File[]) => {
+    if (!files.length || !liveItem || isSaving) return;
+    if (files.length > 10 || files.some(file => !file.type.startsWith("image/"))) { alert("이미지 파일만 한 번에 최대 10장까지 올려주세요."); return; }
     try {
       const photos: string[] = [];
       for (const file of files) photos.push(await readPhotoFile(file));
@@ -1038,6 +1039,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                   </div>
                 )}
 
+                <ConstructionPhotoDropZone onUpload={handleCommentPhotoSelect} disabled={isSaving} />
                 <div className="flex gap-2">
                   <textarea
                     rows={2}
@@ -1053,7 +1055,7 @@ export function TaskDetailModal({ item, onClose }: TaskDetailModalProps) {
                     ref={commentFileInputRef}
                     accept="image/*"
                     multiple
-                    onChange={handleCommentPhotoSelect}
+                    onChange={e => { const files = Array.from(e.target.files ?? []); e.target.value = ""; void handleCommentPhotoSelect(files); }}
                     className="hidden"
                   />
 
