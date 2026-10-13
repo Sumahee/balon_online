@@ -20,7 +20,7 @@ import {
 } from "@/lib/dataStore";
 
 import { compressPhoto } from "@/lib/photo-compression";
-import { commentGalleryImages } from "@/lib/construction-gallery";
+import { commentGalleryImages, orderGalleryImage } from "@/lib/construction-gallery";
 import type { WorkItemComment } from "@/types";
 import { requestApi } from "@/lib/api-client";
 
@@ -232,10 +232,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteImage = async (id: string) => {
-    const target = images.find((img) => img.id === id);
+    const target = galleryImages.find((img) => img.id === id);
     if (!target) return;
     await save(`/api/gallery?id=${encodeURIComponent(id)}&type=image`, "DELETE");
     setImages((prev) => prev.filter((img) => img.id !== id));
+    if (id.startsWith("attachment-")) setWorkItems(prev => prev.map(item => ({...item, attachments: (item.attachments || []).filter(attachment => `attachment-${attachment.id}` !== id)})));
     setFolders((prev) => prev.map((folder) => folder.id === target.folderId || folder.id === "folder-all"
       ? { ...folder, itemCount: Math.max(0, folder.itemCount - 1) } : folder));
   };
@@ -411,6 +412,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     };
 
   const metrics = getDashboardMetrics(workItems, asItems);
+  const galleryImages = [
+    ...images.filter(image => !image.id.startsWith("attachment-")),
+    ...workItems.flatMap(item => (item.attachments || []).filter(attachment => attachment.fileType === "image").map(attachment => orderGalleryImage(item, attachment))),
+  ];
 
   return (
     <DataContext.Provider
@@ -418,7 +423,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         workItems,
         asItems,
         folders,
-        images,
+        images: galleryImages,
         materials,
         purchaseItems,
         metrics,

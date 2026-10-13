@@ -118,6 +118,33 @@ test("construction gallery derives searchable drawing tags without copying photo
   assert.equal(await image.text(),"test-image");
 });
 
+test("work registration images are order materials and never construction photos", async () => {
+  const { orderGalleryImage, matchesGalleryFolder, galleryFolders } = loadModule("src/lib/construction-gallery.ts");
+  const work = {id:"w", title:"업체, 반포동", clientName:"업체", region:"반포동", drawingType:"천정형", postColor:"다크그레이", boardColor:"화이트"};
+  const image = orderGalleryImage(work, {id:"a", name:"발주.png", url:"/uploads/a.png", fileType:"image", size:"10 KB"});
+  assert.ok(image.tags.includes("발주자료"));
+  assert.ok(!image.tags.includes("시공사진"));
+  assert.ok(!image.tags.includes("천정형"));
+  assert.equal(matchesGalleryFolder(image,"folder-construction"),false);
+  assert.equal(matchesGalleryFolder(image,"folder-order-materials"),true);
+  const folders = galleryFolders([], [image]);
+  assert.equal(folders[0].id,"folder-construction");
+  assert.ok(folders.some(folder => folder.name === "업체 발주 자료"));
+  const row={id:"w",attachment_id:"a",photo_name:"발주.png",photo_date:"2026-10-13",client_name:"업체",title:"업체, 반포동",region:"반포동",drawing_type:"천정형"};
+  const { GET } = loadModule("src/lib/api-handlers/gallery.ts", {"@/lib/db":{db:{},executeQuery:async sql=>({success:true,rows:sql.includes("bo_attachments")?[row]:[]})}}, {Response});
+  const result = await (await GET({url:"http://localhost/api/gallery"})).json();
+  const saved = result.data.images.find(entry=>entry.id === "attachment-a");
+  assert.ok(saved.tags.includes("발주자료"));
+  assert.equal(matchesGalleryFolder(saved,"folder-construction"),false);
+});
+
+test("new work defaults to ceiling drawing type and gallery opens construction folder", () => {
+  const form = readFileSync("src/components/layout/QuickModals.tsx", "utf8");
+  assert.equal((form.match(/drawingType: "천정형"/g) || []).length, 2);
+  assert.match(readFileSync("src/app/calendar/page.tsx", "utf8"), /useState<DrawingType>\("천정형"\)/);
+  assert.match(readFileSync("src/app/gallery/page.tsx", "utf8"), /useState<string>\("folder-construction"\)/);
+});
+
 test("comment photos persist once and failed writes never report success", async () => {
   const writes=[];
   const {POST}=loadModule("src/lib/api-handlers/comments.ts",{"@/lib/db":{executeMutation:async(sql,args)=>{writes.push({sql,args});},executeQuery:async()=>({success:true,rows:[]})}});

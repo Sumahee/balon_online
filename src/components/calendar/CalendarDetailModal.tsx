@@ -111,17 +111,6 @@ export function CalendarDetailModal({ item, onClose }: CalendarDetailModalProps)
   // All Photos list (combines card photo uploads & comment attached photos)
   const allPhotos = React.useMemo(() => {
     const list: { id: string; name: string; url: string; size?: string; uploadedAt?: string }[] = [];
-    (liveItem.attachments || []).forEach((att) => {
-      if (att.fileType === "image" || /\.(jpg|jpeg|png|webp|gif)$/i.test(att.name)) {
-        list.push({
-          id: att.id,
-          name: att.name,
-          url: att.url,
-          size: att.size,
-          uploadedAt: att.uploadedAt,
-        });
-      }
-    });
     (liveItem.comments || []).forEach((cmt, cIdx) => {
       const cmtImages = cmt.images || (cmt.imageUrl ? [cmt.imageUrl] : []);
       cmtImages.forEach((imgUrl, imgIdx) => {

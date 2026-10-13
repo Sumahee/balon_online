@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverStore } from "@/lib/serverStore";
 import { db, executeQuery, executeMutation } from "@/lib/db";
-import { commentGalleryImages } from "@/lib/construction-gallery";
+import { commentGalleryImages, orderGalleryImage, galleryFolders, matchesGalleryFolder } from "@/lib/construction-gallery";
 import type { WorkItem } from "@/types";
 import { photoResponse } from "@/lib/gallery-thumbnail";
 
@@ -41,13 +41,14 @@ export async function GET(request: NextRequest) {
       });
       const attachments=await executeQuery(`SELECT a.id AS attachment_id, a.url AS photo_url, a.name AS photo_name, a.uploaded_at AS photo_date, w.* FROM bo_attachments a JOIN bo_work_items w ON w.id = a.work_item_id WHERE a.file_type = 'image'`);
       if (!attachments.success) throw new Error("시공 첨부 사진 조회 실패");
+      const orders = [];
       for (const row of attachments.rows) {
         const work={id:String(row.id),title:String(row.title || ""),clientName:String(row.client_name || ""),siteAddress:String(row.site_address || ""),region:String(row.region || ""),drawingType:row.drawing_type,boardColor:String(row.board_color || ""),postColor:String(row.post_color || ""),category:row.category} as WorkItem;
-        const entry=commentGalleryImages(work,{id:String(row.attachment_id),workItemId:work.id,author:"",content:"",createdAt:String(row.photo_date || ""),images:[String(row.photo_url || "")]})[0];
-        if (entry) construction.push({...entry,id:`attachment-${row.attachment_id}`,title:`${work.title} - ${row.photo_name}`,url:`/api/gallery?source=attachment&id=${encodeURIComponent(String(row.attachment_id))}&index=0`});
+        orders.push(orderGalleryImage(work, {id:String(row.attachment_id), name:String(row.photo_name), fileType:"image", size:"", uploadedAt:String(row.photo_date || ""), url:`/api/gallery?source=attachment&id=${encodeURIComponent(String(row.attachment_id))}&index=0`}));
       }
-      const images=[...construction,...serverStore.getImages()].filter(image=>!folderId || folderId === "folder-all" || image.folderId === folderId);
-      const folders=[...serverStore.getFolders(),{id:"folder-construction",name:"시공 사진",description:"업무 댓글에 등록된 시공 사진",itemCount:construction.length,createdAt:""}];
+      const allImages=[...construction,...orders,...serverStore.getImages()];
+      const images=allImages.filter(image=>!folderId || matchesGalleryFolder(image, folderId));
+      const folders=galleryFolders(serverStore.getFolders(),allImages);
       return NextResponse.json({success:true,data:{folders,images,selectedFolderId:folderId || "folder-all"}});
     } catch {
       return NextResponse.json({success:false,message:"시공 사진을 불러오지 못했습니다."},{status:503});

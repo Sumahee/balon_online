@@ -21,6 +21,7 @@ import {
 import { useData } from "@/context/DataContext";
 
 import { cn } from "@/lib/utils";
+import { galleryFolders, matchesGalleryFolder, ORDER_FOLDER } from "@/lib/construction-gallery";
 
 import { BulkSelectionBar, useBulkSelection } from "@/components/common/BulkSelection";
 
@@ -34,7 +35,7 @@ export default function GalleryPage() {
   const { folders, images, addFolder, addImage, deleteImage, isSaving } = useData();
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [selectedFolderId, setSelectedFolderId] = useState<string>("folder-all");
+  const [selectedFolderId, setSelectedFolderId] = useState<string>("folder-construction");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   // Search & Attribute Filters
@@ -68,7 +69,7 @@ export default function GalleryPage() {
   // Filtered images with Tag & Attribute Search
   const filteredImages = images.filter((img) => {
     // Folder filter
-    if (selectedFolderId !== "folder-all" && img.folderId !== selectedFolderId) {
+    if (!matchesGalleryFolder(img, selectedFolderId)) {
       return false;
     }
 
@@ -111,7 +112,8 @@ export default function GalleryPage() {
 
   const selection = useBulkSelection(filteredImages.map(image => image.id), deleteImage);
 
-  const activeFolder = folders.find((f) => f.id === selectedFolderId);
+  const displayFolders = galleryFolders(folders, images);
+  const activeFolder = displayFolders.find((f) => f.id === selectedFolderId);
 
   const handleCreateFolder = async (e: React.FormEvent) => {
     try {
@@ -159,14 +161,15 @@ export default function GalleryPage() {
       }
 
       // Auto folder classification: Match category to existing folder or use selected
-      let targetFolderId = selectedFolderId === "folder-all" ? "folder-1" : selectedFolderId;
+      let targetFolderId = selectedFolderId === "folder-all" ? "folder-construction" : selectedFolderId;
       const matchedFolder = folders.find((f) => f.name.includes(uploadCategory));
-      if (matchedFolder) {
+      if (matchedFolder && !selectedFolderId.startsWith(ORDER_FOLDER)) {
         targetFolderId = matchedFolder.id;
       }
 
       // Auto-generate tags based on drawing/item attributes
-      const autoTags: string[] = [
+      const autoTags: string[] = selectedFolderId.startsWith(ORDER_FOLDER) ? ["발주자료", uploadSiteName].filter(Boolean) : [
+        "시공사진",
         uploadCategory,
         uploadColor,
         uploadHasMirror ? "거울포함" : "거울없음",
@@ -323,12 +326,12 @@ export default function GalleryPage() {
 
       {/* Folder Tabs / Hierarchy Selector */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {folders.map((folder) => {
+        {displayFolders.map((folder) => {
           const isSelected = selectedFolderId === folder.id;
           const count =
             folder.id === "folder-all"
               ? images.length
-              : images.filter((img) => img.folderId === folder.id).length;
+              : images.filter((img) => matchesGalleryFolder(img, folder.id)).length;
 
           return (
             <button

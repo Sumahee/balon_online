@@ -55,7 +55,7 @@ export function QuickModals() {
   }>(() => ({
     clientName: "",
     siteAddress: "",
-    drawingType: "옴니버스",
+    drawingType: "천정형",
     cardType: "도면",
     deadlineType: "시공일",
     deliveryDate: new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0],
@@ -159,7 +159,7 @@ export function QuickModals() {
       setWorkForm({
         clientName: "",
         siteAddress: "",
-        drawingType: "옴니버스",
+        drawingType: "천정형",
         cardType: "도면",
         deadlineType: "시공일",
         deliveryDate: new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0],

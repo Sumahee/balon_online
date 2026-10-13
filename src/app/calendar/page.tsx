@@ -111,7 +111,7 @@ export default function CalendarPage() {
   const [newSiteAddress, setNewSiteAddress] = useState("");
   const [newRegion, setNewRegion] = useState("반포");
   const [newDate, setNewDate] = useState(getToday());
-  const [newDrawingType, setNewDrawingType] = useState<DrawingType>("옴니버스");
+  const [newDrawingType, setNewDrawingType] = useState<DrawingType>("천정형");
   const [newDeadlineType, setNewDeadlineType] = useState<"시공일" | "배송일" | "요청일">("시공일");
   const [newCategory, setNewCategory] = useState<"제작" | "실측" | "시공" | "설계" | "납품" | "기타">("시공");
   const [newDescription, setNewDescription] = useState("");
