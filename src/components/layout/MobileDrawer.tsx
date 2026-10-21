@@ -71,6 +71,7 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
       badge: `${images.length}장`,
       color: "text-purple-400 bg-purple-500/10 border-purple-500/20",
     },
+    { name: "설비 관리", path: "/equipment", icon: Wrench, badge: null, color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
     {
       name: "서랍장 자동화 계산기",
       path: "/drawer",

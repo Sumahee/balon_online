@@ -1,4 +1,5 @@
 "use client";
+import { ConstructionPhotoPicker } from "@/components/common/ConstructionPhotoPicker";
 import { DrawingUploadBlock } from "@/components/common/DrawingUploadBlock";
 import { isDrawingAttachment } from "@/lib/drawing-attachments";
 import { WorkEditorModal } from "@/components/common/WorkEditorModal";
@@ -43,11 +44,12 @@ import { AttachmentItem,CardType,DeadlineType,DrawingRequest,WorkItem,WorkStatus
 
 interface TaskDetailModalProps {
   item: WorkItem | null;
+  startPhotoUpload?: boolean;
   onClose: () => void;
 }
 
-export function TaskDetailModal({item,onClose}:TaskDetailModalProps) { return <WorkDetailGate item={item} onClose={onClose}>{loaded => <TaskDetailContent item={loaded} onClose={onClose} />}</WorkDetailGate>; }
-function TaskDetailContent({ item: originalItem, onClose }: { item: WorkItem; onClose: () => void }) {
+export function TaskDetailModal({item,onClose,startPhotoUpload}:TaskDetailModalProps) { return <WorkDetailGate item={item} onClose={onClose}>{loaded => <TaskDetailContent item={loaded} onClose={onClose} startPhotoUpload={startPhotoUpload} />}</WorkDetailGate>; }
+function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { item: WorkItem; onClose: () => void; startPhotoUpload?: boolean }) {
   const { workItems, updateWorkItem, isSaving, addComment, deleteComment, deleteCommentImage, loadMoreComments } = useData();
   const { user, token } = useAuth();
 
@@ -55,6 +57,8 @@ function TaskDetailContent({ item: originalItem, onClose }: { item: WorkItem; on
   const item = workItems.find((w) => w.id === originalItem.id) || originalItem;
   const liveItem = item;
 
+  const [photoOpen,setPhotoOpen]=useState(!!startPhotoUpload);
+  const [photoFiles,setPhotoFiles]=useState<File[]>([]);
   const [editorOpen, setEditorOpen] = useState(false);
   const [materialOpen, setMaterialOpen] = useState(false);
   const startEditingSpecs = () => setEditorOpen(true);
@@ -131,19 +135,9 @@ function TaskDetailContent({ item: originalItem, onClose }: { item: WorkItem; on
     setCommentAttachedPhotos([]);
   };
 
-  // Immediate upload & post when user selects photo files from OS dialog ("열기")
   const handleCommentPhotoSelect = async (files: File[]) => {
-    if (!files.length || !liveItem || isSaving) return;
-    if (files.length > 10 || files.some(file => !file.type.startsWith("image/"))) { alert("이미지 파일만 한 번에 최대 10장까지 올려주세요."); return; }
-    try {
-      const photos: string[] = [];
-      for (const file of files) photos.push(await readPhotoFile(file));
-      await addComment(liveItem.id, user?.name || "\uC2DC\uACF5\uAE30\uC0AC", newCommentText.trim() || "[\uC2DC\uACF5 \uC0AC\uC9C4]",photos);
-      setNewCommentText("");
-      setCommentAttachedPhotos([]);
-    } catch {
-      // Keep the draft; DataContext reports compression or database failures.
-    }
+    if (!files.length || isSaving) return;
+    setPhotoFiles(files);setPhotoOpen(true);
   };
 
   const handleRemoveAttachedPhoto = (index: number) => {
@@ -275,7 +269,8 @@ function TaskDetailContent({ item: originalItem, onClose }: { item: WorkItem; on
       {editorOpen && <WorkEditorModal item={liveItem} onClose={() => setEditorOpen(false)} />}
       <div role="dialog" aria-modal="true" aria-label="업무 상세" inert={editorOpen} aria-hidden={editorOpen}
         className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-5 bg-black/70 backdrop-blur-xs animate-in fade-in overflow-y-auto">
-        <div className="w-full sm:max-w-4xl bg-white rounded-none sm:rounded-2xl shadow-2xl border-0 sm:border border-slate-200 overflow-hidden flex flex-col h-[100dvh] sm:h-auto max-h-[100dvh] sm:max-h-[92vh]">
+        {photoOpen && <ConstructionPhotoPicker title={liveItem.title} initialFiles={photoFiles} onClose={()=>setPhotoOpen(false)} onUpload={photos=>addComment(liveItem.id,user?.name || "시공기사",newCommentText.trim() || "[시공 사진]",photos)} />}
+      <div className="w-full sm:max-w-4xl bg-white rounded-none sm:rounded-2xl shadow-2xl border-0 sm:border border-slate-200 overflow-hidden flex flex-col h-[100dvh] sm:h-auto max-h-[100dvh] sm:max-h-[92vh]">
           {/* Top Bar */}
           <div className="sm:hidden flex items-center gap-2 border-b border-slate-200 px-3 py-2 shrink-0 bg-white">
             <span className="text-xs text-slate-500 shrink-0">{(liveItem?.deliveryDate || item.dueDate || "").slice(5).replace("-", ".")}</span>
@@ -313,6 +308,7 @@ function TaskDetailContent({ item: originalItem, onClose }: { item: WorkItem; on
             <section className="space-y-3 px-3 sm:px-0" aria-label="기본정보와 본문">
               <h3 className="sr-only">기본정보 · 업무 내용</h3>
               <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-bold">{getWorkTitle(liveItem || item)}</h2><button type="button" onClick={startEditingSpecs} className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">업무 수정</button></div>
+              {!!liveItem?.tags?.length && <div aria-label="업무 태그" className="flex flex-wrap gap-2">{liveItem.tags.map(tag => <span key={tag} className="rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white">{tag}</span>)}</div>}
               <dl className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-sm sm:grid-cols-4">{[["예정일", liveItem?.deliveryDate || item.dueDate], ["일정 종류", liveItem?.deadlineType], ["업무 등록자", liveItem?.createdBy || "기존 기록 없음"], ["시공팀", liveItem?.installationTeam], ["진행 상태", liveItem?.status]].map(([label,value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 font-medium">{value || "미입력"}</dd></div>)}</dl>
               <div className="flex items-center gap-3 text-sm"><label className="flex items-center gap-2">현재 상태<select aria-label="현재 업무 상태" value={liveItem?.status || item.status} disabled={isSaving} onChange={e => handleStageChange(e.target.value as WorkStatus)} className="rounded-lg border p-2">{(["대기", "오피스", "공장", "준비완료", "시공완료"] as WorkStatus[]).map(status => <option key={status} value={status}>{workStatusLabel(liveItem || item, status)}</option>)}</select></label><span className="text-xs text-slate-500" role="status">{isSaving ? "저장 중…" : "상태 변경은 즉시 저장됩니다"}</span></div>
               <div className="flex items-center gap-2"><button type="button" aria-pressed={!!liveItem?.confirmationPending} disabled={isSaving} onClick={() => { void updateWorkItem(item.id, { confirmationPending: !liveItem?.confirmationPending, confirmationCompleted: false }); }} className={cn("rounded-lg border px-2.5 py-1.5 text-xs font-bold cursor-pointer disabled:opacity-50", liveItem?.confirmationCompleted ? "border-emerald-300 bg-emerald-100 text-emerald-800" : liveItem?.confirmationPending ? "border-amber-400 bg-amber-100 text-amber-800 shadow-sm" : "border-slate-200 bg-slate-100 text-slate-500")}><span className={cn("inline-block mr-1.5 h-2 w-2 rounded-full", liveItem?.confirmationCompleted ? "bg-emerald-500" : liveItem?.confirmationPending ? "bg-amber-500" : "bg-slate-300")} />{liveItem?.confirmationCompleted ? "컨펌완료 ✓" : "컨펌중"}</button></div>
@@ -564,7 +560,7 @@ function TaskDetailContent({ item: originalItem, onClose }: { item: WorkItem; on
 
             {/* 💬 SNS 게시물/피드 스타일 현장 소통 댓글 섹션 */}
             {liveItem?.commentsHasMore && <button type="button" disabled={isSaving} onClick={()=>{void loadMoreComments(item.id,liveItem.comments?.length || 0).catch(()=>alert("댓글을 불러오지 못했습니다."));}} className="w-full rounded-lg border bg-white py-2 text-xs">이전 댓글 20개 더보기</button>}
-            <section className="sm:hidden px-2 space-y-2" aria-label="시공사진 첨부"><h2 className="text-sm font-bold">시공사진 첨부</h2><ConstructionPhotoDropZone onUpload={handleCommentPhotoSelect} disabled={isSaving} /><button type="button" onClick={() => commentFileInputRef.current?.click()} className="rounded-lg border px-3 py-1.5 text-xs">사진 선택</button></section>
+            <section className="sm:hidden px-2 space-y-2" aria-label="시공사진 첨부"><h2 className="text-sm font-bold">시공사진 첨부</h2><ConstructionPhotoDropZone onUpload={handleCommentPhotoSelect} disabled={isSaving} /><button type="button" onClick={() => {setPhotoFiles([]);setPhotoOpen(true);}} className="rounded-lg border px-3 py-1.5 text-xs">사진 등록 · 최대 20장</button></section>
 
             <div className="bg-slate-50 rounded-none sm:rounded-2xl border-y sm:border border-slate-200 px-0 py-3 sm:p-5 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-200 pb-3">
@@ -627,7 +623,7 @@ function TaskDetailContent({ item: originalItem, onClose }: { item: WorkItem; on
                   <div className="flex flex-col gap-1.5 shrink-0">
                     <button
                       type="button"
-                      onClick={() => commentFileInputRef.current?.click()}
+                      onClick={() => {setPhotoFiles([]);setPhotoOpen(true);}}
                       className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-extrabold transition flex items-center gap-1 cursor-pointer justify-center"
                       title="댓글에 사진 첨부"
                     >

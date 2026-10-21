@@ -1,3 +1,4 @@
+import * as equipmentHandler from "@/lib/api-handlers/equipment";
 import { NextRequest, NextResponse } from "next/server";
 
 import * as plywoodsHandler from "@/lib/api-handlers/plywoods";
@@ -48,6 +49,8 @@ export async function GET(request: NextRequest, context?: RouteContext) {
     const { domain } = await resolveDomain(request, context);
 
     switch (domain) {
+      case "equipment":
+        return await equipmentHandler.GET(request);
       case "posts":
         return await postsHandler.GET(request);
       case "clients":
@@ -107,6 +110,8 @@ export async function POST(request: NextRequest, context?: RouteContext) {
     const { domain, subPath } = await resolveDomain(request, context);
 
     switch (domain) {
+      case "equipment":
+        return await equipmentHandler.POST(request);
       case "posts":
         return await postsHandler.POST(request);
       case "clients":
@@ -149,6 +154,8 @@ export async function PUT(request: NextRequest, context?: RouteContext) {
     const { domain } = await resolveDomain(request, context);
 
     switch (domain) {
+      case "equipment":
+        return await equipmentHandler.PUT(request);
       case "posts":
         return await postsHandler.PUT(request);
       case "plywoods":

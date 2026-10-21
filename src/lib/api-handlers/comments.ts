@@ -45,8 +45,8 @@ export async function POST(request: Request) {
       );
     }
 
-    if (images !== undefined && (!Array.isArray(images) || images.length > 10 || images.some((url:unknown)=>typeof url !== "string" || (url.startsWith("data:") && (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(url) || url.length > 700000))))) {
-      return NextResponse.json({success:false,error:"한 번에 최대 10장, 사진당 500KB 이하로 첨부해주세요."},{status:400});
+    if (images !== undefined && (!Array.isArray(images) || images.length > 20 || images.some((url:unknown)=>typeof url !== "string" || (url.startsWith("data:") && (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(url) || url.length > 700000))))) {
+      return NextResponse.json({success:false,error:"한 번에 최대 20장, 사진당 500KB 이하로 첨부해주세요."},{status:400});
     }
     const commentId = `cmt-${crypto.randomUUID()}`;
     const authorName = author || "바론 INT 담당자";

@@ -1,5 +1,6 @@
 "use client";
 
+import { WORK_TAGS } from "@/lib/work-tags";
 import { PageHeader } from "@/components/common/PageHeader";
 
 import React, { useEffect, useState, useRef } from "react";
@@ -76,7 +77,7 @@ export default function GalleryPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Filter types & colors
-  const TYPES = ["전체", "주방가구", "아일랜드", "붙박이장", "수납장", "신발장", "기타"];
+  const TYPES = ["전체", "천정형", "바닥형", "주방가구", "아일랜드", "붙박이장", "수납장", "신발장", "기타"];
   const COLORS = ["전체", "화이트", "그레이", "우드/원목", "다크/블랙", "세라믹"];
 
   // Filtered images with Tag & Attribute Search
@@ -88,7 +89,7 @@ export default function GalleryPage() {
 
     // Text search query
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.trim().replace(/^#+/, "").toLowerCase();
       const matchTitle = img.title.toLowerCase().includes(q);
       const matchSite = img.siteName?.toLowerCase().includes(q) || false;
       const matchTags = img.tags.some((t) => t.toLowerCase().includes(q));
@@ -288,6 +289,9 @@ export default function GalleryPage() {
           </div>
         </div>
 
+        <div aria-label="시공사진 태그 검색" className="flex flex-wrap gap-2">
+          {WORK_TAGS.map(tag => <button key={tag} type="button" aria-pressed={searchQuery.replace(/^#+/, "") === tag} onClick={() => setSearchQuery(searchQuery.replace(/^#+/, "") === tag ? "" : tag)} className={cn("rounded-full border px-3 py-1.5 text-xs font-bold transition", searchQuery.replace(/^#+/, "") === tag ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 text-slate-600 hover:bg-blue-50")}>#{tag}</button>)}
+        </div>
         {/* Type & Color Sub-Filter Bar */}
         <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
           {/* Type Filter */}

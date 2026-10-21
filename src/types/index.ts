@@ -43,6 +43,7 @@ export interface WorkItemComment {
 }
 
 export interface WorkItem {
+  tags?: string[];
   createdBy?: string;
   installationTeam?: string;
   ceilingHeight?: string; // mm

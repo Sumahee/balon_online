@@ -103,6 +103,7 @@ export default function CalendarPage() {
   const [searchQuery, setSearchQuery] = useState("");
 
   // Selected item for Detail Modal
+  const [startPhotoUpload,setStartPhotoUpload]=useState(false);
   const [selectedItem, setSelectedItem] = useState<WorkItem | null>(null);
   const [selectedAsItem, setSelectedAsItem] = useState<AsItem | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
@@ -198,7 +199,7 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      <MobileMonthCalendar key={`${currentDate.getFullYear()}-${currentDate.getMonth()}`} year={currentDate.getFullYear()} month={currentDate.getMonth()} days={calendarDays} events={filteredEvents} regions={REGIONS} region={selectedRegion} search={searchQuery} onRegion={setSelectedRegion} onSearch={setSearchQuery} onPrevious={handlePrevMonth} onNext={handleNextMonth} onToday={()=>setCurrentDate(new Date(`${getToday()}T00:00:00`))} onAdd={date=>{if(date)setNewDate(date);setIsAddModalOpen(true);}} onOpen={event=>{const original=filteredEvents.find(value=>value.id===event.id && value.type===event.type);if(original?.originalWorkItem)setSelectedItem(original.originalWorkItem);if(original?.originalAsItem)setSelectedAsItem(original.originalAsItem);}} />
+      <MobileMonthCalendar key={`${currentDate.getFullYear()}-${currentDate.getMonth()}`} year={currentDate.getFullYear()} month={currentDate.getMonth()} days={calendarDays} events={filteredEvents} regions={REGIONS} region={selectedRegion} search={searchQuery} onRegion={setSelectedRegion} onSearch={setSearchQuery} onPrevious={handlePrevMonth} onNext={handleNextMonth} onToday={()=>setCurrentDate(new Date(`${getToday()}T00:00:00`))} onAdd={date=>{if(date)setNewDate(date);setIsAddModalOpen(true);}} onPhoto={event=>{const original=filteredEvents.find(value=>value.id===event.id && value.type===event.type);if(original?.originalWorkItem){setStartPhotoUpload(true);setSelectedItem(original.originalWorkItem);}}} onOpen={event=>{setStartPhotoUpload(false);const original=filteredEvents.find(value=>value.id===event.id && value.type===event.type);if(original?.originalWorkItem)setSelectedItem(original.originalWorkItem);if(original?.originalAsItem)setSelectedAsItem(original.originalAsItem);}} />
       <div className="hidden lg:block space-y-6">
       <PageHeader title="일정 관리" description="시공·배송·요청 일정을 확인하고 현장별 업무를 열어보세요." actions={<button onClick={() => {setNewDate(getToday());setIsAddModalOpen(true);}} className="action-primary"><Plus className="h-4 w-4" />일정 추가</button>} />
 
@@ -444,7 +445,8 @@ export default function CalendarPage() {
       {selectedItem && (
         <CalendarDetailModal
           item={selectedItem}
-          onClose={() => setSelectedItem(null)}
+          startPhotoUpload={startPhotoUpload}
+          onClose={() => {setSelectedItem(null);setStartPhotoUpload(false);}}
         />
       )}
 

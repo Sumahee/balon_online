@@ -31,6 +31,53 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
 
 const request = (body) => ({ json: async () => body });
 
+test("equipment stores photos, sums cost categories, filters dates and guards concurrent edits", async () => {
+  const database=nativeRequire("@libsql/client").createClient({url:"file::memory:"});
+  try {
+    const mock={db:database,executeQuery:async(sql,args=[])=>{const result=await database.execute({sql,args});return {success:true,rows:result.rows};},executeMutation:async(sql,args=[])=>{const result=await database.execute({sql,args});return {success:true,rows:result.rows};}};
+    const api=loadModule("src/lib/api-handlers/equipment.ts",{"@/lib/db":mock,"./auth":{VERIFY:async()=>new Response(JSON.stringify({user:{name:"정비 등록자"}}))}},{Response});
+    const get=async(params="")=>await (await api.GET({url:"http://localhost/api/equipment?"+params})).json();
+    const machine=await api.POST(request({entity:"machine",name:"1번 기계",status:"사용중",description:"절단기",serviceCompany:"공통 정비업체",contacts:[{company:"정비 업체",phone:"02-123-4567",technician:"담당기사",technicianPhone:"010-1234-5678"}]}));
+    assert.equal(machine.status,201);const id=(await machine.json()).data.id;
+    const second=await api.POST(request({entity:"machine",name:"2번 기계",status:"사용중"}));const secondId=(await second.json()).data.id;
+    const photo="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9V8AAAAASUVORK5CYII=";
+    const input={entity:"maintenance",machineId:id,date:"2026-10-21",title:"모터 교체",kind:"부품교체",costs:{travel:50000,parts:150000,self:0,other:10000},photos:[photo]};
+    const response=await api.POST(request(input));assert.equal(response.status,201);const entry=(await response.json()).data.id;
+    await api.POST(request({...input,machineId:secondId,date:"2026-09-01",costs:{travel:0,parts:0,self:30000,other:0},photos:[]}));
+    let all=(await get()).data;assert.equal(all.totals.total,240000);assert.equal(all.totals.parts,150000);assert.equal(all.totals.self,30000);
+    assert.equal(all.machines.find(m=>m.id===id).total,210000);
+    assert.equal(all.machines.find(m=>m.id===id).contacts[0].technician,"담당기사");
+    assert.equal((await get("from=2026-10-01&to=2026-10-31")).data.totals.total,210000);
+    const timeline=await get("machine="+id);assert.equal(timeline.data.length,1);assert.ok(timeline.data[0].photos[0].startsWith("/api/equipment?photo="));assert.ok(!JSON.stringify(timeline).includes("base64"));
+    const full=(await get("entry="+entry)).data;assert.equal(full.photos[0],photo);assert.equal(full.author,"정비 등록자");
+    const image=await api.GET({url:"http://localhost/api/equipment?photo="+entry+"&index=0"});assert.equal(image.status,200);assert.equal(image.headers.get("Content-Type"),"image/png");
+    assert.equal((await api.PUT(request({entity:"machine",id,revision:1,name:"재단기",status:"사용 종료"}))).status,200);
+    assert.equal((await api.PUT(request({entity:"machine",id,revision:1,name:"오래된 수정",status:"사용중"}))).status,409);
+    assert.equal((await api.PUT(request({...input,id:entry,revision:1,costs:{travel:0,parts:100000,self:0,other:0}}))).status,200);
+    assert.equal((await api.PUT(request({...input,id:entry,revision:1}))).status,409);
+    all=(await get()).data;assert.equal(all.totals.total,130000);assert.equal(all.machines.find(m=>m.id===id).name,"재단기");
+    assert.equal(all.machines.find(m=>m.id===id).contacts[0].phone,"02-123-4567");
+    assert.equal(all.machines.find(m=>m.id===id).serviceCompany,"공통 정비업체");
+    assert.equal((await api.PUT(request({entity:"machine",id,revision:2,name:"재단기",status:"사용 종료",contacts:Array(4).fill({company:"업체"})}))).status,400);
+    assert.equal((await api.PUT(request({entity:"machine",id,revision:2,name:"재단기",status:"사용 종료",contacts:[{company:"업체1"},{company:"업체2"},{company:"업체3",technician:"새 기사"}]}))).status,200);
+    assert.equal((await get()).data.machines.find(m=>m.id===id).contacts[2].technician,"새 기사");
+    assert.equal((await api.POST(request({...input,costs:{...input.costs,parts:-1}}))).status,400);
+    assert.equal((await api.POST(request({...input,costs:{...input.costs,parts:1.5}}))).status,400);
+    assert.equal((await api.POST(request({...input,date:"2026-02-30"}))).status,400);
+    assert.equal((await api.POST(request({...input,photos:Array(5).fill(photo)}))).status,400);
+    assert.equal((await api.POST(request({...input,machineId:"missing"}))).status,404);
+    assert.equal((await api.GET({url:"http://localhost/api/equipment?from=2026-10-31&to=2026-10-01"})).status,400);
+    for(let i=0;i<31;i++)await api.POST(request({...input,title:"점검 "+i,costs:{travel:0,parts:0,self:0,other:0},photos:[]}));
+    const first=await get("machine="+id);const next=await get("machine="+id+"&offset=30");assert.equal(first.data.length,30);assert.equal(first.hasMore,true);assert.equal(next.data.length,2);assert.ok(!next.data.some(item=>first.data.some(old=>old.id===item.id)));
+    assert.equal((await get()).data.totals.total,130000);
+    const denied=loadModule("src/lib/api-handlers/equipment.ts",{"@/lib/db":mock,"./auth":{VERIFY:async()=>new Response("denied",{status:401})}},{Response});
+    assert.equal((await denied.GET({url:"http://localhost/api/equipment"})).status,401);assert.equal((await denied.POST(request(input))).status,401);assert.equal((await denied.PUT(request(input))).status,401);
+    const offline=loadModule("src/lib/api-handlers/equipment.ts",{"@/lib/db":{db:null},"./auth":{VERIFY:async()=>new Response(JSON.stringify({user:{name:"정비 등록자"}}))}},{Response});
+    assert.equal((await offline.GET({url:"http://localhost/api/equipment"})).status,503);
+    const failed=await offline.POST(request({entity:"machine",name:"저장 실패",status:"사용중"}));assert.equal((await failed.json()).success,false);
+  } finally {database.close();}
+});
+
 test("simple work entry saves minimal drafts and keeps production fields on edit", () => {
   const {createWorkDraft,prepareWorkDraft}=loadModule("src/lib/work-form.ts");
   const draft=createWorkDraft(undefined,"2026-10-13","현재 계정");
@@ -51,12 +98,19 @@ test("work entry DB round trip preserves team, height and verified registration 
       CREATE TABLE bo_work_item_comments(id TEXT,work_item_id TEXT,author TEXT,content TEXT,created_at TEXT,images TEXT);`);
     const dbMock={db:database,executeQuery:async(sql,args=[])=>{const result=await database.execute({sql,args});return {success:true,rows:result.rows};},executeMutation:async(sql,args=[])=>{const result=await database.execute({sql,args});return {success:true,rows:result.rows};}};
     const handlers=loadModule("src/lib/api-handlers/posts.ts",{"@/lib/db":dbMock,"./db":dbMock,"./auth":{VERIFY:async()=>new Response(JSON.stringify({user:{name:"로그인 등록자"}}))}},{Response});
-    const created=await handlers.POST(request({type:"work",clientName:"업체",title:"업체",createdBy:"임의값",assignee:"임의값",installationTeam:"시공 A팀",ceilingHeight:"2400",cardType:"도면",calendarVisible:false,confirmationPending:true}));
+    const created=await handlers.POST(request({type:"work",clientName:"업체",title:"업체",createdBy:"임의값",assignee:"임의값",installationTeam:"시공 A팀",ceilingHeight:"2400",cardType:"도면",tags:["빗각","조명"],calendarVisible:false,confirmationPending:true}));
     assert.equal(created.status,201);
     const {data:{id}}=await created.json();
     await handlers.PUT(request({id,type:"work",createdBy:"다른 사용자",ceilingHeight:"2500",installationTeam:"시공 B팀"}));
     const detail=await (await handlers.GET({url:"http://localhost/api/posts?type=work&id="+id})).json();
     assert.equal(detail.data[0].createdBy,"로그인 등록자");
+    assert.deepEqual(detail.data[0].tags,["빗각","조명"]);
+    const summary=await (await handlers.GET({url:"http://localhost/api/posts?type=work&summary=1"})).json();
+    assert.deepEqual(summary.data[0].tags,["빗각","조명"]);
+    assert.equal((await handlers.PUT(request({id,type:"work",tags:["invalid"]}))).status,400);
+    await handlers.PUT(request({id,type:"work",tags:[]}));
+    const cleared=await (await handlers.GET({url:"http://localhost/api/posts?type=work&id="+id})).json();
+    assert.deepEqual(cleared.data[0].tags,[]);
     assert.equal(detail.data[0].calendarVisible,false);
     assert.equal(detail.data[0].confirmationPending,true);
     await handlers.PUT(request({id,type:"work",calendarVisible:true,confirmationPending:false}));
@@ -153,6 +207,17 @@ test("real SQLite pagination stays small with large photo data and loads files o
     const gallery=loadModule("src/lib/api-handlers/gallery.ts",{"@/lib/db":mock},{Response},cache);
     const photos=await(await gallery.GET({url:"http://localhost/api/gallery?limit=30&folder_id=folder-construction"})).json();
     assert.equal(photos.data.images.length,10);assert.ok(!JSON.stringify(photos).includes(photo));
+    await database.execute({sql:"UPDATE bo_work_items SET work_tags=?,drawing_type='천정형',board_color='화이트',post_color='다크그레이' WHERE id='064'",args:[JSON.stringify(["빗각","조명"])]});
+    for(const filter of ["q="+encodeURIComponent("#빗각"),"q="+encodeURIComponent("조명"),"drawing="+encodeURIComponent("천정형"),"color="+encodeURIComponent("다크그레이")]) {
+      const result=await(await gallery.GET({url:"http://localhost/api/gallery?limit=1&folder_id=folder-construction&"+filter})).json();
+      assert.equal(result.data.images.length,1);assert.equal(result.hasMore,true);
+      for(const tag of ["빗각","조명","천정형","화이트","다크그레이"])assert.ok(result.data.images[0].tags.includes(tag));
+    }
+    const missing=await(await gallery.GET({url:"http://localhost/api/gallery?limit=1&q="+encodeURIComponent("장식장")})).json();
+    assert.equal(missing.data.images.length,0);
+    await database.execute({sql:"UPDATE bo_work_items SET work_tags=? WHERE id='064'",args:[JSON.stringify(["장식장"])]});
+    const updated=await(await gallery.GET({url:"http://localhost/api/gallery?limit=1&q="+encodeURIComponent("장식장")})).json();
+    assert.equal(updated.data.images.length,1);assert.ok(!updated.data.images[0].tags.includes("빗각"));
     const calendarRows = [
       ["installation", "기타", "시공일", "2027-01-10", "", null],
       ["request", "도면", "요청일", "2027-01-10", "", null],
@@ -175,6 +240,7 @@ test("summary work query returns 30 small rows and only PDF metadata for the cur
     "@/lib/db":{db:{},executeQuery:async(sql,args)=>{queries.push({sql,args});return {success:true,rows};},executeMutation:async()=>({success:true})},
     "@/lib/work-calendar-schema":{ensureWorkCalendarSchema:async()=>{}},
     "@/lib/work-confirmation-schema":{ensureWorkConfirmationSchema:async()=>{}},
+    "@/lib/work-tags-schema":{ensureWorkTagsSchema:async()=>{}},
   });
   const result=await (await GET({url:"http://localhost/api/posts?type=work&summary=1&limit=30&from=2026-09-14"})).json();
   assert.equal(result.data.length,30);
@@ -191,6 +257,7 @@ test("summary work query returns 30 small rows and only PDF metadata for the cur
 test("work detail restricts related queries to the requested work and recent comments", async () => {
   const queries=[];
   const {GET}=loadModule("src/lib/api-handlers/posts.ts",{
+    "@/lib/work-tags-schema":{ensureWorkTagsSchema:async()=>{}},
     "@/lib/db":{db:{},executeQuery:async(sql,args)=>{queries.push({sql,args});return {success:true,rows:sql.includes("FROM bo_work_items")?[{id:"chosen",title:"업무",description:"본문"}]:[]};}},
   });
   const result=await (await GET({url:"http://localhost/api/posts?type=work&id=chosen"})).json();
@@ -203,6 +270,7 @@ test("work detail restricts related queries to the requested work and recent com
 test("gallery first page selects photo metadata with a server limit and no full photo URLs", async () => {
   const queries=[];
   const {GET}=loadModule("src/lib/api-handlers/gallery.ts",{
+    "@/lib/work-tags-schema":{ensureWorkTagsSchema:async()=>{}},
     "@/lib/db":{db:{},executeQuery:async(sql,args)=>{queries.push({sql,args});return {success:true,rows:sql.includes("SELECT DISTINCT")?[]:[{work_id:"w",source:"comment",photo_id:"c",photo_index:4,title:"현장",client_name:"업체",created_at:"2026-10-13"}]};}},
   },{Response});
   const result=await(await GET({url:"http://localhost/api/gallery?limit=30&folder_id=folder-construction"})).json();
@@ -345,11 +413,11 @@ test("construction photo compression resizes and caps storage before upload", as
 
 test("construction gallery derives searchable drawing tags without copying photo data", async () => {
   const photo="data:image/jpeg;base64,"+Buffer.from("test-image").toString("base64");
-  const row={id:"work-1",comment_id:"cmt-1",author:"기사",content:"시공완료",images:JSON.stringify([photo]),comment_date:"2026-10-12T01:00:00Z",title:"현장",client_name:"업체",site_address:"서울",region:"반포",drawing_type:"천정형",board_color:"화이트",post_color:"다크그레이"};
+  const row={id:"work-1",comment_id:"cmt-1",author:"기사",content:"시공완료",images:JSON.stringify([photo]),comment_date:"2026-10-12T01:00:00Z",title:"현장",client_name:"업체",site_address:"서울",region:"반포",drawing_type:"천정형",board_color:"화이트",post_color:"다크그레이",work_tags:JSON.stringify(["빗각","조명"])};
   const gallery=loadModule("src/lib/api-handlers/gallery.ts",{"@/lib/db":{db:{},executeQuery:async sql=>({success:true,rows:sql.includes("bo_attachments")?[]:sql.includes("JOIN")?[row]:[{images:row.images}]})}}, {Response});
   const listed=await (await gallery.GET({url:"http://localhost/api/gallery"})).json();
   const entry=listed.data.images[0];
-  for (const tag of ["천정형","화이트","다크그레이","업체","서울","기사"]) assert.ok(entry.tags.includes(tag));
+  for (const tag of ["빗각","조명","천정형","화이트","다크그레이","업체","서울","기사"]) assert.ok(entry.tags.includes(tag));
   assert.ok(entry.tags.includes("반포"));
   assert.ok(!entry.tags.some(tag => /^(도면타입|포스트컬러|합판종류·컬러|지역):/.test(tag)));
   assert.equal(entry.url,"/api/gallery?source=comment&id=cmt-1&index=0");
@@ -435,7 +503,15 @@ test("work editor keeps failed drafts and locks duplicate save attempts", async 
   const walk=node=>Array.isArray(node)?node.flatMap(walk):node&&typeof node==="object"?[node,...walk(node.props?.children)]:[];
   const find=(tree,predicate)=>walk(tree).find(predicate);
   let tree=render();find(tree,node=>node.props?.label==="현장 주소").props.children.props.onChange({target:{value:"수정한 현장"}});
-  tree=render();await find(tree,node=>node.type==="form").props.onSubmit({preventDefault(){}});
+  tree=render();
+  const tagButton=(tree,label)=>find(tree,node=>node.type==="button"&&node.props["aria-pressed"]!==undefined&&node.props.children.includes(label));
+  tagButton(tree,"빗각").props.onClick();tree=render();
+  assert.equal(tagButton(tree,"빗각").props["aria-pressed"],true);
+  tagButton(tree,"조명").props.onClick();tree=render();
+  tagButton(tree,"빗각").props.onClick();tree=render();
+  assert.equal(tagButton(tree,"빗각").props["aria-pressed"],false);
+  assert.equal(tagButton(tree,"조명").props["aria-pressed"],true);
+  await find(tree,node=>node.type==="form").props.onSubmit({preventDefault(){}});
   tree=render();assert.equal(closed,0);assert.match(find(tree,node=>node.props?.role==="alert").props.children,/저장/);assert.equal(find(tree,node=>node.props?.label==="현장 주소").props.children.props.value,"수정한 현장");
   find(tree,node=>node.type==="button"&&node.props?.children==="취소").props.onClick();tree=render();assert.ok(find(tree,node=>node.props?.role==="alertdialog"));assert.equal(closed,0);
   find(tree,node=>node.type==="button"&&node.props?.children==="계속 작성").props.onClick();tree=render();
@@ -480,8 +556,8 @@ test("comment photos persist once and failed writes never report success", async
   assert.match(saved.data.comment.images[0],/^\/api\/gallery\?source=comment/);
   const failing=loadModule("src/lib/api-handlers/comments.ts",{"@/lib/db":{executeMutation:async()=>{throw new Error("DB failed");}}});
   assert.equal((await failing.POST(request({workItemId:"work-1",content:"완료",images:[image]}))).status,500);
-  assert.equal((await POST(request({workItemId:"work-1",content:"완료",images:Array(10).fill(image)}))).status,200);
-  assert.equal((await POST(request({workItemId:"work-1",content:"완료",images:Array(11).fill(image)}))).status,400);
+  assert.equal((await POST(request({workItemId:"work-1",content:"완료",images:Array(20).fill(image)}))).status,200);
+  assert.equal((await POST(request({workItemId:"work-1",content:"완료",images:Array(21).fill(image)}))).status,400);
 });
 
 test("AS intake persists installation, received and scheduled dates with paid reason", async () => {
@@ -1060,4 +1136,28 @@ test("memory summaries carry drawing metadata while the PDF bytes load only on c
   const removed=await (await posts.GET({url:"http://localhost/api/posts?type=work&summary=1&q="+encodeURIComponent("図面")})).json();
   assert.equal(removed.data[0].drawingAttachment,null);
   assert.equal((await posts.GET({url:"http://localhost/api/posts?type=work&attachment_id=drawing-only"})).status,404);
+});
+
+ test("photo grouping uses adjacent capture gaps and never guesses missing dates",()=>{
+  const {groupPhotos}=loadModule("src/lib/photo-groups.ts");
+  const input=[{id:"missing"},{id:"third",takenAt:120000},{id:"first",takenAt:0},{id:"next-site",takenAt:180001},{id:"second",takenAt:60000},{id:"invalid",takenAt:NaN}];
+  assert.equal(JSON.stringify(groupPhotos(input).map(group=>group.map(p=>p.id))),JSON.stringify([["first","second","third"],["next-site"],["missing","invalid"]]));
+  assert.equal(input[0].id,"missing");assert.equal(groupPhotos([]).length,0);
+ });
+
+test("photo picker batches 20 photos and retries only unsaved selections",async()=>{
+ const React=nativeRequire("react"),slots=[];let cursor=0,closed=0,attempt=0;
+ const saved=[];
+ const hookReact={...React,useEffect(){},useRef(value){const i=cursor++;return slots[i]??(slots[i]={current:value});},useState(value){const i=cursor++;if(!(i in slots))slots[i]=typeof value==="function"?value():value;return [slots[i],next=>slots[i]=typeof next==="function"?next(slots[i]):next];}};
+ const {ConstructionPhotoPicker}=loadModule("src/components/common/ConstructionPhotoPicker.tsx",{react:hookReact,exifr:{parse:async()=>({})},"@/lib/use-modal-back":{useModalBack(){}},"@/lib/photo-compression":{readPhotoFile:async file=>file.name,compressPhoto:async value=>value}},{URL:{createObjectURL:file=>"blob:"+file.name,revokeObjectURL(){}}});
+ const props={title:"현장",onClose:()=>closed++,onUpload:async photos=>{attempt++;assert.ok(photos.length<=3);if(attempt===2)throw Error("연결 실패");saved.push(...photos);}};
+ const render=()=>{cursor=0;return ConstructionPhotoPicker(props);};
+ const walk=node=>Array.isArray(node)?node.flatMap(walk):node&&typeof node==="object"?[node,...walk(node.props?.children)]:[];
+ let tree=render();const files=Array.from({length:20},(_,i)=>({name:String(i),type:"image/jpeg",size:100}));
+ walk(tree).find(n=>n.type==="input"&&n.props.type==="file").props.onChange({target:{files,value:""}});
+ await new Promise(resolve=>setImmediate(resolve));tree=render();
+ const submit=tree=>walk(tree).find(n=>n.type==="button"&&typeof n.props.children==="string"&&n.props.children.includes("장 등록"));
+ assert.equal(submit(tree).props.children,"선택한 20장 등록");submit(tree).props.onClick();
+ await new Promise(resolve=>setImmediate(resolve));tree=render();assert.equal(saved.length,3);assert.equal(closed,0);assert.equal(submit(tree).props.children,"선택한 17장 등록");
+ submit(tree).props.onClick();await new Promise(resolve=>setImmediate(resolve));assert.equal(saved.length,20);assert.equal(new Set(saved).size,20);assert.equal(closed,1);
 });

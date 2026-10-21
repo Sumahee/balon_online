@@ -21,6 +21,7 @@ export function MobileHeader({ onOpenDrawer }: MobileHeaderProps) {
 
   const getPageTitle = () => {
     switch (pathname) {
+      case "/equipment": return "설비 관리";
       case "/":
         return "업무 칸반";
       case "/calendar":

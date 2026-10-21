@@ -14,7 +14,7 @@ interface Props {
   events: Event[]; regions: string[]; region: string; search: string;
   onRegion: (value:string)=>void; onSearch:(value:string)=>void;
   onPrevious:()=>void; onNext:()=>void; onToday:()=>void;
-  onAdd:(date?:string)=>void; onOpen:(event:Event)=>void;
+  onPhoto?:(event:Event)=>void; onAdd:(date?:string)=>void; onOpen:(event:Event)=>void;
 }
 
 export function MobileMonthCalendar(props:Props) {
@@ -62,12 +62,12 @@ export function MobileMonthCalendar(props:Props) {
         <div ref={list} onScroll={event => { const next = event.currentTarget.scrollTop > 12; if(next !== compact) {setCompact(next);window.dispatchEvent(new CustomEvent("mobile-calendar-compact",{detail:next}));} }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-2 pb-20" tabIndex={0} aria-label="월 일정 스크롤 목록">
           {!dates.length && <p className="p-5 text-sm text-slate-500">이 달의 일정이 없습니다.</p>}
           {dates.map(date=><section key={date} ref={element=>{if(element)sections.current.set(date,element);else sections.current.delete(date);}} className="mb-4" aria-label={`${props.month+1}월 ${Number(date.slice(-2))}일 일정`}>
-            <h2 className={`py-2 px-1 text-sm font-bold ${date===selected ? "text-blue-700" : "text-slate-900"}`}>{props.month+1}월 {Number(date.slice(-2))}일</h2>
-            {groups.get(date)!.length ? groups.get(date)!.map(event=><button key={`${event.type}-${event.id}`} onClick={()=>props.onOpen(event)} aria-label={`${event.clientName} ${event.title} ${event.status} 상세보기`} title={`${event.title} · ${event.location} · ${event.status}`} className={`mb-1 flex items-center gap-2 w-full rounded-lg bg-white border-l-4 border px-2.5 py-2.5 text-left ${event.type==="as" ? "border-l-rose-500" : event.status==="시공완료" ? "border-l-blue-500" : "border-l-lime-500"}`}>
+            <h2 className={`py-2 px-1 text-[15.4px] font-bold ${date===selected ? "text-blue-700" : "text-slate-900"}`}>{props.month+1}월 {Number(date.slice(-2))}일</h2>
+            {groups.get(date)!.length ? groups.get(date)!.map(event=><div key={`${event.type}-${event.id}`} className="flex gap-1 items-center"><button onClick={()=>props.onOpen(event)} aria-label={`${event.clientName} ${event.title} ${event.status} 상세보기`} title={`${event.title} · ${event.location} · ${event.status}`} className={`mb-1 flex items-center gap-2 min-w-0 flex-1 rounded-lg bg-white border-l-4 border px-2.5 py-2.5 text-left ${event.type==="as" ? "border-l-rose-500" : event.status==="시공완료" ? "border-l-blue-500" : "border-l-lime-500"}`}>
               <span title={event.drawingType || "기타"} aria-label={event.drawingType || "기타"} className={`shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white ${event.drawingType === "천정형" ? "bg-emerald-600" : event.drawingType === "에보라" ? "bg-fuchsia-700" : event.drawingType === "옴니버스" ? "bg-purple-600" : "bg-slate-500"}`}>{event.drawingType?.slice(0,1) || "기"}</span>
-              <span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-900">{event.type === "work" ? event.title : event.location}</span>
-              <span className="shrink-0 text-[10px] text-slate-500">{event.status}</span>
-            </button>) : <p className="rounded-xl bg-white p-4 text-sm text-slate-500">등록된 일정이 없습니다.</p>}
+              <span className="min-w-0 flex-1 truncate text-[13.2px] font-bold text-slate-900">{event.type === "work" ? event.title : event.location}</span>
+              <span className="shrink-0 text-[11px] text-slate-500">{event.status}</span>
+            </button>{event.type==="work" && props.onPhoto && <button aria-label={`${event.title} 사진 등록`} onClick={()=>props.onPhoto?.(event)} className="shrink-0 rounded-lg border bg-white px-2 py-3 text-xs text-blue-700 font-bold">사진 등록</button>}</div>) : <p className="rounded-xl bg-white p-4 text-sm text-slate-500">등록된 일정이 없습니다.</p>}
           </section>)}
         </div>
       </section>

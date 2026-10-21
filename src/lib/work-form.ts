@@ -2,12 +2,14 @@ import type { WorkItem, WorkStatus } from "@/types";
 import { bodyText } from "./body-content";
 import { getMaterialOrders } from "./materialUtils";
 import { getProjectLocation } from "./work-title";
+import { readWorkTags, validateWorkTags } from "./work-tags";
 
 export type WorkDraft = Omit<WorkItem, "id" | "createdAt" | "comments">;
 export const STATUS_PROGRESS: Record<WorkStatus, number> = { 대기: 0, 오피스: 40, 공장: 75, 준비완료: 90, 시공완료: 100 };
 
 export function createWorkDraft(item: WorkItem | undefined, today: string, user: string, date?: string): WorkDraft {
   return {
+    tags: readWorkTags(item?.tags),
     createdBy: item?.createdBy ?? (item ? "" : user),
     installationTeam: item?.installationTeam ?? "", ceilingHeight: item?.ceilingHeight ?? "",
     type: "work", title: item?.title ?? "", clientName: item?.clientName ?? "",
@@ -33,7 +35,7 @@ export function prepareWorkDraft(draft: WorkDraft): WorkDraft {
   if (draft.ceilingHeight && (!Number.isFinite(Number(draft.ceilingHeight)) || Number(draft.ceilingHeight) <= 0)) throw new Error("천정고를 올바른 mm 숫자로 입력해 주세요.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.deliveryDate) || Number.isNaN(Date.parse(draft.deliveryDate)) || new Date(draft.deliveryDate).toISOString().slice(0,10) !== draft.deliveryDate) throw new Error("올바른 예정일을 입력해 주세요.");
   const orders = draft.materialOrders ?? [];
-  return { ...draft, title: draft.title.trim() || draft.clientName.trim(), clientName: draft.clientName.trim(),
+  return { ...draft, tags: validateWorkTags(draft.tags ?? []), title: draft.title.trim() || draft.clientName.trim(), clientName: draft.clientName.trim(),
     assignee: draft.assignee.trim(), drawingAssignee: draft.drawingAssignee?.trim(),
     siteAddress: draft.siteAddress?.trim(), region: draft.region?.trim() || getProjectLocation(draft.siteAddress || ""),
     dueDate: draft.deliveryDate, notes: bodyText(draft.description ?? ""),

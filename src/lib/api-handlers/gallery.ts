@@ -1,3 +1,5 @@
+import { ensureWorkTagsSchema } from "@/lib/work-tags-schema";
+import { readWorkTags } from "@/lib/work-tags";
 import { NextRequest, NextResponse } from "next/server";
 import { serverStore } from "@/lib/serverStore";
 import { db, executeQuery, executeMutation } from "@/lib/db";
@@ -7,7 +9,7 @@ import { photoResponse } from "@/lib/gallery-thumbnail";
 
 function lightImage(image: GalleryImage): GalleryImage {return {...image,url:image.url.startsWith("data:image/") ? `/api/gallery?source=gallery&id=${encodeURIComponent(image.id)}` : image.url};}
 function storedMatches(image:GalleryImage,params:URLSearchParams) {
-  const folder=params.get("folder_id"),query=params.get("q")?.trim().toLowerCase(),type=params.get("drawing"),color=params.get("color")?.split("/")[0];
+  const folder=params.get("folder_id"),query=params.get("q")?.trim().replace(/^#+/, "").toLowerCase(),type=params.get("drawing"),color=params.get("color")?.split("/")[0];
   const text=[image.title,image.siteName,...image.tags].filter(Boolean).join(" ").toLowerCase();
   return (!folder || matchesGalleryFolder(image,folder)) && (!query || text.includes(query)) && (!type || ["all","전체"].includes(type) || text.includes(type.toLowerCase())) && (!color || ["all","전체"].includes(color) || text.includes(color.toLowerCase()));
 }
@@ -26,6 +28,7 @@ export async function GET(request: NextRequest) {
   if (db) {
     try {
       if(searchParams.has("limit") && !searchParams.has("source")) {
+        await ensureWorkTagsSchema();
         const limit=Math.min(60,Math.max(1,Number(searchParams.get("limit")) || 30));
         const offset=Math.max(0,Number(searchParams.get("offset")) || 0);
         const filters:string[]=[];const args:(string|number)[]=[];
@@ -35,11 +38,11 @@ export async function GET(request: NextRequest) {
           const local=serverStore.getImages(folderId).filter(image=>storedMatches(image,searchParams));
           return NextResponse.json({success:true,data:{folders:galleryFolders(serverStore.getFolders(),local),images:local.slice(offset,offset+limit).map(lightImage)},hasMore:local.length>offset+limit});
         }
-        const query=searchParams.get("q")?.trim();
-        if(query){filters.push("(w.title LIKE ? OR w.client_name LIKE ? OR w.site_address LIKE ? OR w.drawing_type LIKE ? OR w.board_color LIKE ? OR w.post_color LIKE ? OR p.source = 'gallery')");args.push(...Array(6).fill(`%${query}%`));}
-        for(const [param,column] of [["drawing","category"],["color","board_color"]]) {const value=searchParams.get(param);if(value && value !== "all" && value !== "전체"){filters.push(`(w.${column} LIKE ? OR w.title LIKE ? OR p.source = 'gallery')`);args.push(...Array(2).fill(`%${value.split("/")[0]}%`));}}
+        const query=searchParams.get("q")?.trim().replace(/^#+/, "");
+        if(query){filters.push("(w.title LIKE ? OR w.client_name LIKE ? OR w.site_address LIKE ? OR w.drawing_type LIKE ? OR w.board_color LIKE ? OR w.post_color LIKE ? OR w.work_tags LIKE ? OR w.category LIKE ? OR p.source = 'gallery')");args.push(...Array(8).fill(`%${query}%`));}
+        for(const [param,column] of [["drawing","drawing_type"],["color","board_color"]]) {const value=searchParams.get(param);if(value && value !== "all" && value !== "전체"){filters.push(`(w.${column} LIKE ? OR w.${param === "drawing" ? "category" : "post_color"} LIKE ? OR w.work_tags LIKE ? OR w.title LIKE ? OR p.source = 'gallery')`);args.push(...Array(4).fill(`%${value.split("/")[0]}%`));}}
         const localMetadata=JSON.stringify(serverStore.getImages().filter(image=>storedMatches(image,searchParams)).map(lightImage));
-        const result=await executeQuery(`SELECT w.id AS work_id,w.title,w.client_name,w.site_address,w.region,w.drawing_type,w.board_color,w.post_color,w.category,p.* FROM (
+        const result=await executeQuery(`SELECT w.id AS work_id,w.title,w.client_name,w.site_address,w.region,w.drawing_type,w.board_color,w.post_color,w.category,w.work_tags,p.* FROM (
           SELECT 'comment' AS source,c.id AS photo_id,c.work_item_id,c.created_at,c.author,'시공 사진' AS photo_name,CAST(j.key AS INTEGER) AS photo_index,NULL AS metadata
           FROM bo_work_item_comments c, json_each(CASE WHEN json_valid(c.images) THEN c.images ELSE '[]' END) j WHERE j.value != ''
           UNION ALL SELECT 'attachment',a.id,a.work_item_id,a.uploaded_at,'',a.name,0,NULL FROM bo_attachments a WHERE a.file_type='image'
@@ -48,7 +51,7 @@ export async function GET(request: NextRequest) {
         if(!result.success) throw new Error("사진 목록 조회 실패");
         const images=result.rows.slice(0,limit).map(row=>{
           if(row.source === "gallery")return JSON.parse(String(row.metadata)) as GalleryImage;
-          const work={id:String(row.work_id),title:String(row.title || ""),clientName:String(row.client_name || ""),siteAddress:String(row.site_address || ""),region:String(row.region || ""),drawingType:row.drawing_type,boardColor:String(row.board_color || ""),postColor:String(row.post_color || ""),category:row.category} as WorkItem;
+          const work={id:String(row.work_id),title:String(row.title || ""),clientName:String(row.client_name || ""),siteAddress:String(row.site_address || ""),region:String(row.region || ""),drawingType:row.drawing_type,boardColor:String(row.board_color || ""),postColor:String(row.post_color || ""),category:row.category,tags:readWorkTags(row.work_tags)} as WorkItem;
           const id=String(row.photo_id),index=Number(row.photo_index);
           if(row.source === "attachment") return orderGalleryImage(work,{id,name:String(row.photo_name),fileType:"image",size:"",uploadedAt:String(row.created_at || ""),url:`/api/gallery?source=attachment&id=${encodeURIComponent(id)}&index=0`});
           const image=commentGalleryImages(work,{id,workItemId:work.id,author:String(row.author || ""),content:"",createdAt:String(row.created_at || ""),images:["photo"]})[0];
@@ -77,18 +80,18 @@ export async function GET(request: NextRequest) {
         let urls: string[]=[];
         try { urls=JSON.parse(String(row.images || "[]")); } catch { return []; }
         if (!Array.isArray(urls)) return [];
-        const work = {id:String(row.id), title:String(row.title || ""),clientName:String(row.client_name || ""),siteAddress:String(row.site_address || ""),region:String(row.region || ""),drawingType:row.drawing_type,boardColor:String(row.board_color || ""),postColor:String(row.post_color || ""),category:row.category} as WorkItem;
+        const work = {id:String(row.id), title:String(row.title || ""),clientName:String(row.client_name || ""),siteAddress:String(row.site_address || ""),region:String(row.region || ""),drawingType:row.drawing_type,boardColor:String(row.board_color || ""),postColor:String(row.post_color || ""),category:row.category,tags:readWorkTags(row.work_tags)} as WorkItem;
         return commentGalleryImages(work,{id:String(row.comment_id),workItemId:work.id,author:String(row.author || ""),content:String(row.content || ""),createdAt:String(row.comment_date),images:urls});
       });
       const attachments=await executeQuery(`SELECT a.id AS attachment_id, a.url AS photo_url, a.name AS photo_name, a.uploaded_at AS photo_date, w.* FROM bo_attachments a JOIN bo_work_items w ON w.id = a.work_item_id WHERE a.file_type = 'image'`);
       if (!attachments.success) throw new Error("시공 첨부 사진 조회 실패");
       const orders = [];
       for (const row of attachments.rows) {
-        const work={id:String(row.id),title:String(row.title || ""),clientName:String(row.client_name || ""),siteAddress:String(row.site_address || ""),region:String(row.region || ""),drawingType:row.drawing_type,boardColor:String(row.board_color || ""),postColor:String(row.post_color || ""),category:row.category} as WorkItem;
+        const work={id:String(row.id),title:String(row.title || ""),clientName:String(row.client_name || ""),siteAddress:String(row.site_address || ""),region:String(row.region || ""),drawingType:row.drawing_type,boardColor:String(row.board_color || ""),postColor:String(row.post_color || ""),category:row.category,tags:readWorkTags(row.work_tags)} as WorkItem;
         orders.push(orderGalleryImage(work, {id:String(row.attachment_id), name:String(row.photo_name), fileType:"image", size:"", uploadedAt:String(row.photo_date || ""), url:`/api/gallery?source=attachment&id=${encodeURIComponent(String(row.attachment_id))}&index=0`}));
       }
       const allImages=[...construction,...orders,...serverStore.getImages()];
-      const images=allImages.filter(image=>!folderId || matchesGalleryFolder(image, folderId));
+      const images=allImages.filter(image=>storedMatches(image,searchParams));
       const folders=galleryFolders(serverStore.getFolders(),allImages);
       return NextResponse.json({success:true,data:{folders,images,selectedFolderId:folderId || "folder-all"}});
     } catch {

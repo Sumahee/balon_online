@@ -21,6 +21,7 @@ import { useData } from "@/context/DataContext";
 import { useAuth } from "@/context/AuthContext";
 
 const PAGE_TITLES: Record<string, { title: string; subtitle: string; category: string }> = {
+  "/equipment": { title: "설비 관리", subtitle: "공장 기계 정비 이력과 유지보수 비용", category: "Equipment" },
   "/": {
     title: "메인 대시보드",
     subtitle: "프로젝트 진행 현황, 일정 타임라인 및 칸반 업무 요약",

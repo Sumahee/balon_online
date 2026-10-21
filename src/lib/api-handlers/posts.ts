@@ -1,3 +1,5 @@
+import { ensureWorkTagsSchema } from "@/lib/work-tags-schema";
+import { readWorkTags, validateWorkTags } from "@/lib/work-tags";
 import { ensureWorkEntrySchema } from "@/lib/work-entry-schema";
 import { VERIFY } from "./auth";
 import { NextRequest, NextResponse } from "next/server";
@@ -55,7 +57,7 @@ export async function GET(request: NextRequest) {
       if (query) {filters.push("(LOWER(title) LIKE ? OR LOWER(client_name) LIKE ? OR LOWER(site_address) LIKE ?)");values.push(...Array(3).fill(`%${query}%`));}
       if (db) {
         try {
-          await ensureWorkCalendarSchema(); await ensureWorkConfirmationSchema();
+          await ensureWorkCalendarSchema(); await ensureWorkConfirmationSchema(); await ensureWorkTagsSchema();
           const result = await executeQuery(`SELECT ${WORK_SUMMARY_COLUMNS} FROM bo_work_items ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`, [...values,limit+1,offset]);
           if (!result.success) throw new Error("목록 조회 실패");
           const pageRows = result.rows.slice(0,limit);
@@ -69,7 +71,7 @@ export async function GET(request: NextRequest) {
               if (!drawings.has(workId)) drawings.set(workId, {id:String(file.id), name:String(file.name)});
             }
           }
-          const data = pageRows.map(row => ({...row, drawingAttachment:drawings.get(String(row.id)) || null, confirmationPending:Number(row.confirmationPending) === 1, confirmationCompleted:Number(row.confirmationCompleted) === 1, calendarVisible:row.calendarVisible == null ? undefined : Number(row.calendarVisible) === 1, detailsLoaded:false}));
+          const data = pageRows.map(row => ({...row, tags:readWorkTags(row.tags), drawingAttachment:drawings.get(String(row.id)) || null, confirmationPending:Number(row.confirmationPending) === 1, confirmationCompleted:Number(row.confirmationCompleted) === 1, calendarVisible:row.calendarVisible == null ? undefined : Number(row.calendarVisible) === 1, detailsLoaded:false}));
           return NextResponse.json({success:true,data,hasMore:result.rows.length>limit});
         } catch { return NextResponse.json({success:false,message:"업무 목록을 불러오지 못했습니다."},{status:503}); }
       }
@@ -81,6 +83,7 @@ export async function GET(request: NextRequest) {
     }
     if (db) {
       await ensureWorkConfirmationSchema();
+      await ensureWorkTagsSchema();
       let sql = "SELECT * FROM bo_work_items";
       const conditions: string[] = [];
       const args: any[] = [];
@@ -167,6 +170,7 @@ export async function GET(request: NextRequest) {
             detailsLoaded: true,
             commentsHasMore: !!detailId && cmtRes.rows.length > 20,
             title: String(row.title || ""),
+            tags: readWorkTags(row.work_tags),
             confirmationPending: Number(row.confirmation_pending || 0) === 1,
             confirmationCompleted: Number(row.confirmation_completed || 0) === 1,
             calendarVisible: row.calendar_visible == null ? undefined : Number(row.calendar_visible) === 1,
@@ -298,6 +302,8 @@ export async function POST(request: NextRequest) {
       const { user: author } = await session.json();
       body.createdBy = String(author.name || author.loginId || "");
       body.assignee = body.createdBy;
+      let tags: string[];
+      try { tags=validateWorkTags(body.tags ?? []); } catch { return NextResponse.json({success:false,message:"업무 태그를 확인해주세요."},{status:400}); }
       const {
         title,
         clientName,
@@ -350,10 +356,11 @@ export async function POST(request: NextRequest) {
 
       if (db) {
         await ensureWorkEntrySchema();
+        await ensureWorkTagsSchema();
         await executeMutation(
           `INSERT INTO bo_work_items 
-           (id, type, title, client_name, site_address, region, drawing_type, card_type, deadline_type, delivery_date, site_contact_phone, post_color, board_color, drawing_assignee, category, assignee, priority, status, progress, start_date, due_date, notes, description, material_orders, created_at, created_by, installation_team, ceiling_height)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, type, title, client_name, site_address, region, drawing_type, card_type, deadline_type, delivery_date, site_contact_phone, post_color, board_color, drawing_assignee, category, assignee, priority, status, progress, start_date, due_date, notes, description, material_orders, created_at, created_by, installation_team, ceiling_height, work_tags)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
             "work",
@@ -380,7 +387,7 @@ export async function POST(request: NextRequest) {
             safeDesc,
             safeOrders,
             now,
-            body.createdBy || "", body.installationTeam || "", body.ceilingHeight || "",
+            body.createdBy || "", body.installationTeam || "", body.ceilingHeight || "", JSON.stringify(tags),
           ]
         );
         if (Array.isArray(attachments) && attachments.length > 0) {
@@ -410,6 +417,7 @@ export async function POST(request: NextRequest) {
         await executeMutation("UPDATE bo_work_items SET confirmation_pending = ? WHERE id = ?", [body.confirmationPending ? 1 : 0, id]);
       }
       const newItem = serverStore.addWorkItem({
+        tags,
         confirmationPending: body.confirmationPending === true,
         createdBy: body.createdBy || "", installationTeam: body.installationTeam || "", ceilingHeight: body.ceilingHeight || "",
         calendarVisible: typeof body.calendarVisible === "boolean" ? body.calendarVisible : undefined,
@@ -537,6 +545,9 @@ export async function PUT(request: NextRequest) {
     }
 
     if (type === "work") {
+      if (updates.tags !== undefined) {
+        try { updates.tags=validateWorkTags(updates.tags); } catch { return NextResponse.json({success:false,message:"업무 태그를 확인해주세요."},{status:400}); }
+      }
       if (db) {
         const fields: string[] = [];
         const args: any[] = [];
@@ -548,6 +559,7 @@ export async function PUT(request: NextRequest) {
           }
         }
 
+        if (updates.tags !== undefined) { await ensureWorkTagsSchema(); fields.push("work_tags = ?"); args.push(JSON.stringify(updates.tags)); }
         if (updates.status) {
           fields.push("status = ?");
           args.push(updates.status);

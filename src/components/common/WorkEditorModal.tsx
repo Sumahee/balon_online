@@ -1,5 +1,6 @@
 "use client";
 
+import { WORK_TAGS } from "@/lib/work-tags";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
 import { useAuth } from "@/context/AuthContext";
 import { useData } from "@/context/DataContext";
@@ -129,6 +130,10 @@ export function WorkEditorModal({ item, initialDate, onClose }: { item?: WorkIte
             <label className="flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-blue-600" checked={isCalendarVisible(draft)} onChange={e => change("calendarVisible", e.target.checked)} />달력 등록</label>
             <label className="flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-blue-600" checked={!!draft.confirmationPending} onChange={e => change("confirmationPending", e.target.checked)} />컨펌중</label>
           </div>
+          <section aria-label="업무 태그" className="space-y-2"><h3 className="text-sm font-bold">시공사진 분류 태그</h3><div className="flex flex-wrap gap-2">{WORK_TAGS.map(tag => {
+            const selected = draft.tags?.includes(tag) ?? false;
+            return <button key={tag} type="button" aria-pressed={selected} onClick={() => setDraft(previous => ({...previous,tags:previous.tags?.includes(tag) ? previous.tags.filter(value => value !== tag) : [...(previous.tags ?? []),tag]}))} className={"rounded-full border px-4 py-1.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 " + (selected ? "border-blue-600 bg-blue-600 text-white shadow-sm" : "border-slate-300 bg-white text-slate-600 hover:border-blue-400 hover:bg-blue-50")}>{selected && <span aria-hidden="true" className="mr-1">✓</span>}{tag}</button>;
+          })}</div></section>
           <section className="space-y-2"><h3 className="text-sm font-bold">발주정보 · 이미지</h3><UnifiedBoardEditor minRows={3} placeholder="발주 내용을 적거나 이미지·파일을 붙여넣으세요." description={draft.description ?? ""} onChangeDescription={value => change("description", value)} attachments={draft.attachments.filter(attachment => !isDrawingAttachment(attachment))} onChangeAttachments={value => setDraft(prev => ({ ...prev, attachments: replaceAttachmentGroup(prev.attachments, value, false) }))} onUploadingChange={setUploading} readOnly={saving || drawingUploading} /></section>
           <div className="pt-4"><DrawingUploadBlock attachments={draft.attachments} onChange={value => setDraft(prev => ({ ...prev, attachments: replaceAttachmentGroup(prev.attachments, value, true) }))} onUploadingChange={setDrawingUploading} readOnly={saving || bodyUploading} /></div>
           {draft.cardType === "도면" && <details className="border-t border-slate-200 pt-3"><summary className="cursor-pointer text-sm font-bold text-slate-800">제작사양</summary><div className="mt-3 grid gap-3 sm:grid-cols-2">

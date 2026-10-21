@@ -61,6 +61,7 @@ const NAV_ITEMS = [
     icon: ShoppingBag,
     badgeKey: "purchaseCount" as const,
   },
+  { name: "설비 관리", path: "/equipment", icon: Wrench, badgeKey: null },
   {
     name: "서랍장 자동화",
     path: "/drawer",
