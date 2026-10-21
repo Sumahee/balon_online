@@ -4,7 +4,6 @@ import { DrawingUploadBlock } from "@/components/common/DrawingUploadBlock";
 import { isDrawingAttachment } from "@/lib/drawing-attachments";
 import { WorkEditorModal } from "@/components/common/WorkEditorModal";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
-import { ConstructionPhotoDropZone } from "@/components/common/ConstructionPhotoDropZone";
 import { useModalBack } from "@/lib/use-modal-back";
 import { PdfPreview } from "@/components/common/PdfPreview";
 import { WorkDetailGate } from "@/components/common/WorkDetailGate";
@@ -82,7 +81,7 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
   const [newCommentText, setNewCommentText] = useState("");
   const [commentAttachedPhotos, setCommentAttachedPhotos] = useState<string[]>([]);
 
-  const commentFileInputRef = useRef<HTMLInputElement>(null);
+
 
   // All photos for Lightbox Slider (combines card uploads & comment photos)
   const allPhotos = React.useMemo(() => {
@@ -139,10 +138,6 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
     setCommentAttachedPhotos([]);
   };
 
-  const handleCommentPhotoSelect = async (files: File[]) => {
-    if (!files.length || isSaving) return;
-    setPhotoFiles(files);setPhotoOpen(true);
-  };
 
   const handleRemoveAttachedPhoto = (index: number) => {
     setCommentAttachedPhotos((prev) => prev.filter((_, i) => i !== index));
@@ -323,17 +318,45 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
           <div className="flex-1 overflow-y-auto bg-slate-50/80 px-3 py-4 sm:p-6 space-y-4">
             <section className="space-y-4 rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-sm" aria-label="기본정보와 본문">
               <h3 className="sr-only">기본정보 · 업무 내용</h3>
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="min-w-0 truncate font-semibold text-slate-800">{liveItem.createdBy || liveItem.assignee || "등록자 미입력"}</span>
+                <time className="shrink-0 text-xs text-slate-400" dateTime={liveItem.createdAt}>{liveItem.createdAt ? new Date(liveItem.createdAt).toLocaleDateString("ko-KR", {timeZone:"Asia/Seoul"}) : ""}</time>
+              </div>
               <div className="flex items-center gap-4 border-b border-slate-100 pb-4">
                 <div className="w-16 shrink-0 overflow-hidden rounded-xl bg-teal-50 text-center"><div className="py-1 text-[11px] font-semibold text-teal-700">{deliveryDate?.slice(0,7)||"날짜 미정"}</div><div className="bg-teal-600 py-2 text-2xl font-bold text-white">{deliveryDate?.slice(8,10)||"—"}</div></div>
                 <div className="min-w-0 flex-1"><h2 className="text-lg font-bold leading-snug text-slate-900">{getWorkTitle(liveItem || item)}</h2><p className="mt-1 text-sm text-slate-500">{deliveryDate || "일정 미정"} · {liveItem.deadlineType || "시공일"}</p></div>
                 <button type="button" aria-label="업무 수정" onClick={startEditingSpecs} className="self-start shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50">수정</button>
               </div>
               {!!liveItem?.tags?.length && <div aria-label="업무 태그" className="flex flex-wrap gap-2">{liveItem.tags.map(tag => <span key={tag} className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">{tag}</span>)}</div>}
-              <dl className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-sm sm:grid-cols-4">{[["업무 등록자", liveItem?.createdBy || "기존 기록 없음"], ["시공팀", liveItem?.installationTeam], ["현장 주소", liveItem?.siteAddress]].map(([label,value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 font-medium">{value || "미입력"}</dd></div>)}</dl>
-              <details className="rounded-lg text-xs text-slate-500"><summary className="cursor-pointer py-1">상세 상태 변경</summary><div className="flex items-center gap-3 pt-2 text-sm"><label className="flex items-center gap-2">현재 상태<select aria-label="현재 업무 상태" value={liveItem?.status || item.status} disabled={isSaving} onChange={e => handleStageChange(e.target.value as WorkStatus)} className="rounded-lg border p-2">{(["대기", "오피스", "공장", "준비완료", "시공완료"] as WorkStatus[]).map(status => <option key={status} value={status}>{workStatusLabel(liveItem || item, status)}</option>)}</select></label><span className="text-xs text-slate-500" role="status">{isSaving ? "저장 중…" : "상태 변경은 즉시 저장됩니다"}</span></div></details>
-              <div className="flex items-center gap-2"><button type="button" aria-pressed={!!liveItem?.confirmationPending} disabled={isSaving} onClick={() => { void updateWorkItem(item.id, { confirmationPending: !liveItem?.confirmationPending, confirmationCompleted: false }); }} className={cn("rounded-lg border px-2.5 py-1.5 text-xs font-bold cursor-pointer disabled:opacity-50", liveItem?.confirmationCompleted ? "border-emerald-300 bg-emerald-100 text-emerald-800" : liveItem?.confirmationPending ? "border-amber-400 bg-amber-100 text-amber-800 shadow-sm" : "border-slate-200 bg-slate-100 text-slate-500")}><span className={cn("inline-block mr-1.5 h-2 w-2 rounded-full", liveItem?.confirmationCompleted ? "bg-emerald-500" : liveItem?.confirmationPending ? "bg-amber-500" : "bg-slate-300")} />{liveItem?.confirmationCompleted ? "컨펌완료 ✓" : "컨펌중"}</button></div>
+              <dl className="space-y-2 text-sm text-slate-700">
+                {[
+                  ["시공팀", liveItem.installationTeam],
+                  ["시공 현장주소", liveItem.siteAddress],
+                  ["연락처", liveItem.siteContactPhone],
+                ].map(([label,value]) => <div key={label} className="flex gap-2"><dt className="shrink-0 text-slate-500">{label} :</dt><dd className="min-w-0 break-words font-medium">{value || "미입력"}</dd></div>)}
+              </dl>
               {!!(liveItem?.description || liveItem?.notes || (liveItem.attachments??[]).filter(a=>!isDrawingAttachment(a)).length) && <UnifiedBoardEditor description={liveItem?.description || liveItem?.notes || ""} onChangeDescription={() => {}} attachments={(liveItem?.attachments ?? []).filter(attachment => !isDrawingAttachment(attachment))} onChangeAttachments={() => {}} readOnly minRows={3} onOpenAttachment={attachment => {if (attachment.fileType === "pdf") {setActivePdfUrl(attachment.url);setActivePdfTitle(attachment.name);} else window.open(attachment.url,"_blank","noopener,noreferrer");}} />}
               <div className="space-y-2 border-t border-slate-100 pt-4">{(liveItem.attachments??[]).filter(isDrawingAttachment).map(file=><button key={file.id} onClick={()=>{setActivePdfUrl(file.url);setActivePdfTitle(file.name);}} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left hover:bg-slate-50"><span className="rounded-xl bg-rose-50 px-3 py-3 text-xs font-bold text-rose-600">PDF</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-800">{file.name}</span><span className="text-xs text-slate-400">{file.size} · 도면 보기</span></span><ChevronRight className="h-4 w-4 text-slate-400" /></button>)}</div>
+              <details className="rounded-lg text-xs text-slate-500"><summary className="cursor-pointer py-1">상세 상태 변경</summary><div className="flex items-center gap-3 pt-2 text-sm"><label className="flex items-center gap-2">현재 상태<select aria-label="현재 업무 상태" value={liveItem?.status || item.status} disabled={isSaving} onChange={e => handleStageChange(e.target.value as WorkStatus)} className="rounded-lg border p-2">{(["대기", "오피스", "공장", "준비완료", "시공완료"] as WorkStatus[]).map(status => <option key={status} value={status}>{workStatusLabel(liveItem || item, status)}</option>)}</select></label><span className="text-xs text-slate-500" role="status">{isSaving ? "저장 중…" : "상태 변경은 즉시 저장됩니다"}</span></div></details>
+              {!liveItem.confirmationCompleted && <div className="flex items-center gap-2"><button type="button" aria-pressed={!!liveItem?.confirmationPending} disabled={isSaving} onClick={() => { void updateWorkItem(item.id, { confirmationPending: !liveItem?.confirmationPending, confirmationCompleted: false }); }} className={cn("rounded-lg border px-2.5 py-1.5 text-xs font-bold cursor-pointer disabled:opacity-50", liveItem?.confirmationCompleted ? "border-emerald-300 bg-emerald-100 text-emerald-800" : liveItem?.confirmationPending ? "border-amber-400 bg-amber-100 text-amber-800 shadow-sm" : "border-slate-200 bg-slate-100 text-slate-500")}><span className={cn("inline-block mr-1.5 h-2 w-2 rounded-full", liveItem?.confirmationCompleted ? "bg-emerald-500" : liveItem?.confirmationPending ? "bg-amber-500" : "bg-slate-300")} />{liveItem?.confirmationCompleted ? "컨펌완료 ✓" : "컨펌중"}</button></div>}
+            </section>
+
+            <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-label="시공사진">
+              <h2 className="text-sm font-bold text-slate-800">시공사진 {allPhotos.length > 0 && <span className="ml-1 text-teal-600">{allPhotos.length}</span>}</h2>
+              {allPhotos.length > 0 && <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {(liveItem.comments || []).flatMap(cmt => (cmt.images || (cmt.imageUrl ? [cmt.imageUrl] : [])).map((url,index) =>
+                  <div key={cmt.id + "-" + index} className="relative overflow-hidden rounded-xl bg-slate-100">
+                    <button type="button" aria-label={"시공사진 확대 " + (index + 1)} onClick={()=>setActivePhotoIndex(allPhotos.findIndex(photo=>photo.id==="cmt-photo-"+cmt.id+"-"+index))} className="block aspect-square w-full">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="시공사진" loading="lazy" className="h-full w-full object-cover" />
+                    </button>
+                    <button type="button" aria-label="시공사진 삭제" disabled={isSaving} onClick={()=>void deleteCommentImage(liveItem.id,cmt.id,url)} className="absolute right-1 top-1 rounded-full bg-black/60 p-1.5 text-white"><X className="h-4 w-4" /></button>
+                  </div>
+                ))}
+              </div>}
+              <button type="button" disabled={isSaving} onClick={()=>{setPhotoFiles([]);setPhotoOpen(true);}} className="flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-4 text-base font-semibold text-white transition hover:bg-teal-700 disabled:opacity-50">
+                <Camera className="h-5 w-5" />{allPhotos.length ? "시공사진 추가" : "시공사진 업로드"}
+              </button>
             </section>
 
             {(liveItem?.cardType || "도면") === "도면" && (
@@ -580,7 +603,7 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
 
             {/* 💬 SNS 게시물/피드 스타일 현장 소통 댓글 섹션 */}
             {liveItem?.commentsHasMore && <button type="button" disabled={isSaving} onClick={()=>{void loadMoreComments(item.id,liveItem.comments?.length || 0).catch(()=>alert("댓글을 불러오지 못했습니다."));}} className="w-full rounded-lg border bg-white py-2 text-xs">이전 댓글 20개 더보기</button>}
-            <section className="sm:hidden px-2 space-y-2" aria-label="시공사진 첨부"><h2 className="text-sm font-bold">시공사진 첨부</h2><ConstructionPhotoDropZone onUpload={handleCommentPhotoSelect} disabled={isSaving} /><button type="button" onClick={() => {setPhotoFiles([]);setPhotoOpen(true);}} className="rounded-lg border px-3 py-1.5 text-xs">사진 등록 · 최대 20장</button></section>
+
 
             <div className="bg-slate-50 rounded-none sm:rounded-2xl border-y sm:border border-slate-200 px-0 py-3 sm:p-5 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-200 pb-3">
@@ -620,7 +643,6 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
                   </div>
                 )}
 
-                <div className="hidden sm:block"><ConstructionPhotoDropZone onUpload={handleCommentPhotoSelect} disabled={isSaving} /></div>
                 <div className="flex gap-2">
                   <textarea
                     rows={2}
@@ -630,26 +652,7 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
                     className="flex-1 p-2.5 text-xs sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans"
                   />
 
-                  {/* Hidden photo file input */}
-                  <input
-                    type="file"
-                    ref={commentFileInputRef}
-                    accept="image/*"
-                    multiple
-                    onChange={e => { const files = Array.from(e.target.files ?? []); e.target.value = ""; void handleCommentPhotoSelect(files); }}
-                    className="hidden"
-                  />
-
                   <div className="flex flex-col gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {setPhotoFiles([]);setPhotoOpen(true);}}
-                      className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-extrabold transition flex items-center gap-1 cursor-pointer justify-center"
-                      title="댓글에 사진 첨부"
-                    >
-                      <Camera className="w-3.5 h-3.5 text-amber-600" />
-                      <span>사진</span>
-                    </button>
 
                     <button
                       type="button"
@@ -672,7 +675,6 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
               ) : (
                 <div className="space-y-3 pt-1">
                   {liveItem.comments.map((cmt) => {
-                    const cmtImages = cmt.images || (cmt.imageUrl ? [cmt.imageUrl] : []);
                     return (
                       <div
                         key={cmt.id}
@@ -703,37 +705,7 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
                           {cmt.content}
                         </p>
 
-                        {/* Comment Attached Photos inline with Small Red X badge button */}
-                        {cmtImages.length > 0 && (
-                          <div className="flex flex-wrap gap-2 pt-1 pl-9">
-                            {cmtImages.map((imgUrl, idx) => (
-                              <div key={idx} className="relative group rounded-lg overflow-hidden border border-slate-200 bg-slate-100 shadow-2xs">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={imgUrl}
-                                  alt={`cmt-photo-${idx}`}
-                                  onClick={() => {
-                                    const pIndex = allPhotos.findIndex((p) => p.url === imgUrl);
-                                    if (pIndex !== -1) setActivePhotoIndex(pIndex);
-                                  }}
-                                  className="w-20 h-20 sm:w-24 sm:h-24 object-cover cursor-pointer group-hover:scale-105 transition"
-                                />
-                                {/* Red Circle X Mark Delete Button */}
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteCommentImage(liveItem.id, cmt.id, imgUrl);
-                                  }}
-                                  className="absolute top-1 right-1 w-6 h-6 rounded-full bg-rose-600 hover:bg-rose-700 active:scale-95 text-white flex items-center justify-center shadow-md border-2 border-white transition cursor-pointer z-20"
-                                  title="사진 개별 삭제"
-                                >
-                                  <X className="w-3.5 h-3.5 stroke-[3]" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+
                       </div>
                     );
                   })}
