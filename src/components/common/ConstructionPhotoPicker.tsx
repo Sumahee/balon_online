@@ -51,7 +51,7 @@ export function ConstructionPhotoPicker({title,onClose,onUpload,initialFiles=[]}
   return <div className="fixed inset-0 z-[120] bg-black/60 flex items-center justify-center p-2" role="dialog" aria-modal="true" aria-label="시공사진 등록">
     <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[94dvh] flex flex-col p-4 gap-3">
       <div className="flex justify-between gap-3"><h2 className="font-bold">{title} · 사진 등록</h2><button disabled={busy} onClick={close} aria-label="사진 등록 닫기">닫기</button></div>
-      <p className="text-xs text-slate-500">최대 20장 · 촬영 간격 1분 이내로 묶음 · 촬영정보가 없는 사진은 별도 표시</p>
+      <p className="text-xs text-slate-500">최대 20장 · 촬영 간격 5분 이내로 묶음 · 촬영정보가 없는 사진은 별도 표시</p>
       <label className="rounded-xl bg-blue-600 text-white text-center py-3 font-bold">휴대폰 사진 불러오기<input className="sr-only" type="file" accept="image/*" multiple disabled={busy} onChange={e=>{const files=Array.from(e.target.files??[]);e.target.value="";void read(files);}} /></label>
       <div className="overflow-y-auto space-y-4 flex-1 min-h-0">{groupPhotos(photos).map((group,index)=><section key={group[0].id} className="rounded-xl border p-3 space-y-2">
         <label className="flex gap-2 font-bold text-sm"><input type="checkbox" disabled={busy} checked={group.every(p=>p.selected)} onChange={e=>{const ids=new Set(group.map(p=>p.id));setPhotos(prev=>prev.map(p=>ids.has(p.id)?{...p,selected:e.target.checked}:p));}} />{group[0].takenAt===undefined?"촬영시간 정보 없음":`묶음 ${index+1} · ${new Date(group[0].takenAt).toLocaleString("ko-KR")}`} ({group.length}장)</label>

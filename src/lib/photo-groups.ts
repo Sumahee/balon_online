@@ -5,7 +5,7 @@ export function groupPhotos<T extends PhotoMetadata>(photos: T[]): T[][] {
   const groups: T[][] = [];
   for (const photo of dated) {
     const last = groups[groups.length-1];
-    if (last && photo.takenAt! - last[last.length-1].takenAt! <= 60_000) last.push(photo);
+    if (last && photo.takenAt! - last[last.length-1].takenAt! <= 300_000) last.push(photo);
     else groups.push([photo]);
   }
   const unknown = photos.filter(p=>!Number.isFinite(p.takenAt));

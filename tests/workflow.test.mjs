@@ -1140,7 +1140,7 @@ test("memory summaries carry drawing metadata while the PDF bytes load only on c
 
  test("photo grouping uses adjacent capture gaps and never guesses missing dates",()=>{
   const {groupPhotos}=loadModule("src/lib/photo-groups.ts");
-  const input=[{id:"missing"},{id:"third",takenAt:120000},{id:"first",takenAt:0},{id:"next-site",takenAt:180001},{id:"second",takenAt:60000},{id:"invalid",takenAt:NaN}];
+  const input=[{id:"missing"},{id:"third",takenAt:600000},{id:"first",takenAt:0},{id:"next-site",takenAt:900001},{id:"second",takenAt:300000},{id:"invalid",takenAt:NaN}];
   assert.equal(JSON.stringify(groupPhotos(input).map(group=>group.map(p=>p.id))),JSON.stringify([["first","second","third"],["next-site"],["missing","invalid"]]));
   assert.equal(input[0].id,"missing");assert.equal(groupPhotos([]).length,0);
  });
