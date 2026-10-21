@@ -1,6 +1,7 @@
 "use client";
 
 import { STATUS_PROGRESS } from "@/lib/work-form";
+import { getDrawingAttachment } from "@/lib/drawing-attachments";
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import {
@@ -220,6 +221,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateWorkItem = async (id: string, updates: Partial<WorkItem>) => {
+    if (updates.attachments) {
+      updates = { ...updates, drawingAttachment: getDrawingAttachment({attachments:updates.attachments,detailsLoaded:true}) };
+    }
     if (updates.status) updates = { ...updates, progress: STATUS_PROGRESS[updates.status] };
     await save("/api/posts", "PUT", { ...updates, id, type: "work" });
     detailCache.current.delete(id);

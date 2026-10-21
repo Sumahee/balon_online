@@ -135,6 +135,9 @@ test("real SQLite pagination stays small with large photo data and loads files o
     const reloadedSummary = await (await reloadedPosts.GET({url:"http://localhost/api/posts?type=work&summary=1&limit=1"})).json();
     assert.equal(reloadedSummary.data[0].confirmationCompleted, true);
     assert.equal(reloadedSummary.data[0].confirmationPending, false);
+    assert.equal(reloadedSummary.data[0].drawingAttachment.id, "a");
+    assert.equal(reloadedSummary.data[0].drawingAttachment.name, "도면.pdf");
+    assert.ok(!JSON.stringify(reloadedSummary).includes(pdf));
     const page1=await(await posts.GET({url:"http://localhost/api/posts?type=work&summary=1&limit=30"})).json();
     const page2=await(await posts.GET({url:"http://localhost/api/posts?type=work&summary=1&limit=30&offset=30"})).json();
     assert.equal(page1.data.length,30);assert.equal(page2.data.length,30);
@@ -165,7 +168,7 @@ test("real SQLite pagination stays small with large photo data and loads files o
   } finally { database.close(); }
 });
 
-test("summary work query returns 30 small rows and never reads body attachments or comments", async () => {
+test("summary work query returns 30 small rows and only PDF metadata for the current page", async () => {
   const queries=[];
   const rows=Array.from({length:31},(_,index)=>({id:String(index),title:"목록 제목",cardType:"도면",status:"오피스",createdAt:"2026-10-13"}));
   const {GET}=loadModule("src/lib/api-handlers/posts.ts",{
@@ -176,9 +179,12 @@ test("summary work query returns 30 small rows and never reads body attachments 
   const result=await (await GET({url:"http://localhost/api/posts?type=work&summary=1&limit=30&from=2026-09-14"})).json();
   assert.equal(result.data.length,30);
   assert.equal(result.hasMore,true);
-  assert.equal(queries.length,1);
+  assert.equal(queries.length,2);
   assert.ok(!/SELECT \*|description|notes|bo_attachments|bo_work_item_comments/.test(queries[0].sql));
   assert.deepEqual(Array.from(queries[0].args),["2026-09-14",31,0]);
+  assert.match(queries[1].sql, /SELECT id, name, work_item_id AS workItemId/);
+  assert.doesNotMatch(queries[1].sql, /\burl\b|SELECT \*/);
+  assert.equal(queries[1].args.length, 30);
   assert.equal(result.data[0].detailsLoaded,false);
 });
 
@@ -1009,4 +1015,49 @@ test("calendar form follows schedule defaults until the checkbox is explicitly c
   edited.calendarVisible=false;
   edited.deadlineType="시공일";
   assert.equal(isCalendarVisible(edited),false);
+});
+
+
+test("drawing icon opens the PDF directly, stops the card click and stays off without a drawing", () => {
+  const React=nativeRequire("react");const slots=[];let cursor=0;
+  const hookReact={...React,useEffect(){},useRef(value){const index=cursor++;return slots[index] ?? (slots[index]={current:value});},useState(value){const index=cursor++;if(!(index in slots))slots[index]=value;return [slots[index],next=>{slots[index]=next;}];}};
+  function PdfPreview() { return null; }
+  const {DrawingQuickOpen}=loadModule("src/components/common/DrawingQuickOpen.tsx",{
+    react:hookReact,"react-dom":{createPortal:node=>node},"./PdfPreview":{PdfPreview},"@/lib/use-modal-back":{useModalBack(){}},
+  },{document:{body:{}}});
+  const item={attachments:[],detailsLoaded:false,drawingAttachment:{id:"drawing id",name:"현장.pdf"}};
+  const render=()=>{cursor=0;return DrawingQuickOpen({item});};
+  const walk=node=>Array.isArray(node)?node.flatMap(walk):node&&typeof node==="object"?[node,...walk(node.props?.children)]:[];
+  let nodes=walk(render());
+  const button=nodes.find(node=>node.type==="button");
+  assert.equal(button.props.disabled,false);
+  assert.equal(button.props["data-drawing-registered"],true);
+  let stopped=false;button.props.onClick({stopPropagation(){stopped=true;}});assert.equal(stopped,true);
+  nodes=walk(render());
+  assert.ok(nodes.some(node=>node.type==="dialog"));
+  assert.equal(nodes.find(node=>node.type===PdfPreview).props.url,"/api/posts?type=work&attachment_id=drawing%20id");
+  nodes.find(node=>node.props?.["aria-label"]==="도면 닫기").props.onClick();
+  assert.ok(!walk(render()).some(node=>node.type==="dialog"));
+  item.drawingAttachment=null;
+  const empty=walk(render()).find(node=>node.type==="button");
+  assert.equal(empty.props.disabled,true);
+  assert.equal(empty.props["data-drawing-registered"],false);
+});
+
+test("memory summaries carry drawing metadata while the PDF bytes load only on click", async () => {
+  const mocks={"@/lib/db":{db:null},"./db":{db:null}};const cache=new Map();
+  const {serverStore}=loadModule("src/lib/serverStore.ts",mocks,{},cache);
+  const pdf="data:application/pdf;base64,"+Buffer.from("drawing contents").toString("base64");
+  serverStore.addWorkItem({type:"work",title:"図面",clientName:"업체",attachments:[{id:"drawing-only",name:"도면.pdf",fileType:"pdf",url:pdf,uploadedAt:"2026-10-21"}]},"drawing-work");
+  const posts=loadModule("src/lib/api-handlers/posts.ts",mocks,{Response},cache);
+  const result=await (await posts.GET({url:"http://localhost/api/posts?type=work&summary=1&q="+encodeURIComponent("図面")})).json();
+  assert.equal(result.data[0].drawingAttachment.id,"drawing-only");
+  assert.ok(!JSON.stringify(result).includes(pdf));
+  const opened=await posts.GET({url:"http://localhost/api/posts?type=work&attachment_id=drawing-only"});
+  assert.equal(opened.headers.get("Content-Type"),"application/pdf");
+  assert.equal(await opened.text(),"drawing contents");
+  await posts.PUT(request({id:"drawing-work",type:"work",attachments:[]}));
+  const removed=await (await posts.GET({url:"http://localhost/api/posts?type=work&summary=1&q="+encodeURIComponent("図面")})).json();
+  assert.equal(removed.data[0].drawingAttachment,null);
+  assert.equal((await posts.GET({url:"http://localhost/api/posts?type=work&attachment_id=drawing-only"})).status,404);
 });

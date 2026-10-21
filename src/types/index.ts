@@ -78,6 +78,7 @@ export interface WorkItem {
   materialOrderNeeded?: string; // 발주 필요 자재 (기존 호환)
   materialOrderStatus?: MaterialOrderStatus; // 발주불필요 | 발주필요 | 발주완료 (기존 호환)
   attachments: AttachmentItem[]; // 도면 PDF, 자재 리스트, 현장 사진 등
+  drawingAttachment?: Pick<AttachmentItem, "id" | "name"> | null; // 목록용 도면 정보 (PDF 본문 제외)
   comments?: WorkItemComment[]; // 현장 및 오피스 소통 댓글 목록
   createdAt: string;
 }

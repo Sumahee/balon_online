@@ -1,4 +1,5 @@
 "use client";
+import { DrawingQuickOpen } from "@/components/common/DrawingQuickOpen";
 import { getWorkTitle } from "@/lib/work-title";
 import { workStatusLabel } from "@/lib/work-status";
 
@@ -333,6 +334,7 @@ export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) 
                         </div>
 
                         <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
+                          <DrawingQuickOpen item={task} />
                           {[task.cardType, task.category].filter((label, index, labels) => label && labels.indexOf(label) === index).map((label) => (
                             <span key={label} className="rounded bg-slate-100 px-1.5 py-0.5 whitespace-nowrap">{label}</span>
                           ))}

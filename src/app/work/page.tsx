@@ -2,6 +2,7 @@
 
 
 import { WorkEditorModal } from "@/components/common/WorkEditorModal";
+import { DrawingQuickOpen } from "@/components/common/DrawingQuickOpen";
 import { KanbanBoard } from "@/components/dashboard/KanbanBoard";
 import { WorkOverview } from "@/components/dashboard/WorkOverview";
 import { useData } from "@/context/DataContext";
@@ -131,6 +132,7 @@ export default function WorkBoardPage() {
               </span>
               <span className="block break-words text-sm font-semibold leading-5 text-slate-900">{getWorkTitle(item)}</span>
             </button>
+            <DrawingQuickOpen item={item} />
             <button type="button" onClick={() => setSelectedTask(item)} aria-label={`${getWorkTitle(item)} 일정과 상태 상세보기`} className="shrink-0 w-16 text-right cursor-pointer">
               <span className="block mb-1 text-xs tabular-nums text-slate-600">{shortDate(item.deliveryDate || item.dueDate)}</span>
               <span className={cn("inline-block rounded px-1.5 py-0.5 text-[10px] font-bold border", getStatusBadge(item.status))}>{item.cardType === "자재리스트" && item.status === "시공완료" ? "발송완료" : shortStatus(item.status)}</span>
@@ -328,6 +330,7 @@ export default function WorkBoardPage() {
 
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <DrawingQuickOpen item={item} />
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

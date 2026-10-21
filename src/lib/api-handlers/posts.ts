@@ -19,10 +19,15 @@ export async function GET(request: NextRequest) {
 
   if (type === "work") {
     const attachmentId=searchParams.get("attachment_id");
-    if(attachmentId && db) {
-      const result=await executeQuery("SELECT url FROM bo_attachments WHERE id = ?",[attachmentId]);
-      if(!result.success)return new Response("File read failed",{status:503});
-      const url=String(result.rows[0]?.url || "");
+    if(attachmentId) {
+      let url = "";
+      if (db) {
+        const result=await executeQuery("SELECT url FROM bo_attachments WHERE id = ?",[attachmentId]);
+        if(!result.success)return new Response("File read failed",{status:503});
+        url=String(result.rows[0]?.url || "");
+      } else {
+        url = serverStore.getWorkItems().flatMap(item => item.attachments || []).find(attachment => attachment.id === attachmentId)?.url || "";
+      }
       const data=url.match(/^data:([\w.+/-]+);base64,([A-Za-z0-9+/=]+)$/);
       if(data)return new Response(Buffer.from(data[2],"base64"),{headers:{"Content-Type":data[1],"Cache-Control":"private, max-age=3600","X-Content-Type-Options":"nosniff"}});
       if(/^(https?:\/\/|\/uploads\/)/.test(url))return NextResponse.redirect(new URL(url,request.url));
@@ -53,7 +58,18 @@ export async function GET(request: NextRequest) {
           await ensureWorkCalendarSchema(); await ensureWorkConfirmationSchema();
           const result = await executeQuery(`SELECT ${WORK_SUMMARY_COLUMNS} FROM bo_work_items ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`, [...values,limit+1,offset]);
           if (!result.success) throw new Error("목록 조회 실패");
-          const data = result.rows.slice(0,limit).map(row => ({...row, confirmationPending:Number(row.confirmationPending) === 1, confirmationCompleted:Number(row.confirmationCompleted) === 1, calendarVisible:row.calendarVisible == null ? undefined : Number(row.calendarVisible) === 1, detailsLoaded:false}));
+          const pageRows = result.rows.slice(0,limit);
+          const drawings = new Map<string, {id: string; name: string}>();
+          if (pageRows.length) {
+            const ids = pageRows.map(row => String(row.id));
+            const metadata = await executeQuery(`SELECT id, name, work_item_id AS workItemId FROM bo_attachments WHERE work_item_id IN (${ids.map(() => "?").join(",")}) AND (file_type = 'pdf' OR LOWER(name) LIKE '%.pdf') ORDER BY uploaded_at DESC, id DESC`, ids);
+            if (!metadata.success) throw new Error("도면 정보 조회 실패");
+            for (const file of metadata.rows) {
+              const workId = String(file.workItemId);
+              if (!drawings.has(workId)) drawings.set(workId, {id:String(file.id), name:String(file.name)});
+            }
+          }
+          const data = pageRows.map(row => ({...row, drawingAttachment:drawings.get(String(row.id)) || null, confirmationPending:Number(row.confirmationPending) === 1, confirmationCompleted:Number(row.confirmationCompleted) === 1, calendarVisible:row.calendarVisible == null ? undefined : Number(row.calendarVisible) === 1, detailsLoaded:false}));
           return NextResponse.json({success:true,data,hasMore:result.rows.length>limit});
         } catch { return NextResponse.json({success:false,message:"업무 목록을 불러오지 못했습니다."},{status:503}); }
       }

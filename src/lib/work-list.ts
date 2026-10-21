@@ -1,8 +1,9 @@
 import type { WorkItem } from "@/types";
+import { getDrawingAttachment } from "./drawing-attachments";
 export function workSummary(item: WorkItem): WorkItem {
   const {description, notes, attachments, comments, materialOrders, ...summary} = item;
   void description; void notes; void attachments; void comments; void materialOrders;
-  return {...summary, attachments:[], detailsLoaded:false};
+  return {...summary, drawingAttachment:getDrawingAttachment(item), attachments:[], detailsLoaded:false};
 }
 export const WORK_SUMMARY_COLUMNS = `id, type, title, client_name AS clientName, site_address AS siteAddress,
 region, drawing_type AS drawingType, card_type AS cardType, deadline_type AS deadlineType,
