@@ -46,7 +46,7 @@ test("Korean holidays include substitute holidays and correct three-day lunar sp
 test("real SQLite pagination stays small with large photo data and loads files only on demand", async () => {
   const database=nativeRequire("@libsql/client").createClient({url:"file::memory:"});
   try {
-    await database.executeMultiple(`CREATE TABLE bo_work_items(id TEXT PRIMARY KEY,type TEXT,title TEXT,client_name TEXT,site_address TEXT,region TEXT,drawing_type TEXT,card_type TEXT,deadline_type TEXT,delivery_date TEXT,category TEXT,assignee TEXT,priority TEXT,status TEXT,progress INTEGER,start_date TEXT,due_date TEXT,created_at TEXT,confirmation_pending INTEGER,calendar_visible INTEGER,post_color TEXT,board_color TEXT,description TEXT,notes TEXT,material_orders TEXT);
+    await database.executeMultiple(`CREATE TABLE bo_work_items(id TEXT PRIMARY KEY,type TEXT,title TEXT,client_name TEXT,site_address TEXT,region TEXT,drawing_type TEXT,card_type TEXT,deadline_type TEXT,delivery_date TEXT,category TEXT,assignee TEXT,priority TEXT,status TEXT,progress INTEGER,start_date TEXT,due_date TEXT,created_at TEXT,confirmation_pending INTEGER,confirmation_completed INTEGER DEFAULT 0,calendar_visible INTEGER,post_color TEXT,board_color TEXT,description TEXT,notes TEXT,material_orders TEXT);
       CREATE TABLE bo_attachments(id TEXT,work_item_id TEXT,name TEXT,file_type TEXT,size TEXT,uploaded_at TEXT,url TEXT);
       CREATE TABLE bo_work_item_comments(id TEXT,work_item_id TEXT,author TEXT,content TEXT,created_at TEXT,images TEXT);`);
     for(let index=0;index<65;index++)await database.execute({sql:"INSERT INTO bo_work_items(id,type,title,card_type,status,created_at,description) VALUES (?,'work',?,'도면','오피스','2026-10-13',?)",args:[String(index).padStart(3,"0"),`제목 ${index}`,"긴 본문".repeat(1000)]});
@@ -57,12 +57,21 @@ test("real SQLite pagination stays small with large photo data and loads files o
     const mock={db:database,executeQuery:async(sql,args=[])=>{const result=await database.execute({sql,args});return {success:true,rows:result.rows};},executeMutation:async(sql,args=[])=>{const result=await database.execute({sql,args});return {success:true,rows:result.rows};}};
     const cache=new Map();
     const posts=loadModule("src/lib/api-handlers/posts.ts",{"@/lib/db":mock},{Response},cache);
+    await database.execute("UPDATE bo_work_items SET confirmation_pending = 1 WHERE id = '064'");
+    const completed = await posts.PUT(request({ id: "064", type: "work", confirmationPending: false, confirmationCompleted: true }));
+    assert.equal((await completed.json()).success, true);
+    const reloadedPosts = loadModule("src/lib/api-handlers/posts.ts", {"@/lib/db":mock}, {Response});
+    const reloadedSummary = await (await reloadedPosts.GET({url:"http://localhost/api/posts?type=work&summary=1&limit=1"})).json();
+    assert.equal(reloadedSummary.data[0].confirmationCompleted, true);
+    assert.equal(reloadedSummary.data[0].confirmationPending, false);
     const page1=await(await posts.GET({url:"http://localhost/api/posts?type=work&summary=1&limit=30"})).json();
     const page2=await(await posts.GET({url:"http://localhost/api/posts?type=work&summary=1&limit=30&offset=30"})).json();
     assert.equal(page1.data.length,30);assert.equal(page2.data.length,30);
     assert.ok(!page2.data.some(item=>page1.data.some(old=>old.id===item.id)));
     assert.ok(!JSON.stringify(page1).includes("긴 본문"));
     const detail=await(await posts.GET({url:"http://localhost/api/posts?type=work&id=064"})).json();
+    assert.equal(detail.data[0].confirmationCompleted, true);
+    assert.equal(detail.data[0].status, "오피스");
     assert.ok(!JSON.stringify(detail).includes(photo));assert.ok(!JSON.stringify(detail).includes(pdf));
     assert.equal(detail.data[0].comments[0].images.length,10);
     const file=await posts.GET({url:"http://localhost"+detail.data[0].attachments[0].url});
@@ -757,4 +766,23 @@ test("plywood listing uses DB records and never silently substitutes local catal
   assert.equal((await failed.GET()).status, 503);
   const empty = loadModule("src/lib/api-handlers/plywoods.ts", { "@/lib/db": { db: {}, executeMutation: async () => ({}), executeQuery: async () => ({ success: true, rows: [] }) } });
   assert.deepEqual((await (await empty.GET()).json()).data, []);
+});
+
+
+test("confirmation schema adds completed state to existing work without changing pending state", async () => {
+  const database = nativeRequire("@libsql/client").createClient({url:"file::memory:"});
+  try {
+    await database.execute("CREATE TABLE bo_work_items(id TEXT PRIMARY KEY, confirmation_pending INTEGER NOT NULL DEFAULT 0)");
+    await database.execute("INSERT INTO bo_work_items VALUES ('existing', 1)");
+    const mock = { db: database,
+      executeQuery: async sql => ({success: true, rows: (await database.execute(sql)).rows}),
+      executeMutation: async sql => database.execute(sql),
+    };
+    const schema = loadModule("src/lib/work-confirmation-schema.ts", {"./db": mock});
+    await schema.ensureWorkConfirmationSchema();
+    await schema.ensureWorkConfirmationSchema();
+    const saved = (await database.execute("SELECT * FROM bo_work_items")).rows[0];
+    assert.equal(saved.confirmation_pending, 1);
+    assert.equal(saved.confirmation_completed, 0);
+  } finally { database.close(); }
 });

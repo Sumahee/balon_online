@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
           await ensureWorkCalendarSchema(); await ensureWorkConfirmationSchema();
           const result = await executeQuery(`SELECT ${WORK_SUMMARY_COLUMNS} FROM bo_work_items ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`, [...values,limit+1,offset]);
           if (!result.success) throw new Error("목록 조회 실패");
-          const data = result.rows.slice(0,limit).map(row => ({...row, confirmationPending:Number(row.confirmationPending) === 1, calendarVisible:row.calendarVisible == null ? undefined : Number(row.calendarVisible) === 1, detailsLoaded:false}));
+          const data = result.rows.slice(0,limit).map(row => ({...row, confirmationPending:Number(row.confirmationPending) === 1, confirmationCompleted:Number(row.confirmationCompleted) === 1, calendarVisible:row.calendarVisible == null ? undefined : Number(row.calendarVisible) === 1, detailsLoaded:false}));
           return NextResponse.json({success:true,data,hasMore:result.rows.length>limit});
         } catch { return NextResponse.json({success:false,message:"업무 목록을 불러오지 못했습니다."},{status:503}); }
       }
@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({success:true,data:matches.slice(offset,offset+limit).map(workSummary),hasMore:matches.length>offset+limit});
     }
     if (db) {
+      await ensureWorkConfirmationSchema();
       let sql = "SELECT * FROM bo_work_items";
       const conditions: string[] = [];
       const args: any[] = [];
@@ -145,6 +146,7 @@ export async function GET(request: NextRequest) {
             commentsHasMore: !!detailId && cmtRes.rows.length > 20,
             title: String(row.title || ""),
             confirmationPending: Number(row.confirmation_pending || 0) === 1,
+            confirmationCompleted: Number(row.confirmation_completed || 0) === 1,
             calendarVisible: row.calendar_visible == null ? undefined : Number(row.calendar_visible) === 1,
             clientName: String(row.client_name || "(주)바론 협력업체"),
             siteAddress: row.site_address ? String(row.site_address) : undefined,
@@ -571,11 +573,12 @@ export async function PUT(request: NextRequest) {
           await ensureWorkCalendarSchema();
           fields.push("calendar_visible = ?"); args.push(updates.calendarVisible ? 1 : 0);
         }
-        if (updates.confirmationPending !== undefined) {
-          if (typeof updates.confirmationPending !== "boolean") return NextResponse.json({success:false,message:"컨펌 상태를 확인해주세요."},{status:400});
+        for (const [key, column] of Object.entries({ confirmationPending: "confirmation_pending", confirmationCompleted: "confirmation_completed" })) {
+          if (updates[key] === undefined) continue;
+          if (typeof updates[key] !== "boolean") return NextResponse.json({success:false,message:"컨펌 상태를 확인해주세요."},{status:400});
           await ensureWorkConfirmationSchema();
-          fields.push("confirmation_pending = ?");
-          args.push(updates.confirmationPending ? 1 : 0);
+          fields.push(column + " = ?");
+          args.push(updates[key] ? 1 : 0);
         }
         if (updates.description !== undefined) {
           fields.push("description = ?");
