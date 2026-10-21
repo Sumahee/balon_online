@@ -2,7 +2,7 @@ export type Priority = '긴급' | '높음' | '보통' | '낮음';
 export type WorkStatus = '대기' | '오피스' | '공장' | '준비완료' | '시공완료';
 export type AsStatus = '접수' | '처리중' | '완료';
 export type CardType = '도면' | '자재리스트' | '견적' | '기타';
-export type DeadlineType = '시공일' | '배송일' | '요청일';
+export type DeadlineType = '시공일' | '배송일' | '발송일' | '요청일';
 export type MaterialOrderStatus = '발주불필요' | '발주필요' | '발주완료';
 export type DrawingType = '천정형' | '에보라' | '옴니버스' | '기타';
 
@@ -43,6 +43,9 @@ export interface WorkItemComment {
 }
 
 export interface WorkItem {
+  createdBy?: string;
+  installationTeam?: string;
+  ceilingHeight?: string; // mm
   id: string;
   type: 'work';
   title: string;
@@ -249,6 +252,7 @@ export type DrawingRequestStatus = 'pending' | 'in_progress' | 'review_pending' 
 
 
 export interface DrawingRequest {
+  ceilingHeight?: string;
   id: string;
   workItemId: string;
   drawingType?: DrawingType; // 도면 타입 (천정형 | 에보라 | 옴니버스 | 기타)

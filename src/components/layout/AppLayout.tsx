@@ -48,7 +48,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
             {/* Platform Footer */}
             <footer className="py-4 px-6 border-t border-slate-200/80 text-center text-xs text-slate-400 bg-white/50 hidden lg:block">
-              BARON ONLINE © 2026 BARON INT. All rights reserved. Custom Furniture & Interior Integrated Platform.
+              BALON ONLINE © 2026 BALON INT. All rights reserved. Custom Furniture & Interior Integrated Platform.
             </footer>
           </div>
 

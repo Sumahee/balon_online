@@ -1,5 +1,6 @@
 "use client";
 
+import { STATUS_PROGRESS } from "@/lib/work-form";
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import {
@@ -219,6 +220,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateWorkItem = async (id: string, updates: Partial<WorkItem>) => {
+    if (updates.status) updates = { ...updates, progress: STATUS_PROGRESS[updates.status] };
     await save("/api/posts", "PUT", { ...updates, id, type: "work" });
     detailCache.current.delete(id);
     setWorkItems((prev) => prev.map((item) => item.id === id ? { ...item, ...updates } : item));

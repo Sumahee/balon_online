@@ -3,10 +3,10 @@ import "./globals.css";
 import { AppLayout } from "@/components/layout/AppLayout";
 
 export const metadata: Metadata = {
-  title: "바론 온라인 | BARON INT 통합 관리 시스템",
+  title: "바론 온라인 | BALON INT 통합 관리 시스템",
   description: "바론 INT 내부 업무 관리, A/S 파이프라인, 현장 이미지 아카이브, 서랍장 자동화 치수 산출 통합 플랫폼",
   icons: {
-    icon: "/favicon.ico",
+    icon: "/icon.png",
   },
 };
 

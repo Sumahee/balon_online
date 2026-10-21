@@ -1,44 +1,43 @@
 "use client";
-import { WorkDetailGate } from "@/components/common/WorkDetailGate";
-import { getWorkTitle } from "@/lib/work-title";
-import { PdfPreview } from "@/components/common/PdfPreview";
-import { workStatusLabel } from "@/lib/work-status";
-import { isCalendarVisible } from "@/lib/calendar-visibility";
+import { WorkEditorModal } from "@/components/common/WorkEditorModal";
+import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
 import { ConstructionPhotoDropZone } from "@/components/common/ConstructionPhotoDropZone";
+import { PdfPreview } from "@/components/common/PdfPreview";
+import { WorkDetailGate } from "@/components/common/WorkDetailGate";
+import { STATUS_PROGRESS } from "@/lib/work-form";
+import { workStatusLabel } from "@/lib/work-status";
+import { getWorkTitle } from "@/lib/work-title";
 
 
 import { getToday } from "@/lib/date";
 
-import React, { useState, useRef } from "react";
 import {
-  X,
-  Building,
-  Calendar,
-  User,
-  Trash2,
-  ExternalLink,
-  Sparkles,
-  CheckCircle2,
-  Clock,
-  CheckCircle,
-  AlertTriangle,
-  Download,
-  ChevronLeft,
-  ChevronRight,
-  MessageSquare,
-  Send,
-  Camera,
+AlertTriangle,
+Building,
+Camera,
+CheckCircle,
+CheckCircle2,
+ChevronLeft,
+ChevronRight,
+Clock,
+Download,
+ExternalLink,
+MessageSquare,
+Send,
+Sparkles,
+Trash2,
+X
 } from "lucide-react";
+import React,{ useRef,useState } from "react";
 
-import { WorkItem, WorkStatus, AttachmentItem, CardType, DeadlineType, DrawingRequest, DrawingType, ClientInfo, POST_BAR_COLORS } from "@/types";
-import { useData } from "@/context/DataContext";
+import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
 import { useAuth } from "@/context/AuthContext";
-import { cn } from "@/lib/utils";
-import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
+import { useData } from "@/context/DataContext";
+import { bodyText } from "@/lib/body-content";
 import { getMaterialOrders } from "@/lib/materialUtils";
 import { readPhotoFile } from "@/lib/photo-compression";
-import { bodyText } from "@/lib/body-content";
-import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
+import { cn } from "@/lib/utils";
+import { AttachmentItem,CardType,DeadlineType,DrawingRequest,WorkItem,WorkStatus } from "@/types";
 
 interface TaskDetailModalProps {
   item: WorkItem | null;
@@ -46,88 +45,22 @@ interface TaskDetailModalProps {
 }
 
 export function TaskDetailModal({item,onClose}:TaskDetailModalProps) { return <WorkDetailGate item={item} onClose={onClose}>{loaded => <TaskDetailContent item={loaded} onClose={onClose} />}</WorkDetailGate>; }
-function TaskDetailContent({ item, onClose }: TaskDetailModalProps) {
+function TaskDetailContent({ item: originalItem, onClose }: { item: WorkItem; onClose: () => void }) {
   const { workItems, updateWorkItem, isSaving, addComment, deleteComment, deleteCommentImage, loadMoreComments } = useData();
   const { user, token } = useAuth();
 
   // Reactive subscription to live item in DataContext
-  const liveItem = item ? (workItems.find((w) => w.id === item.id) || item) : null;
+  const item = workItems.find((w) => w.id === originalItem.id) || originalItem;
+  const liveItem = item;
 
-  const [description, setDescription] = useState(liveItem?.description || liveItem?.notes || "");
-  const [isBodyDirty, setIsBodyDirty] = useState(false);
-  const [attachmentDraft, setAttachmentDraft] = useState<AttachmentItem[] | null>(null);
-  const [isSavingBody, setIsSavingBody] = useState(false);
-  const [isUploadingBody, setIsUploadingBody] = useState(false);
-  const [descSaved, setDescSaved] = useState(false);
-
-  // Title edit state
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [titleValue, setTitleValue] = useState(liveItem?.title || "");
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [materialOpen, setMaterialOpen] = useState(false);
+  const startEditingSpecs = () => setEditorOpen(true);
 
   // Drawing Request State for Baron Web integration
   const [drawingReq, setDrawingReq] = useState<DrawingRequest | null>(null);
   const [isSendingReq, setIsSendingReq] = useState(false);
   const [reqToast, setReqToast] = useState<string | null>(null);
-
-  // 8 Specs Editable States (도면 전송 사양 8종 수정 상태)
-  const [isEditingSpecs, setIsEditingSpecs] = useState(false);
-  const [editDrawingType, setEditDrawingType] = useState<DrawingType>(liveItem?.drawingType || "옴니버스");
-  const [editClientName, setEditClientName] = useState(liveItem?.clientName || "");
-  const [editSiteAddress, setEditSiteAddress] = useState(liveItem?.siteAddress || "");
-  const [editDeliveryDate, setEditDeliveryDate] = useState(liveItem?.deliveryDate || liveItem?.dueDate || "");
-  const [editSiteContactPhone, setEditSiteContactPhone] = useState(liveItem?.siteContactPhone || "");
-  const [editPostColor, setEditPostColor] = useState(liveItem?.postColor || "11 다크그레이");
-  const [editBoardColor, setEditBoardColor] = useState(liveItem?.boardColor || "PET 18T 화이트");
-  const [editDrawingAssignee, setEditDrawingAssignee] = useState(liveItem?.drawingAssignee || liveItem?.assignee || user?.name || "");
-  const [clientsList, setClientsList] = useState<ClientInfo[]>([]);
-
-  // Load clients list for autocomplete datalist
-  React.useEffect(() => {
-    fetch("/api/clients")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.success && Array.isArray(data.clients)) {
-          setClientsList(data.clients);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const startEditingSpecs = () => {
-    if (!liveItem) return;
-    setEditDrawingType(liveItem.drawingType || "옴니버스");
-    setEditClientName(liveItem.clientName || "");
-    setEditSiteAddress(liveItem.siteAddress || "");
-    setEditDeliveryDate(liveItem.deliveryDate || liveItem.dueDate || "");
-    setEditSiteContactPhone(liveItem.siteContactPhone || "");
-    setEditPostColor(liveItem.postColor || "11 다크그레이");
-    setEditBoardColor(liveItem.boardColor || "PET 18T 화이트");
-    setEditDrawingAssignee(liveItem.drawingAssignee || liveItem.assignee || "");
-    setIsEditingSpecs(true);
-  };
-
-  const handleSaveSpecs = async () => {
-    try {
-      if (!liveItem) return;
-      await updateWorkItem(liveItem.id, {
-        drawingType: editDrawingType,
-        clientName: editClientName.trim() || liveItem.clientName,
-        siteAddress: editSiteAddress.trim(),
-        deliveryDate: editDeliveryDate,
-        dueDate: editDeliveryDate,
-        siteContactPhone: editSiteContactPhone.trim(),
-        postColor: editPostColor,
-        boardColor: editBoardColor.trim(),
-        drawingAssignee: editDrawingAssignee,
-        assignee: editDrawingAssignee,
-      });
-      setIsEditingSpecs(false);
-      setReqToast("도면 전송 8종 사양 정보가 실시간 저장되었습니다! ✨");
-      setTimeout(() => setReqToast(null), 3000);
-    } catch {
-      // Keep the editor open; DataStatus displays the server error.
-    }
-  };
 
   // PDF Viewer Modal
   const [activePdfUrl, setActivePdfUrl] = useState<string | null>(null);
@@ -234,7 +167,7 @@ function TaskDetailContent({ item, onClose }: TaskDetailModalProps) {
 
   const handleSendDrawingRequest = async () => {
     if (!liveItem) return;
-    if (isBodyDirty || attachmentDraft !== null || isEditingSpecs) {
+    if (editorOpen) {
       window.alert("본문과 도면 사양을 저장한 뒤 전송해 주세요.");
       return;
     }
@@ -246,15 +179,9 @@ function TaskDetailContent({ item, onClose }: TaskDetailModalProps) {
     drawingWindow.opener = null;
     drawingWindow.document.body.textContent = "도면 정보를 전송하고 있습니다…";
     setIsSendingReq(true);
-    const assignedUser = user?.name || liveItem.drawingAssignee || liveItem.assignee || "바론 담당자";
+    const assignedUser = liveItem.drawingAssignee || "";
 
     try {
-      // Auto assign logged-in user to this work item on drawing action
-      await updateWorkItem(liveItem.id, {
-        drawingAssignee: assignedUser,
-        assignee: assignedUser,
-      });
-
       const res = await fetch("/api/drawing-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -265,6 +192,7 @@ function TaskDetailContent({ item, onClose }: TaskDetailModalProps) {
           siteAddress: liveItem.siteAddress || "",
           deliveryDate: liveItem.deliveryDate || liveItem.dueDate,
           contactPhone: liveItem.siteContactPhone || "",
+          ceilingHeight: liveItem.ceilingHeight || "",
           postColor: liveItem.postColor || "",
           boardColor: liveItem.boardColor || "",
           drawingAssignee: assignedUser,
@@ -279,7 +207,7 @@ function TaskDetailContent({ item, onClose }: TaskDetailModalProps) {
       drawingWindow.location.replace(data.launchUrl);
       if (data.success && data.request) {
         setDrawingReq(data.request);
-        setReqToast(`바론웹으로 도면 작업 요청이 전송되었습니다! 🚀 (담당자: ${assignedUser} 자동 배정 완료)`);
+        setReqToast("바론웹으로 도면 작업 요청이 전송되었습니다.");
         setTimeout(() => setReqToast(null), 4500);
       }
     } catch (err) {
@@ -333,64 +261,17 @@ function TaskDetailContent({ item, onClose }: TaskDetailModalProps) {
 
   const STAGES: WorkStatus[] = ["대기", "오피스", "공장", "준비완료", "시공완료"];
 
-  const CARD_TYPES: { key: CardType; label: string; color: string }[] = [
-    { key: "도면", label: "도면", color: "bg-indigo-100 text-indigo-800 border-indigo-200" },
-    { key: "자재리스트", label: "자재리스트", color: "bg-amber-100 text-amber-800 border-amber-200" },
-    { key: "견적", label: "견적", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
-    { key: "기타", label: "기타", color: "bg-slate-100 text-slate-700 border-slate-200" },
-  ];
+  const handleStageChange = (newStatus: WorkStatus) => { void updateWorkItem(item.id, { status: newStatus, progress: STATUS_PROGRESS[newStatus] }).catch(() => {}); };
+  const handleClose = onClose;
 
-  const DEADLINE_TYPES: DeadlineType[] = ["시공일", "배송일", "요청일"];
-
-
-  const handleStageChange = (newStatus: WorkStatus) => {
-    let newProgress = item.progress;
-    if (newStatus === "대기") newProgress = 10;
-    else if (newStatus === "오피스") newProgress = 40;
-    else if (newStatus === "공장") newProgress = 75;
-    else if (newStatus === "준비완료") newProgress = 90;
-    else if (newStatus === "시공완료") newProgress = 100;
-
-    updateWorkItem(item.id, { status: newStatus, progress: newProgress });
-  };
-
-  const handleSaveBody = async () => {
-    if (!liveItem || isSavingBody || isUploadingBody) return;
-    setIsSavingBody(true);
-    try {
-      await updateWorkItem(liveItem.id, {
-        description: isBodyDirty ? description : (liveItem.description ?? liveItem.notes ?? ""),
-        notes: bodyText(isBodyDirty ? description : (liveItem.description ?? liveItem.notes ?? "")),
-        attachments: attachmentDraft ?? liveItem.attachments ?? [],
-      });
-      setIsBodyDirty(false);
-      setAttachmentDraft(null);
-      setDescSaved(true);
-      setTimeout(() => setDescSaved(false), 2500);
-    } catch {
-      // Preserve the draft so the user can retry after the error notification.
-    } finally {
-      setIsSavingBody(false);
-    }
-  };
-
-  const handleClose = () => {
-    if (isSavingBody || isUploadingBody) return;
-    if ((isBodyDirty || attachmentDraft !== null) && !window.confirm("저장하지 않은 본문 변경이 있습니다. 닫으시겠습니까?")) return;
-    onClose();
-  };
-
-  // Urgency detection
-  const todayStr = getToday();
-  const targetDate = item.deliveryDate || item.dueDate;
-  const daysUntilDelivery = Math.ceil(
-    (new Date(targetDate).getTime() - new Date(todayStr).getTime()) / (1000 * 60 * 60 * 24)
-  );
+  const deliveryDate = liveItem?.deliveryDate || item.dueDate;
+  const daysUntilDelivery = Math.ceil((new Date(deliveryDate).getTime() - new Date(getToday()).getTime()) / 86400000);
   const isUrgent = item.priority === "긴급" || (daysUntilDelivery >= 0 && daysUntilDelivery <= 3);
 
   return (
     <>
-      <div role="dialog" aria-modal="true" aria-label="업무 상세"
+      {editorOpen && <WorkEditorModal item={liveItem} onClose={() => setEditorOpen(false)} />}
+      <div role="dialog" aria-modal="true" aria-label="업무 상세" inert={editorOpen} aria-hidden={editorOpen}
         className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-5 bg-black/70 backdrop-blur-xs animate-in fade-in overflow-y-auto">
         <div className="w-full sm:max-w-4xl bg-white rounded-none sm:rounded-2xl shadow-2xl border-0 sm:border border-slate-200 overflow-hidden flex flex-col h-[100dvh] sm:h-auto max-h-[100dvh] sm:max-h-[92vh]">
           {/* Top Bar */}
@@ -401,26 +282,7 @@ function TaskDetailContent({ item, onClose }: TaskDetailModalProps) {
           </div>
           <div className="hidden sm:flex px-6 py-4 border-b border-slate-200 bg-slate-50 items-center justify-between">
             <div className="flex flex-wrap items-center gap-2.5">
-              {/* Card Type Selector */}
-              <div className="flex items-center gap-1 bg-white border border-slate-200 p-0.5 rounded-lg shadow-2xs">
-                {CARD_TYPES.map((ct) => {
-                  const isSelected = (item.cardType || "도면") === ct.key;
-                  return (
-                    <button
-                      key={ct.key}
-                      onClick={() => updateWorkItem(item.id, { cardType: ct.key })}
-                      className={cn(
-                        "text-xs font-bold px-2.5 py-1 rounded-md transition cursor-pointer",
-                        isSelected
-                          ? "bg-slate-900 text-white shadow-2xs"
-                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                      )}
-                    >
-                      {ct.label}
-                    </button>
-                  );
-                })}
-              </div>
+              <span className="rounded-lg border bg-white px-3 py-1 text-xs font-semibold">{item.cardType || "도면"}</span>
 
               {/* Client Name */}
               <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 rounded-lg border border-blue-200 text-blue-950 font-bold text-xs">
@@ -446,130 +308,13 @@ function TaskDetailContent({ item, onClose }: TaskDetailModalProps) {
 
           {/* Modal Main Scrollable Content */}
           <div className="flex-1 overflow-y-auto px-0 py-3 sm:p-6 space-y-4">
-            {/* Title & Metadata Strip */}
-            <div className="hidden sm:block">
-              {isEditingTitle ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={titleValue}
-                    onChange={(e) => setTitleValue(e.target.value)}
-                    className="text-lg sm:text-xl font-extrabold p-2 border-2 border-blue-500 rounded-xl flex-1 focus:outline-none bg-white text-slate-900"
-                  />
-                  <button
-                    onClick={() => {
-                      if (titleValue.trim()) {
-                        updateWorkItem(item.id, { title: titleValue.trim() });
-                      }
-                      setIsEditingTitle(false);
-                    }}
-                    className="px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition"
-                  >
-                    저장
-                  </button>
-                  <button
-                    onClick={() => {
-                      setTitleValue(liveItem?.title || item.title);
-                      setIsEditingTitle(false);
-                    }}
-                    className="px-3 py-2 bg-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-300 transition"
-                  >
-                    취소
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between group">
-                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 leading-tight">
-                    {liveItem?.title || item.title}
-                  </h2>
-                  <button
-                    onClick={() => {
-                      setTitleValue(liveItem?.title || item.title);
-                      setIsEditingTitle(true);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 text-xs font-bold text-blue-600 hover:text-blue-800 transition px-2.5 py-1 bg-blue-50 rounded-lg cursor-pointer shrink-0 ml-2"
-                  >
-                    ✏️ 제목 수정
-                  </button>
-                </div>
-              )}
-
-              <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                {/* Deadline Type & Date Selector */}
-                <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs">
-                  <Calendar className="w-4 h-4 text-rose-500 shrink-0" />
-                  <select
-                    value={item.deadlineType || "시공일"}
-                    onChange={(e) =>
-                      updateWorkItem(item.id, { deadlineType: e.target.value as DeadlineType })
-                    }
-                    className="font-bold text-xs text-slate-900 bg-transparent focus:outline-none cursor-pointer"
-                  >
-                    {DEADLINE_TYPES.map((dt) => (
-                      <option key={dt} value={dt}>
-                        {dt}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="date"
-                    value={item.deliveryDate || item.dueDate}
-                    onChange={(e) =>
-                      updateWorkItem(item.id, {
-                        deliveryDate: e.target.value,
-                        dueDate: e.target.value,
-                      })
-                    }
-                    className="font-mono text-xs font-bold text-slate-800 bg-transparent focus:outline-none cursor-pointer"
-                  />
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <User className="w-4 h-4 text-slate-500" />
-                  <span>
-                    담당자: <strong>{item.assignee}</strong>
-                  </span>
-                </div>
-
-                <label className="ml-auto flex items-center gap-2 text-sm">
-                  <span className="text-slate-500">상태</span>
-                  <span className="flex items-center gap-1 text-xs whitespace-nowrap"><input aria-label="달력 표시" type="checkbox" checked={isCalendarVisible(liveItem || item)} disabled={isSaving} onChange={e => { void updateWorkItem(item.id, {calendarVisible:e.target.checked}); }} />달력 표시</span>
-                  <select aria-label="현재 업무 상태" value={liveItem?.status || item.status} disabled={isSaving}
-                    onChange={(event) => handleStageChange(event.target.value as WorkStatus)}
-                    className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 font-semibold text-slate-800">
-                    {STAGES.map((stage) => <option key={stage} value={stage}>{workStatusLabel(liveItem || item, stage)}</option>)}
-                  </select>
-                  <button type="button" aria-pressed={!!liveItem?.confirmationPending} disabled={isSaving} onClick={() => { void updateWorkItem(item.id, { confirmationPending: !liveItem?.confirmationPending, confirmationCompleted: false }); }} className={cn("rounded-lg border px-2.5 py-1.5 text-xs font-bold cursor-pointer disabled:opacity-50", liveItem?.confirmationCompleted ? "border-emerald-300 bg-emerald-100 text-emerald-800" : liveItem?.confirmationPending ? "border-amber-400 bg-amber-100 text-amber-800 shadow-sm" : "border-slate-200 bg-slate-100 text-slate-500")}><span className={cn("inline-block mr-1.5 h-2 w-2 rounded-full", liveItem?.confirmationCompleted ? "bg-emerald-500" : liveItem?.confirmationPending ? "bg-amber-500" : "bg-slate-300")} />{liveItem?.confirmationCompleted ? "컨펌완료 ✓" : "컨펌중"}</button>
-                </label>
-              </div>
-            </div>
-
-            <section className="space-y-3" aria-label="기본정보와 본문">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="hidden sm:block text-base font-bold text-slate-900">기본정보 · 업무 내용</h3>
-                <div className="flex items-center gap-2">
-                  <span role="status" className="text-xs text-slate-500">{isBodyDirty || attachmentDraft !== null ? "저장하지 않은 변경" : descSaved ? "저장되었습니다" : ""}</span>
-                  <button type="button" onClick={() => void handleSaveBody()} disabled={isSavingBody || isUploadingBody || isSaving || (!isBodyDirty && attachmentDraft === null)}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
-                    {isSavingBody ? "저장 중…" : "본문 저장"}
-                  </button>
-                </div>
-              </div>
-              <UnifiedBoardEditor
-                description={isBodyDirty ? description : (liveItem?.description ?? liveItem?.notes ?? "")}
-                onChangeDescription={(value) => { setDescription(value); setIsBodyDirty(true); setDescSaved(false); }}
-                attachments={attachmentDraft ?? liveItem?.attachments ?? []}
-                onChangeAttachments={(attachments) => { setAttachmentDraft(attachments); setDescSaved(false); }}
-                onOpenAttachment={(attachment) => {
-                  if (attachment.fileType === "pdf" || /\.pdf$/i.test(attachment.name)) {
-                    setActivePdfUrl(attachment.url); setActivePdfTitle(attachment.name);
-                  } else { window.open(attachment.url, "_blank", "noopener,noreferrer"); }
-                }}
-                placeholder="작업 내용, 요청사항, 현장 메모를 작성하세요. 사진과 PDF는 본문에 끌어놓거나 붙여넣을 수 있습니다."
-                onUploadingChange={setIsUploadingBody}
-                minRows={9}
-                readOnly={isSavingBody}
-              />
+            <section className="space-y-3 px-3 sm:px-0" aria-label="기본정보와 본문">
+              <h3 className="sr-only">기본정보 · 업무 내용</h3>
+              <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-bold">{getWorkTitle(liveItem || item)}</h2><button type="button" onClick={startEditingSpecs} className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">업무 수정</button></div>
+              <dl className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-sm sm:grid-cols-4">{[["예정일", liveItem?.deliveryDate || item.dueDate], ["일정 종류", liveItem?.deadlineType], ["업무 등록자", liveItem?.createdBy || "기존 기록 없음"], ["시공팀", liveItem?.installationTeam], ["진행 상태", liveItem?.status]].map(([label,value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 font-medium">{value || "미입력"}</dd></div>)}</dl>
+              <div className="flex items-center gap-3 text-sm"><label className="flex items-center gap-2">현재 상태<select aria-label="현재 업무 상태" value={liveItem?.status || item.status} disabled={isSaving} onChange={e => handleStageChange(e.target.value as WorkStatus)} className="rounded-lg border p-2">{(["대기", "오피스", "공장", "준비완료", "시공완료"] as WorkStatus[]).map(status => <option key={status} value={status}>{workStatusLabel(liveItem || item, status)}</option>)}</select></label><span className="text-xs text-slate-500" role="status">{isSaving ? "저장 중…" : "상태 변경은 즉시 저장됩니다"}</span></div>
+              <div className="flex items-center gap-2"><button type="button" aria-pressed={!!liveItem?.confirmationPending} disabled={isSaving} onClick={() => { void updateWorkItem(item.id, { confirmationPending: !liveItem?.confirmationPending, confirmationCompleted: false }); }} className={cn("rounded-lg border px-2.5 py-1.5 text-xs font-bold cursor-pointer disabled:opacity-50", liveItem?.confirmationCompleted ? "border-emerald-300 bg-emerald-100 text-emerald-800" : liveItem?.confirmationPending ? "border-amber-400 bg-amber-100 text-amber-800 shadow-sm" : "border-slate-200 bg-slate-100 text-slate-500")}><span className={cn("inline-block mr-1.5 h-2 w-2 rounded-full", liveItem?.confirmationCompleted ? "bg-emerald-500" : liveItem?.confirmationPending ? "bg-amber-500" : "bg-slate-300")} />{liveItem?.confirmationCompleted ? "컨펌완료 ✓" : "컨펌중"}</button></div>
+              <UnifiedBoardEditor description={liveItem?.description || liveItem?.notes || ""} onChangeDescription={() => {}} attachments={liveItem?.attachments ?? []} onChangeAttachments={() => {}} readOnly minRows={6} onOpenAttachment={attachment => {if (attachment.fileType === "pdf") {setActivePdfUrl(attachment.url);setActivePdfTitle(attachment.name);} else window.open(attachment.url,"_blank","noopener,noreferrer");}} />
             </section>
 
             {(liveItem?.cardType || "도면") === "도면" && (
@@ -627,181 +372,7 @@ function TaskDetailContent({ item, onClose }: TaskDetailModalProps) {
               )}
               <details className="rounded-xl border border-indigo-100 bg-white">
                 <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-700">다음 전송에 사용할 사양 확인·수정</summary>
-              {/* 📋 도면 프로그램 전송 8개 필수 데이터 사양 카드 (실시간 수정 지원) */}
-              <div className={cn(
-                "p-4 rounded-2xl border transition-all text-xs space-y-3",
-                isEditingSpecs
-                  ? "bg-white border-2 border-indigo-400 shadow-md ring-4 ring-indigo-500/10"
-                  : "bg-white/90 border border-indigo-100 shadow-2xs"
-              )}>
-                <div className="flex items-center justify-between font-extrabold text-slate-900 border-b border-indigo-100 pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">📋 다음 전송 사양</span>
-                    {isEditingSpecs ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-extrabold border border-amber-300 animate-pulse">
-                        ✏️ 사양 정보 수정 중
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
-                        도면 담당자: {liveItem?.drawingAssignee || liveItem?.assignee || ""}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    {isEditingSpecs ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={handleSaveSpecs}
-                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
-                          <span>사양 저장</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (liveItem) {
-                              setEditDrawingType(liveItem.drawingType || "옴니버스");
-                              setEditClientName(liveItem.clientName || "");
-                              setEditSiteAddress(liveItem.siteAddress || "");
-                              setEditDeliveryDate(liveItem.deliveryDate || liveItem.dueDate || "");
-                              setEditSiteContactPhone(liveItem.siteContactPhone || "");
-                              setEditPostColor(liveItem.postColor || "11 다크그레이");
-                              setEditBoardColor(liveItem.boardColor || "PET 18T 화이트");
-                              setEditDrawingAssignee(liveItem.drawingAssignee || liveItem.assignee || "");
-                            }
-                            setIsEditingSpecs(false);
-                          }}
-                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
-                        >
-                          취소
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={startEditingSpecs}
-                        className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer hover:shadow-2xs"
-                      >
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>✏️ 사양 수정</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {isEditingSpecs ? (
-                  /* ✏️ EDIT MODE FORM GRID */
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-[11px] animate-in fade-in duration-200">
-                    {/* 1. 도면 타입 */}
-                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
-                      <label className="text-slate-600 block text-[10px] font-bold mb-1">도면 타입</label>
-                      <select
-                        value={editDrawingType}
-                        onChange={(e) => setEditDrawingType(e.target.value as DrawingType)}
-                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-extrabold text-indigo-900 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                      >
-                        <option value="천정형">천정형</option>
-                        <option value="에보라">에보라</option>
-                        <option value="옴니버스">옴니버스</option>
-                        <option value="기타">기타</option>
-                      </select>
-                    </div>
-
-                    {/* 2. 업체명 */}
-                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
-                      <label className="text-slate-600 block text-[10px] font-bold mb-1">업체명</label>
-                      <input
-                        type="text"
-                        list="task-detail-clients-list"
-                        value={editClientName}
-                        onChange={(e) => setEditClientName(e.target.value)}
-                        placeholder="업체명 선택/입력"
-                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-bold text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                      />
-                      <datalist id="task-detail-clients-list">
-                        {clientsList.map((c) => (
-                          <option key={c.id} value={c.name} />
-                        ))}
-                      </datalist>
-                    </div>
-
-                    {/* 3. 현장 주소 */}
-                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
-                      <label className="text-slate-600 block text-[10px] font-bold mb-1">현장 상세 주소</label>
-                      <input
-                        type="text"
-                        value={editSiteAddress}
-                        onChange={(e) => setEditSiteAddress(e.target.value)}
-                        placeholder="예: 반포동 104동"
-                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-bold text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                      />
-                    </div>
-
-                    {/* 4. 시공일 */}
-                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
-                      <label className="text-slate-600 block text-[10px] font-bold mb-1">시공일 (마감일)</label>
-                      <input
-                        type="date"
-                        value={editDeliveryDate}
-                        onChange={(e) => setEditDeliveryDate(e.target.value)}
-                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-bold text-indigo-700 font-mono text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                      />
-                    </div>
-
-                    {/* 5. 현장 담당자 연락처 */}
-                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
-                      <label className="text-slate-600 block text-[10px] font-bold mb-1">현장 담당자 연락처</label>
-                      <input
-                        type="text"
-                        value={editSiteContactPhone}
-                        onChange={(e) => setEditSiteContactPhone(e.target.value)}
-                        placeholder="010-0000-0000"
-                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-bold text-slate-900 font-mono text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                      />
-                    </div>
-
-                    {/* 6. 포스트바 컬러 */}
-                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
-                      <label className="text-slate-600 block text-[10px] font-bold mb-1">포스트바 컬러</label>
-                      <select
-                        value={editPostColor}
-                        onChange={(e) => setEditPostColor(e.target.value)}
-                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-bold text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                      >
-                        {POST_BAR_COLORS.map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* 7. 합판 컬러 (종류) */}
-                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
-                      <label className="text-slate-600 block text-[10px] font-bold mb-1">합판 컬러 (종류)</label>
-                      <input
-                        type="text"
-                        value={editBoardColor}
-                        onChange={(e) => setEditBoardColor(e.target.value)}
-                        placeholder="예: PET 18T 화이트"
-                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-bold text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                      />
-                    </div>
-
-                    {/* 8. 도면 담당자 */}
-                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-200/80">
-                      <label className="text-slate-600 block text-[10px] font-bold mb-1">도면 담당자</label>
-                      <input
-                        value={editDrawingAssignee}
-                        onChange={(e) => setEditDrawingAssignee(e.target.value)}
-                        placeholder="담당자 이름"
-                        aria-label="도면 담당자"
-                        className="w-full p-2 bg-white border border-indigo-200 rounded-lg font-bold text-indigo-700 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                ) : (
+              <div className="p-4 text-xs space-y-3">
                   /* 👁️ VIEW MODE GRID (Clickable to Edit) */
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
                     <div
@@ -873,7 +444,7 @@ function TaskDetailContent({ item, onClose }: TaskDetailModalProps) {
                         <span className="text-slate-400 block text-[10px] font-bold">포스트바 컬러</span>
                         <span className="text-[10px] text-indigo-500 opacity-0 group-hover:opacity-100 font-bold transition">✏️</span>
                       </div>
-                      <span className="font-extrabold text-slate-900 mt-0.5 block">{liveItem?.postColor || "11 다크그레이"}</span>
+                      <span className="font-extrabold text-slate-900 mt-0.5 block">{liveItem?.postColor || "미정"}</span>
                     </div>
 
                     <div
@@ -885,7 +456,7 @@ function TaskDetailContent({ item, onClose }: TaskDetailModalProps) {
                         <span className="text-slate-400 block text-[10px] font-bold">합판 컬러 (종류)</span>
                         <span className="text-[10px] text-indigo-500 opacity-0 group-hover:opacity-100 font-bold transition">✏️</span>
                       </div>
-                      <span className="font-extrabold text-slate-900 truncate block mt-0.5">{liveItem?.boardColor || "PET 18T 화이트"}</span>
+                      <span className="font-extrabold text-slate-900 truncate block mt-0.5">{liveItem?.boardColor || "미정"}</span>
                     </div>
 
                     <div
@@ -897,10 +468,11 @@ function TaskDetailContent({ item, onClose }: TaskDetailModalProps) {
                         <span className="text-slate-400 block text-[10px] font-bold">도면 담당자</span>
                         <span className="text-[10px] text-indigo-500 opacity-0 group-hover:opacity-100 font-bold transition">✏️</span>
                       </div>
-                      <span className="font-extrabold text-indigo-700 truncate block mt-0.5">{liveItem?.drawingAssignee || liveItem?.assignee}</span>
+                      <span className="font-extrabold text-indigo-700 truncate block mt-0.5">{liveItem?.drawingAssignee || "미배정"}</span>
+                      <span className="mt-2 block text-xs text-slate-600">천정고: {liveItem?.ceilingHeight ? liveItem.ceilingHeight + " mm" : "미입력"} · 시공팀: {liveItem?.installationTeam || "미지정"} · 등록자: {liveItem?.createdBy || "기존 기록 없음"}</span>
                     </div>
                   </div>
-                )}
+
               </div>
 
               </details>
@@ -974,22 +546,17 @@ function TaskDetailContent({ item, onClose }: TaskDetailModalProps) {
               </details>
             )}
 
-            <details className="rounded-xl border border-slate-200 bg-white">
+            <details onToggle={event => setMaterialOpen(event.currentTarget.open)} className="rounded-xl border border-slate-200 bg-white">
               <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">자재 발주 · {getMaterialOrders(item).length}개 품목</summary>
             {/* 📦 Material Order Management Section */}
-            <MaterialOrderManager
-              orders={getMaterialOrders(item)}
-              onChange={(updatedOrders) => {
-                const allDone = updatedOrders.length > 0 && updatedOrders.every((o) => o.isOrdered);
-                updateWorkItem(item.id, {
-                  materialOrders: updatedOrders,
-                  materialOrderNeeded: updatedOrders.map((o) => o.name).join(", "),
-                  materialOrderStatus: updatedOrders.length === 0 ? "발주불필요" : allDone ? "발주완료" : "발주필요",
-                });
-              }}
-            />
-
-
+            <div className="px-3 pb-3">{materialOpen && <MaterialOrderManager
+              orders={getMaterialOrders(item)} autoFocusInput={getMaterialOrders(item).length === 0}
+              onChange={orders => updateWorkItem(item.id, {
+                materialOrders: orders,
+                materialOrderNeeded: orders.map(order => order.name).join(", "),
+                materialOrderStatus: !orders.length ? "발주불필요" : orders.every(order => order.isOrdered) ? "발주완료" : "발주필요",
+              })}
+            />}</div>
             </details>
 
             {/* 💬 SNS 게시물/피드 스타일 현장 소통 댓글 섹션 */}

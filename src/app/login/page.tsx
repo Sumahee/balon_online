@@ -57,7 +57,7 @@ export default function LoginPage() {
           </div>
         </div>
         <h2 className="text-center text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-400">
-          BARON ONLINE
+          BALON ONLINE
         </h2>
         <p className="mt-2 text-center text-sm text-slate-400">
           바론 INT 본사 직원 전용 통합 업무 및 공정 플랫폼

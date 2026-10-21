@@ -1,38 +1,29 @@
 "use client";
 
-import { useAuth } from "@/context/AuthContext";
 import { PageHeader } from "@/components/common/PageHeader";
+import { WorkEditorModal } from "@/components/common/WorkEditorModal";
 
 import { getToday } from "@/lib/date";
 
-import React, { useState, useMemo } from "react";
-import {
-  Calendar as CalendarIcon,
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  MapPin,
-  Building2,
-  FileText,
-  CheckCircle2,
-  Clock,
-  Filter,
-  Search,
-  Layers,
-  Sparkles,
-  Camera,
-} from "lucide-react";
-import { useData } from "@/context/DataContext";
-import { WorkItem, AsItem, AttachmentItem, ClientInfo, DrawingType } from "@/types";
-import { cn } from "@/lib/utils";
-import dynamic from "next/dynamic";
-const CalendarDetailModal=dynamic(()=>import("@/components/calendar/CalendarDetailModal").then(module=>module.CalendarDetailModal),{ssr:false});
-const UnifiedBoardEditor=dynamic(()=>import("@/components/common/UnifiedBoardEditor").then(module=>module.UnifiedBoardEditor),{ssr:false});
 import { MobileMonthCalendar } from "@/components/calendar/MobileMonthCalendar";
+import { useData } from "@/context/DataContext";
+import { cn } from "@/lib/utils";
+import { AsItem,WorkItem } from "@/types";
+import {
+ChevronLeft,
+ChevronRight,
+MapPin,
+Plus,
+Search,
+Sparkles
+} from "lucide-react";
+import dynamic from "next/dynamic";
+import React,{ useMemo,useState } from "react";
+const CalendarDetailModal=dynamic(()=>import("@/components/dashboard/TaskDetailModal").then(module=>module.TaskDetailModal),{ssr:false});
 
-import { generateWorkTitle, getWorkTitle } from "@/lib/work-title";
 import { isCalendarVisible } from "@/lib/calendar-visibility";
 import { useHolidays } from "@/lib/use-holidays";
+import { getWorkTitle } from "@/lib/work-title";
 
 const REGIONS = ["전체", "반포", "일산", "서초", "한남", "성수", "판교", "분당"];
 
@@ -93,8 +84,7 @@ interface CalendarEvent {
 }
 
 export default function CalendarPage() {
-  const { user } = useAuth();
-  const { workItems, asItems, addWorkItem, isSaving, loadWorkList } = useData();
+  const { workItems, asItems, loadWorkList } = useData();
 
   const [currentDate, setCurrentDate] = useState(new Date(`${getToday()}T00:00:00`));
   const holidays=useHolidays(currentDate.getFullYear());
@@ -120,33 +110,7 @@ export default function CalendarPage() {
 
   // New item modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newClient, setNewClient] = useState("");
-  const [newSiteAddress, setNewSiteAddress] = useState("");
-  const [newRegion, setNewRegion] = useState("반포");
   const [newDate, setNewDate] = useState(getToday());
-  const [newDrawingType, setNewDrawingType] = useState<DrawingType>("천정형");
-  const [newDeadlineType, setNewDeadlineType] = useState<"시공일" | "배송일" | "요청일">("시공일");
-  const [newCategory, setNewCategory] = useState<"제작" | "실측" | "시공" | "설계" | "납품" | "기타">("시공");
-  const [newDescription, setNewDescription] = useState("");
-  const [newAttachments, setNewAttachments] = useState<AttachmentItem[]>([]);
-  const [clientsList, setClientsList] = useState<ClientInfo[]>([]);
-
-  // Load live clients list from shared DB (READ-ONLY)
-  React.useEffect(() => {
-    if(!isAddModalOpen)return;
-    fetch("/api/clients")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.success && Array.isArray(data.clients)) {
-          setClientsList(data.clients);
-          if (data.clients.length > 0) {
-            setNewClient(previous=>previous || data.clients[0].name);
-          }
-        }
-      })
-      .catch(() => {});
-  }, [isAddModalOpen]);
 
   // Filtered work & A/S items for Calendar
   const filteredEvents = useMemo(() => {
@@ -232,52 +196,11 @@ export default function CalendarPage() {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   };
 
-  const handleCreateSchedule = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSaving) return;
-    try {
-      if (!(newTitle.trim() || generateWorkTitle(newClient, newSiteAddress, newRegion))) return;
-
-      const safeClient = newClient.trim() || "(주)바론 협력업체";
-      const todayStr = getToday();
-
-      await addWorkItem({
-        type: "work",
-        title: newTitle.trim() || generateWorkTitle(newClient, newSiteAddress, newRegion),
-        clientName: safeClient,
-        siteAddress: newSiteAddress.trim(),
-        region: newRegion,
-        drawingType: newDrawingType,
-        cardType: "도면",
-        deadlineType: newDeadlineType,
-        deliveryDate: newDate,
-        category: newCategory,
-        assignee: user?.name || "",
-        priority: "높음",
-        status: "대기",
-        progress: 0,
-        startDate: todayStr,
-        dueDate: newDate,
-        notes: `${newRegion} 현장 ${newDeadlineType} 일정 등록`,
-        description: newDescription,
-        attachments: newAttachments,
-      });
-
-      setIsAddModalOpen(false);
-      setNewTitle("");
-      setNewSiteAddress("");
-      setNewDescription("");
-      setNewAttachments([]);
-    } catch {
-      // DataContext displays the error; leave the form open for retry.
-    }
-  };
-
   return (
     <div className="space-y-6 pb-12">
       <MobileMonthCalendar key={`${currentDate.getFullYear()}-${currentDate.getMonth()}`} year={currentDate.getFullYear()} month={currentDate.getMonth()} days={calendarDays} events={filteredEvents} regions={REGIONS} region={selectedRegion} search={searchQuery} onRegion={setSelectedRegion} onSearch={setSearchQuery} onPrevious={handlePrevMonth} onNext={handleNextMonth} onToday={()=>setCurrentDate(new Date(`${getToday()}T00:00:00`))} onAdd={date=>{if(date)setNewDate(date);setIsAddModalOpen(true);}} onOpen={event=>{const original=filteredEvents.find(value=>value.id===event.id && value.type===event.type);if(original?.originalWorkItem)setSelectedItem(original.originalWorkItem);if(original?.originalAsItem)setSelectedAsItem(original.originalAsItem);}} />
       <div className="hidden lg:block space-y-6">
-      <PageHeader title="일정 관리" description="시공·배송·요청 일정을 확인하고 현장별 업무를 열어보세요." actions={<button onClick={() => setIsAddModalOpen(true)} className="action-primary"><Plus className="h-4 w-4" />일정 추가</button>} />
+      <PageHeader title="일정 관리" description="시공·배송·요청 일정을 확인하고 현장별 업무를 열어보세요." actions={<button onClick={() => {setNewDate(getToday());setIsAddModalOpen(true);}} className="action-primary"><Plus className="h-4 w-4" />일정 추가</button>} />
 
       {/* Control Bar: Filters & Month Navigator */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -515,217 +438,7 @@ export default function CalendarPage() {
 
       {/* NEW SCHEDULE EVENT MODAL */}
       </div>
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
-          <div className="bg-white w-full max-w-3xl rounded-2xl border border-slate-200 shadow-2xl p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5 text-blue-600" />
-                <span>신규 일정 및 업무 등록 (Schedule & Work Task)</span>
-              </h3>
-              <button
-                onClick={() => setIsAddModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateSchedule} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">
-                    프로젝트 제목 <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newTitle || generateWorkTitle(newClient, newSiteAddress, newRegion)}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    placeholder="예: 반포자이 102동 주방 아일랜드 서랍장 시공"
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">
-                    의뢰 업체명 <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    list="calendar-clients-datalist"
-                    value={newClient}
-                    onChange={(e) => setNewClient(e.target.value)}
-                    placeholder="업체명 선택 또는 직접 입력"
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  />
-                  <datalist id="calendar-clients-datalist">
-                    {clientsList.map((c) => (
-                      <option key={c.id} value={c.name} />
-                    ))}
-                  </datalist>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">현장 상세 주소</label>
-                  <input
-                    type="text"
-                    value={newSiteAddress}
-                    onChange={(e) => setNewSiteAddress(e.target.value)}
-                    placeholder="예: 서초구 반포동 128"
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">시공/현장 지역</label>
-                  <select
-                    value={newRegion}
-                    onChange={(e) => setNewRegion(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-blue-700"
-                  >
-                    {REGIONS.filter((r) => r !== "전체").map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">도면 타입</label>
-                  <div className="grid grid-cols-4 gap-1">
-                    {(["천정형", "에보라", "옴니버스", "기타"] as const).map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setNewDrawingType(t)}
-                        className={cn(
-                          "py-2 rounded-lg text-[11px] font-extrabold border transition cursor-pointer text-center",
-                          newDrawingType === t
-                            ? "bg-slate-900 text-white border-slate-900 shadow-xs"
-                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                        )}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">일정 날짜 (연 / 월 / 일 선택)</label>
-                  {(() => {
-                    const dateParts = (newDate || getToday()).split("-");
-                    const selYear = parseInt(dateParts[0]) || 2026;
-                    const selMonth = parseInt(dateParts[1]) || 9;
-                    const selDay = parseInt(dateParts[2]) || 15;
-
-                    const YEARS_LIST = [2025, 2026, 2027, 2028, 2029, 2030];
-                    const MONTHS_LIST = Array.from({ length: 12 }, (_, i) => i + 1);
-                    const daysCount = new Date(selYear, selMonth, 0).getDate();
-                    const DAYS_LIST = Array.from({ length: daysCount }, (_, i) => i + 1);
-
-                    const handleDateSelectChange = (y: number, m: number, d: number) => {
-                      const maxD = new Date(y, m, 0).getDate();
-                      const safeD = Math.min(d, maxD);
-                      setNewDate(`${y}-${String(m).padStart(2, "0")}-${String(safeD).padStart(2, "0")}`);
-                    };
-
-                    return (
-                      <div className="grid grid-cols-3 gap-1">
-                        <select
-                          value={selYear}
-                          onChange={(e) => handleDateSelectChange(parseInt(e.target.value), selMonth, selDay)}
-                          className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800"
-                        >
-                          {YEARS_LIST.map((y) => (
-                            <option key={y} value={y}>
-                              {y}년
-                            </option>
-                          ))}
-                        </select>
-
-                        <select
-                          value={selMonth}
-                          onChange={(e) => handleDateSelectChange(selYear, parseInt(e.target.value), selDay)}
-                          className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-blue-700"
-                        >
-                          {MONTHS_LIST.map((m) => (
-                            <option key={m} value={m}>
-                              {String(m).padStart(2, "0")}월
-                            </option>
-                          ))}
-                        </select>
-
-                        <select
-                          value={selDay}
-                          onChange={(e) => handleDateSelectChange(selYear, selMonth, parseInt(e.target.value))}
-                          className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-blue-700"
-                        >
-                          {DAYS_LIST.map((d) => (
-                            <option key={d} value={d}>
-                              {String(d).padStart(2, "0")}일
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">마감 구분</label>
-                  <select
-                    value={newDeadlineType}
-                    onChange={(e) => setNewDeadlineType(e.target.value as "시공일" | "배송일" | "요청일")}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
-                  >
-                    <option value="시공일">시공일</option>
-                    <option value="배송일">배송일</option>
-                    <option value="요청일">요청일</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* UNIFIED BOARD EDITOR (텍스트 + 이미지 + 파일 통합) */}
-              <div>
-                <label className="font-bold text-slate-800 block mb-1">
-                  작업 내용 및 첨부 도면/파일 <span className="text-slate-400 font-normal">(파일 드래그&드롭, 사진 클릭 시 보기, PDF 즉시 열기)</span>
-                </label>
-                <UnifiedBoardEditor
-                  description={newDescription}
-                  onChangeDescription={setNewDescription}
-                  attachments={newAttachments}
-                  onChangeAttachments={setNewAttachments}
-                  placeholder="작업 지시사항, 상세 사양, 현장 메모를 입력하세요... 파일이나 도면, 사진을 여기에 바로 끌어다 놓으시면 됩니다."
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition"
-                >
-                  취소
-                </button>
-                <button
-                  type="submit" disabled={isSaving} aria-busy={isSaving}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-md transition"
-                >
-                  일정 추가 등록
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {isAddModalOpen && <WorkEditorModal initialDate={newDate} onClose={() => setIsAddModalOpen(false)} />}
 
       {/* EVENT DETAIL MODAL */}
       {selectedItem && (

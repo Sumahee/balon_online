@@ -1,4 +1,5 @@
 "use client";
+import { APP_VERSION } from "@/lib/app-version";
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
@@ -57,7 +58,7 @@ export function MobileHeader({ onOpenDrawer }: MobileHeaderProps) {
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-xs">
             <Building2 className="w-4 h-4" />
           </div>
-          <span className="font-black text-sm tracking-wide text-white">BARON</span>
+          <span className="flex flex-col"><span className="font-black text-sm tracking-wide text-white">BALON</span><span className="text-[10px] leading-tight text-slate-400" aria-label={`Version ${APP_VERSION}`}>{APP_VERSION}</span></span>
         </Link>
       </div>
 
