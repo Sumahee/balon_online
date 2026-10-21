@@ -11,6 +11,9 @@ import { ClientInfo,WorkItem } from "@/types";
 import { X } from "lucide-react";
 import { useEffect,useRef,useState,type ReactNode } from "react";
 import { UnifiedBoardEditor } from "./UnifiedBoardEditor";
+import { DrawingUploadBlock } from "./DrawingUploadBlock";
+import { isDrawingAttachment, replaceAttachmentGroup } from "@/lib/drawing-attachments";
+import { isCalendarVisible } from "@/lib/calendar-visibility";
 
 import { useModalBack } from "@/lib/use-modal-back";
 
@@ -45,7 +48,9 @@ export function WorkEditorModal({ item, initialDate, onClose }: { item?: WorkIte
   const [teams, setTeams] = useState<string[]>([]);
   const [clients, setClients] = useState<ClientInfo[]>([]);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [bodyUploading, setUploading] = useState(false);
+  const [drawingUploading, setDrawingUploading] = useState(false);
+  const uploading = bodyUploading || drawingUploading;
   const [error, setError] = useState("");
   const [autoTitle, setAutoTitle] = useState(!item);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -121,10 +126,11 @@ export function WorkEditorModal({ item, initialDate, onClose }: { item?: WorkIte
             <datalist id="work-editor-teams">{teams.map(team => <option key={team} value={team} />)}</datalist>
           </section>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg bg-slate-50 px-3 py-2.5">
-            <label className="flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-blue-600" checked={!!draft.calendarVisible} onChange={e => change("calendarVisible", e.target.checked)} />달력 등록</label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-blue-600" checked={isCalendarVisible(draft)} onChange={e => change("calendarVisible", e.target.checked)} />달력 등록</label>
             <label className="flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-blue-600" checked={!!draft.confirmationPending} onChange={e => change("confirmationPending", e.target.checked)} />컨펌중</label>
           </div>
-          <section className="space-y-2"><h3 className="text-sm font-bold">발주정보 · 이미지</h3><UnifiedBoardEditor minRows={3} placeholder="발주 내용을 적거나 이미지·파일을 붙여넣으세요." description={draft.description ?? ""} onChangeDescription={value => change("description", value)} attachments={draft.attachments} onChangeAttachments={value => change("attachments", value)} onUploadingChange={setUploading} readOnly={saving} /></section>
+          <section className="space-y-2"><h3 className="text-sm font-bold">발주정보 · 이미지</h3><UnifiedBoardEditor minRows={3} placeholder="발주 내용을 적거나 이미지·파일을 붙여넣으세요." description={draft.description ?? ""} onChangeDescription={value => change("description", value)} attachments={draft.attachments.filter(attachment => !isDrawingAttachment(attachment))} onChangeAttachments={value => setDraft(prev => ({ ...prev, attachments: replaceAttachmentGroup(prev.attachments, value, false) }))} onUploadingChange={setUploading} readOnly={saving || drawingUploading} /></section>
+          <div className="pt-4"><DrawingUploadBlock attachments={draft.attachments} onChange={value => setDraft(prev => ({ ...prev, attachments: replaceAttachmentGroup(prev.attachments, value, true) }))} onUploadingChange={setDrawingUploading} readOnly={saving || bodyUploading} /></div>
           {draft.cardType === "도면" && <details className="border-t border-slate-200 pt-3"><summary className="cursor-pointer text-sm font-bold text-slate-800">제작사양</summary><div className="mt-3 grid gap-3 sm:grid-cols-2">
             <Field label="제품 유형">{select("drawingType", ["천정형", "에보라", "옴니버스", "기타"])}</Field>
             <Field label="천정고 (mm)"><input className={inputClass} type="number" min="1" step="any" value={draft.ceilingHeight ?? ""} onChange={e => change("ceilingHeight", e.target.value)} placeholder="예: 2400" /></Field>

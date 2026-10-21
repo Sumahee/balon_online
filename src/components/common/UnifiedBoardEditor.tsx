@@ -18,6 +18,7 @@ interface UnifiedBoardEditorProps {
   readOnly?: boolean;
   minRows?: number;
   onUploadingChange?: (uploading: boolean) => void;
+  drawingsOnly?: boolean;
 }
 
 function attachmentType(attachment: AttachmentItem) {
@@ -29,7 +30,7 @@ function attachmentType(attachment: AttachmentItem) {
 export function UnifiedBoardEditor({
   description, onChangeDescription, attachments, onChangeAttachments, onOpenAttachment,
   placeholder = "작업 내용과 요청사항을 작성하세요. 사진과 파일을 끌어놓거나 붙여넣을 수 있습니다.",
-  readOnly = false, minRows = 6, onUploadingChange,
+  readOnly = false, minRows = 6, onUploadingChange, drawingsOnly = false,
 }: UnifiedBoardEditorProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -113,12 +114,13 @@ export function UnifiedBoardEditor({
     setIsUploading(true);
     onUploadingChange?.(true);
     setError(null);
-    const cursor = insertionRange();
+    const cursor = editorRef.current ? insertionRange() : null;
     const uploaded: AttachmentItem[] = [];
     const failures: string[] = [];
     try {
       for (const file of Array.from(files)) {
         try {
+          if (drawingsOnly && file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) throw new Error("PDF 파일을 선택해 주세요.");
           const formData = new FormData();
           formData.append("file", file);
           const response = await fetch("/api/upload", { method: "POST", body: formData });
@@ -138,7 +140,7 @@ export function UnifiedBoardEditor({
         latestAttachments.current = combined;
         const images = uploaded.filter(attachment => attachmentType(attachment) === "image");
         if (images.length && editorRef.current) {
-          const range = editorRef.current.contains(cursor.startContainer) ? cursor : insertionRange();
+          const range = cursor && editorRef.current.contains(cursor.startContainer) ? cursor : insertionRange();
           range.deleteContents();
           const fragment = document.createDocumentFragment();
           for (const attachment of images) {
@@ -186,9 +188,9 @@ export function UnifiedBoardEditor({
         onDragOver={(event) => { event.preventDefault(); if (!readOnly && !isUploading) setIsDragging(true); }}
         onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setIsDragging(false); }}
         onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setIsDragging(false); void uploadFiles(event.dataTransfer.files); }}
-        className={cn("relative overflow-hidden rounded-xl border bg-white p-4 sm:p-5 transition-colors", isDragging ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200" : "border-slate-200 focus-within:border-blue-400")}
+        className={cn("relative overflow-hidden rounded-xl border bg-white p-4 sm:p-5 transition-colors", isDragging ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200" : "border-slate-200 focus-within:border-blue-400", drawingsOnly && readOnly && "hidden")}
       >
-        <div
+        {!drawingsOnly && <div
           ref={editorRef} role="textbox" aria-label="업무 내용" aria-multiline="true" aria-readonly={readOnly}
           contentEditable={!readOnly} suppressContentEditableWarning
           dangerouslySetInnerHTML={{ __html: initialHtml }}
@@ -243,19 +245,19 @@ export function UnifiedBoardEditor({
             else if (files.length) void uploadFiles(files);
             else pasteText(event.clipboardData.getData("text/plain"));
           }}
-        />
+        />}
 
         {!readOnly && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+          <div className={cn("flex flex-wrap items-center justify-between gap-3", !drawingsOnly && "mt-4 border-t border-slate-100 pt-3")}>
             <button type="button" disabled={isUploading} onMouseDown={(event) => { event.preventDefault(); rememberCursor(); }} onClick={() => fileInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200">
               {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
-              {isUploading ? "업로드 중…" : "본문에 사진·파일 추가"}
+              {isUploading ? "업로드 중…" : drawingsOnly ? "도면 PDF 추가" : "본문에 사진·파일 추가"}
             </button>
-            <span className="text-xs text-slate-500">화면 캡처(Win+Shift+S) 후 작성란에 Ctrl+V · 끌어놓기</span>
-            <input ref={fileInputRef} type="file" multiple aria-label="본문에 추가할 파일 선택" className="hidden" onChange={(event) => { if (event.target.files) void uploadFiles(event.target.files); event.target.value = ""; }} />
+            <span className="text-xs text-slate-500">{drawingsOnly ? "PDF 파일을 선택하거나 여기에 끌어놓으세요." : "화면 캡처(Win+Shift+S) 후 작성란에 Ctrl+V · 끌어놓기"}</span>
+            <input ref={fileInputRef} type="file" multiple accept={drawingsOnly ? ".pdf,application/pdf" : undefined} aria-label={drawingsOnly ? "도면 PDF 선택" : "본문에 추가할 파일 선택"} className="hidden" onChange={(event) => { if (event.target.files) void uploadFiles(event.target.files); event.target.value = ""; }} />
           </div>
         )}
-        {isDragging && <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-blue-50/90 text-sm font-semibold text-blue-700">놓으면 본문에 추가합니다</div>}
+        {isDragging && <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-blue-50/90 text-sm font-semibold text-blue-700">{drawingsOnly ? "놓으면 도면으로 추가합니다" : "놓으면 본문에 추가합니다"}</div>}
         {error && <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p>}
       </div>
 
@@ -278,7 +280,7 @@ export function UnifiedBoardEditor({
                     {(
                       <div className="flex shrink-0 items-center gap-1 pr-3">
                         <a href={attachment.url} download={attachment.name} aria-label={`${attachment.name} 다운로드`} title="다운로드" className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"><Download className="h-5 w-5" /></a>
-                        {!readOnly && <button type="button" disabled={isUploading} onClick={() => void removeAttachment(attachment.id)} aria-label={`${attachment.name} 본문에서 제거`} className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700"><X className="h-4 w-4" /></button>}
+                        {!readOnly && <button type="button" disabled={isUploading} onClick={() => void removeAttachment(attachment.id)} aria-label={`${attachment.name} ${drawingsOnly ? "도면에서" : "본문에서"} 제거`} className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700"><X className="h-4 w-4" /></button>}
                       </div>
                     )}
                   </div>

@@ -1,6 +1,5 @@
 import type { WorkItem, WorkStatus } from "@/types";
 import { bodyText } from "./body-content";
-import { isCalendarVisible } from "./calendar-visibility";
 import { getMaterialOrders } from "./materialUtils";
 import { getProjectLocation } from "./work-title";
 
@@ -22,7 +21,7 @@ export function createWorkDraft(item: WorkItem | undefined, today: string, user:
     siteContactPhone: item?.siteContactPhone ?? "", postColor: item?.postColor ?? "미정",
     boardColor: item?.boardColor ?? "미정", priority: item?.priority ?? "보통",
     status: item?.status ?? "대기", progress: item?.progress ?? 0,
-    calendarVisible: item ? isCalendarVisible(item) : true,
+    calendarVisible: item?.calendarVisible,
     confirmationPending: item?.confirmationPending ?? false,
     description: item?.description || item?.notes || "", notes: item?.notes ?? "",
     attachments: item?.attachments ?? [], materialOrders: item ? getMaterialOrders(item) : [],

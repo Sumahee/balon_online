@@ -9,6 +9,7 @@ import { ensureAsSchema } from "@/lib/as-schema";
 import { ensureWorkConfirmationSchema } from "@/lib/work-confirmation-schema";
 import { ensureWorkCalendarSchema } from "@/lib/work-calendar-schema";
 import { workSummary, WORK_SUMMARY_COLUMNS } from "@/lib/work-list";
+import { isCalendarVisible } from "@/lib/calendar-visibility";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -40,7 +41,10 @@ export async function GET(request: NextRequest) {
       if (from) {filters.push(`${dateColumn} >= ?`);values.push(from);}
       if (to) {filters.push(`${dateColumn} <= ?`);values.push(to);}
       if (mode === "active") filters.push("status != '시공완료'");
-      if (mode === "calendar") filters.push("COALESCE(calendar_visible, CASE WHEN card_type = '도면' THEN 1 ELSE 0 END) = 1");
+      if (mode === "calendar") {
+        filters.push("COALESCE(calendar_visible, CASE WHEN deadline_type = '시공일' THEN 1 ELSE 0 END) = 1");
+        filters.push("COALESCE(NULLIF(TRIM(delivery_date),''),NULLIF(TRIM(due_date),'')) IS NOT NULL");
+      }
       if (status && status !== "전체") {filters.push("status = ?");values.push(status);}
       if (category && category !== "전체") {filters.push("category = ?");values.push(category);}
       if (query) {filters.push("(LOWER(title) LIKE ? OR LOWER(client_name) LIKE ? OR LOWER(site_address) LIKE ?)");values.push(...Array(3).fill(`%${query}%`));}
@@ -55,7 +59,7 @@ export async function GET(request: NextRequest) {
       }
       const matches = serverStore.getWorkItems().filter(item => {
         const date = mode === "calendar" ? item.deliveryDate || item.dueDate : item.createdAt?.slice(0,10);
-        return (!from || date >= from) && (!to || date <= to) && (mode !== "active" || item.status !== "시공완료") && (mode !== "calendar" || (item.calendarVisible ?? item.cardType === "도면")) && (!status || status === "전체" || item.status === status) && (!category || category === "전체" || item.category === category) && (!query || [item.title,item.clientName,item.siteAddress].some(value=>value?.toLowerCase().includes(query)));
+        return (!from || date >= from) && (!to || date <= to) && (mode !== "active" || item.status !== "시공완료") && (mode !== "calendar" || isCalendarVisible(item)) && (!status || status === "전체" || item.status === status) && (!category || category === "전체" || item.category === category) && (!query || [item.title,item.clientName,item.siteAddress].some(value=>value?.toLowerCase().includes(query)));
       }).sort((a,b)=>b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
       return NextResponse.json({success:true,data:matches.slice(offset,offset+limit).map(workSummary),hasMore:matches.length>offset+limit});
     }
@@ -392,7 +396,7 @@ export async function POST(request: NextRequest) {
       const newItem = serverStore.addWorkItem({
         confirmationPending: body.confirmationPending === true,
         createdBy: body.createdBy || "", installationTeam: body.installationTeam || "", ceilingHeight: body.ceilingHeight || "",
-        calendarVisible: typeof body.calendarVisible === "boolean" ? body.calendarVisible : safeCardType === "도면",
+        calendarVisible: typeof body.calendarVisible === "boolean" ? body.calendarVisible : undefined,
         type: "work",
         title,
         siteContactPhone, postColor, boardColor, drawingAssignee,

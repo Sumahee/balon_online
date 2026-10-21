@@ -66,6 +66,17 @@ test("work entry DB round trip preserves team, height and verified registration 
     assert.equal(detail.data[0].installationTeam,"시공 B팀");
     assert.equal(detail.data[0].ceilingHeight,"2500");
     assert.equal(detail.data[0].drawingAssignee,undefined);
+    const pdf = {id:"drawing",name:"현장도면.PDF",fileType:"pdf",url:"/uploads/drawing.pdf"};
+    const image = {id:"order",name:"발주.jpg",fileType:"image",url:"/uploads/order.jpg"};
+    const {isDrawingAttachment, replaceAttachmentGroup} = loadModule("src/lib/drawing-attachments.ts");
+    await handlers.PUT(request({id,type:"work",attachments:[image,pdf]}));
+    const withDrawing = (await (await handlers.GET({url:"http://localhost/api/posts?type=work&id="+id})).json()).data[0];
+    assert.equal(withDrawing.attachments.filter(isDrawingAttachment).length, 1);
+    const remaining = replaceAttachmentGroup(withDrawing.attachments, [], true);
+    await handlers.PUT(request({id,type:"work",attachments:remaining}));
+    const withoutDrawing = (await (await handlers.GET({url:"http://localhost/api/posts?type=work&id="+id})).json()).data[0];
+    assert.equal(withoutDrawing.attachments.some(isDrawingAttachment), false);
+    assert.equal(withoutDrawing.attachments[0].id, "order");
   } finally {database.close();}
 });
 
@@ -139,6 +150,18 @@ test("real SQLite pagination stays small with large photo data and loads files o
     const gallery=loadModule("src/lib/api-handlers/gallery.ts",{"@/lib/db":mock},{Response},cache);
     const photos=await(await gallery.GET({url:"http://localhost/api/gallery?limit=30&folder_id=folder-construction"})).json();
     assert.equal(photos.data.images.length,10);assert.ok(!JSON.stringify(photos).includes(photo));
+    const calendarRows = [
+      ["installation", "기타", "시공일", "2027-01-10", "", null],
+      ["request", "도면", "요청일", "2027-01-10", "", null],
+      ["shipping", "도면", "발송일", "2027-01-10", "", null],
+      ["manual-add", "기타", "요청일", "2027-01-10", "", 1],
+      ["manual-hide", "도면", "시공일", "2027-01-10", "", 0],
+      ["undated", "도면", "시공일", "", "", 1],
+      ["fallback", "기타", "시공일", "", "2027-01-11", null],
+    ];
+    for (const row of calendarRows) await database.execute({sql:"INSERT INTO bo_work_items(id,card_type,deadline_type,delivery_date,due_date,calendar_visible) VALUES (?,?,?,?,?,?)", args:row});
+    const calendar = await (await posts.GET({url:"http://localhost/api/posts?type=work&summary=1&mode=calendar&from=2027-01-01&to=2027-01-31"})).json();
+    assert.deepEqual(calendar.data.map(value => value.id).sort(), ["fallback", "installation", "manual-add"]);
   } finally { database.close(); }
 });
 
@@ -210,12 +233,17 @@ test("material lists finish as dispatched while drawing tasks finish as installe
   assert.equal(workStatusLabel({cardType:"도면"}, "시공완료"), "시공완료");
 });
 
-test("calendar defaults to drawing tasks but manual visibility overrides both defaults", () => {
+test("calendar defaults to dated installation tasks while retaining manual overrides", () => {
   const { isCalendarVisible } = loadModule("src/lib/calendar-visibility.ts");
-  assert.equal(isCalendarVisible({cardType:"도면"}), true);
-  assert.equal(isCalendarVisible({cardType:"기타"}), false);
-  assert.equal(isCalendarVisible({cardType:"도면",calendarVisible:false}), false);
-  assert.equal(isCalendarVisible({cardType:"기타",calendarVisible:true}), true);
+  const dated = {deliveryDate:"2026-10-21", dueDate:""};
+  assert.equal(isCalendarVisible({...dated,cardType:"기타",deadlineType:"시공일"}), true);
+  assert.equal(isCalendarVisible({...dated,cardType:"도면",deadlineType:"요청일"}), false);
+  assert.equal(isCalendarVisible({...dated,deadlineType:"발송일"}), false);
+  assert.equal(isCalendarVisible({...dated,deadlineType:"시공일",calendarVisible:false}), false);
+  assert.equal(isCalendarVisible({...dated,deadlineType:"요청일",calendarVisible:true}), true);
+  assert.equal(isCalendarVisible({deadlineType:"시공일",deliveryDate:"",dueDate:""}), false);
+  assert.equal(isCalendarVisible({deadlineType:"시공일",deliveryDate:"",dueDate:"2026-10-21"}), true);
+  assert.equal(isCalendarVisible({deadlineType:"시공일",deliveryDate:" ",dueDate:"",calendarVisible:true}), false);
 });
 
 test("confirmation flag persists independently of office stage", async () => {
@@ -249,7 +277,7 @@ test("calendar more button expands all events in the cell and can collapse again
   const states = [];
   let cursor = 0;
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-const items = Array.from({ length: 7 }, (_, i) => ({ id: `work-${i}`, title: `현장 ${i}`, clientName: "바론", cardType:"도면", dueDate: today, status: "대기", priority: "보통" }));
+const items = Array.from({ length: 7 }, (_, i) => ({ id: `work-${i}`, title: `현장 ${i}`, clientName: "바론", cardType:"도면", deadlineType:"시공일", dueDate: today, status: "대기", priority: "보통" }));
   const react = {
     useState: initial => { const index = cursor++; if (!(index in states)) states[index] = typeof initial === "function" ? initial() : initial; return [states[index], value => { states[index] = typeof value === "function" ? value(states[index]) : value; }]; },
     useMemo: callback => callback(), useEffect: () => {},
@@ -934,4 +962,51 @@ test("confirmation schema adds completed state to existing work without changing
     assert.equal(saved.confirmation_pending, 1);
     assert.equal(saved.confirmation_completed, 0);
   } finally { database.close(); }
+});
+
+
+test("drawing block recognizes legacy PDFs and keeps drawing removal separate from order images", () => {
+  const {isDrawingAttachment, replaceAttachmentGroup} = loadModule("src/lib/drawing-attachments.ts");
+  const image = {id:"image",name:"발주.jpg",fileType:"image",url:"/order.jpg"};
+  const legacy = {id:"legacy",name:"도면.PDF",fileType:"file",url:"/drawing"};
+  const data = {id:"data",name:"scan",fileType:"file",url:"data:application/pdf;base64,JVBERg=="};
+  assert.equal(isDrawingAttachment(image), false);
+  assert.equal(isDrawingAttachment(legacy), true);
+  assert.equal(isDrawingAttachment(data), true);
+  const withoutImages = replaceAttachmentGroup([image,legacy], [], false);
+  assert.deepEqual(Array.from(withoutImages, value => value.id), ["legacy"]);
+  const withoutDrawings = replaceAttachmentGroup([image,legacy,data], [], true);
+  assert.deepEqual(Array.from(withoutDrawings, value => value.id), ["image"]);
+});
+
+test("drawing upload shows PDF registration and a dedicated file input without another canvas", () => {
+  const React = nativeRequire("react");
+  const {renderToStaticMarkup} = nativeRequire("react-dom/server");
+  const {DrawingUploadBlock} = loadModule("src/components/common/DrawingUploadBlock.tsx");
+  const render = attachments => renderToStaticMarkup(React.createElement(DrawingUploadBlock, {attachments,onChange:()=>{}}));
+  assert.match(render([]), /도면 미등록/);
+  const html = render([{id:"pdf",name:"현장.PDF",fileType:"file",url:"/drawing.pdf"}]);
+  assert.match(html, /도면 등록됨/);
+  assert.match(html, /도면 PDF 선택/);
+  assert.ok(html.includes('accept=".pdf,application/pdf"'));
+  assert.doesNotMatch(html, /contentEditable|contenteditable/);
+});
+
+
+test("calendar form follows schedule defaults until the checkbox is explicitly changed", () => {
+  const {createWorkDraft,prepareWorkDraft}=loadModule("src/lib/work-form.ts");
+  const {isCalendarVisible}=loadModule("src/lib/calendar-visibility.ts");
+  const draft=createWorkDraft(undefined,"2026-10-21","담당자");
+  draft.clientName="업체";
+  assert.equal(draft.calendarVisible,undefined);
+  assert.equal(isCalendarVisible(draft),true);
+  draft.deadlineType="요청일";
+  assert.equal(isCalendarVisible(draft),false);
+  draft.calendarVisible=true;
+  const saved=prepareWorkDraft(draft);
+  const edited=createWorkDraft(saved,"2026-10-22","담당자");
+  assert.equal(isCalendarVisible(edited),true);
+  edited.calendarVisible=false;
+  edited.deadlineType="시공일";
+  assert.equal(isCalendarVisible(edited),false);
 });

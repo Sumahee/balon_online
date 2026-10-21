@@ -1,6 +1,6 @@
 {
   "name": "balon_online",
-  "version": "1.2.5-beta.0",
+  "version": "1.2.7-beta.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
