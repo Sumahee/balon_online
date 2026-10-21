@@ -16,7 +16,6 @@ import {
   ArrowLeft,
   User,
   Calendar,
-  Building,
   Paperclip,
   Plus,
   Box} from "lucide-react";
@@ -193,8 +192,6 @@ export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) 
                   const diffDays = getDaysUntil(targetDate, todayStr);
                   const isUrgent = task.status !== "시공완료" && (task.priority === "긴급" || (diffDays !== null && diffDays <= 3));
                   const urgencyLabel = diffDays !== null && diffDays < 0 ? `${Math.abs(diffDays)}일 지연` : task.priority === "긴급" ? "긴급" : diffDays === 0 ? "오늘" : `D-${diffDays}`;
-                  const clientName = task.clientName?.trim();
-                  const showClientName = clientName && !getWorkTitle(task).replace(/\s/g, "").includes(clientName.replace(/\s/g, ""));
                   const hasPdf = task.attachments?.some((a) => a.fileType === "pdf");
 
                   return (
@@ -333,7 +330,6 @@ export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) 
                             {task.confirmationCompleted ? <CheckCircle2 className="h-3 w-3" /> : <span className={cn("h-1.5 w-1.5 rounded-full", task.confirmationPending ? "bg-amber-500" : "bg-slate-300")} />}
                             {task.confirmationCompleted ? "컨펌완료" : "컨펌중"}
                           </button>
-                          {showClientName && <><Building className="h-3.5 w-3.5 shrink-0" /><span className="truncate" title={clientName}>{clientName}</span></>}
                         </div>
 
                         <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
