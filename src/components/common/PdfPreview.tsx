@@ -41,7 +41,8 @@ export function PdfPreview({ url }: { url: string }) {
       if (!active || !canvas.current) return;
       const base = pdfPage.getViewport({scale:1});
       const viewport = pdfPage.getViewport({scale:width / base.width * zoom});
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      // Keep zoom scrollable without allocating an oversized mobile canvas.
+      const ratio = Math.min(window.devicePixelRatio || 1, 2, 8192 / viewport.width, 8192 / viewport.height, Math.sqrt(16_000_000 / (viewport.width * viewport.height)));
       const target = canvas.current;
       target.width = Math.floor(viewport.width * ratio);
       target.height = Math.floor(viewport.height * ratio);
@@ -53,16 +54,19 @@ export function PdfPreview({ url }: { url: string }) {
     return () => { active = false; rendering?.cancel(); };
   }, [document, page, width, zoom]);
   return <div className="flex flex-col min-h-0 h-full w-full bg-slate-100">
-    <div className="flex items-center justify-center gap-3 bg-white border-b p-2 text-xs shrink-0">
+    <div className="flex flex-wrap items-center justify-center gap-1 bg-white border-b border-slate-200 p-2 text-xs shrink-0">
       <button disabled={!document || page <= 1} onClick={() => setPage(value => value - 1)} className="p-2 disabled:opacity-30">이전</button>
       <span>{page} / {document?.numPages || "…"}</span>
       <button disabled={!document || page >= document.numPages} onClick={() => setPage(value => value + 1)} className="p-2 disabled:opacity-30">다음</button>
-      <button aria-label="PDF 축소" onClick={() => setZoom(value => Math.max(0.5,value - 0.25))} className="p-2">−</button>
-      <button aria-label="PDF 확대" onClick={() => setZoom(value => Math.min(3,value + 0.25))} className="p-2">＋</button>
+      <span className="mx-1 h-5 border-l border-slate-200" />
+      <button aria-label="PDF 축소" disabled={zoom <= 0.5} onClick={() => setZoom(value => Math.max(0.5,value - 0.5))} className="h-9 w-9 rounded-lg bg-slate-50 text-lg disabled:opacity-30">−</button>
+      <span className="w-12 text-center font-semibold tabular-nums" aria-live="polite">{Math.round(zoom*100)}%</span>
+      <button aria-label="PDF 확대" disabled={zoom >= 6} onClick={() => setZoom(value => Math.min(6,value + 0.5))} className="h-9 w-9 rounded-lg bg-slate-50 text-lg disabled:opacity-30">＋</button>
+      <button onClick={() => setZoom(1)} className="ml-1 rounded-lg border border-slate-200 px-2 py-2">폭 맞춤</button>
     </div>
     <div ref={container} className="flex-1 min-h-0 overflow-auto p-2">
       {error ? <p role="alert" className="p-4 text-sm text-rose-700">{error}</p> : !document ? <p className="p-4 text-sm">PDF 로딩 중…</p> : null}
-      <canvas ref={canvas} aria-label={`PDF ${page}페이지`} className="block bg-white shadow-sm" />
+      <canvas ref={canvas} aria-label={`PDF ${page}페이지`} className="block bg-white shadow-md" />
     </div>
   </div>;
 }

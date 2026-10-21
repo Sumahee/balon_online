@@ -527,7 +527,7 @@ test("detail edit opens the shared editor with the live work item", () => {
   const {TaskDetailModal}=loadModule("src/components/dashboard/TaskDetailModal.tsx",{react:hookReact,"@/context/AuthContext":{useAuth:()=>({user:{name:"담당자"}})},"@/context/DataContext":{useData:()=>({workItems:[item],isSaving:false})},"@/components/common/WorkEditorModal":{WorkEditorModal:SharedEditor}});
   const render=()=>{cursor=0;const gate=TaskDetailModal({item,onClose(){}});const content=gate.props.children(item);return content.type(content.props);};
   const walk=node=>Array.isArray(node)?node.flatMap(walk):node&&typeof node==="object"?[node,...walk(node.props?.children)]:[];
-  let tree=render();walk(tree).find(node=>node.type==="button"&&node.props.children==="업무 수정").props.onClick();tree=render();
+  let tree=render();walk(tree).find(node=>node.type==="button"&&node.props["aria-label"]==="업무 수정").props.onClick();tree=render();
   const editor=walk(tree).find(node=>node.type===SharedEditor);assert.ok(editor);assert.equal(editor.props.item.id,item.id);
   editor.props.onClose();assert.ok(!walk(render()).some(node=>node.type===SharedEditor));
 });
@@ -1160,4 +1160,27 @@ test("photo picker batches 20 photos and retries only unsaved selections",async(
  assert.equal(submit(tree).props.children,"선택한 20장 등록");submit(tree).props.onClick();
  await new Promise(resolve=>setImmediate(resolve));tree=render();assert.equal(saved.length,3);assert.equal(closed,0);assert.equal(submit(tree).props.children,"선택한 17장 등록");
  submit(tree).props.onClick();await new Promise(resolve=>setImmediate(resolve));assert.equal(saved.length,20);assert.equal(new Set(saved).size,20);assert.equal(closed,1);
+});
+
+test("successful photo upload asks before completion, cancellation preserves status and failure can retry",async()=>{
+ const React=nativeRequire("react"),slots=[];let cursor=0,calls=0,fail=true;
+ const hookReact={...React,useEffect(){},useMemo:fn=>fn(),useRef(value){const i=cursor++;return slots[i]??(slots[i]={current:value});},useState(value){const i=cursor++;if(!(i in slots))slots[i]=typeof value==="function"?value():value;return[slots[i],next=>slots[i]=typeof next==="function"?next(slots[i]):next];}};
+ const item={id:"fixture",title:"현장",status:"준비완료",dueDate:"2026-10-21",cardType:"도면",attachments:[],comments:[]};function Picker(){return null;}
+ const {TaskDetailModal}=loadModule("src/components/dashboard/TaskDetailModal.tsx",{react:hookReact,"@/context/AuthContext":{useAuth:()=>({user:{name:"기사"}})},"@/context/DataContext":{useData:()=>({workItems:[item],isSaving:false,updateWorkItem:async(id,values)=>{calls++;if(fail)throw Error("offline");Object.assign(item,values);}})},"@/components/common/ConstructionPhotoPicker":{ConstructionPhotoPicker:Picker}});
+ const render=()=>{cursor=0;const gate=TaskDetailModal({item,onClose(){},startPhotoUpload:true});const content=gate.props.children(item);return content.type(content.props);};
+ const walk=node=>Array.isArray(node)?node.flatMap(walk):node&&typeof node==="object"?[node,...walk(node.props?.children)]:[];
+ let tree=render();walk(tree).find(n=>n.type===Picker).props.onUploaded();tree=render();assert.equal(calls,0);assert.ok(walk(tree).some(n=>n.props?.role==="alertdialog"));
+ walk(tree).find(n=>n.type==="button"&&n.props.children==="나중에").props.onClick();tree=render();assert.equal(item.status,"준비완료");assert.equal(calls,0);
+ walk(tree).find(n=>n.type==="button"&&Array.isArray(n.props.children)&&n.props.children.includes(" · 완료하기")).props.onClick();tree=render();
+ walk(tree).find(n=>n.type==="button"&&n.props.children==="시공완료").props.onClick();await new Promise(r=>setImmediate(r));tree=render();assert.ok(walk(tree).some(n=>n.props?.role==="alert"));assert.equal(item.status,"준비완료");
+ fail=false;walk(tree).find(n=>n.type==="button"&&n.props.children==="시공완료").props.onClick();await new Promise(r=>setImmediate(r));tree=render();assert.equal(item.status,"시공완료");assert.equal(item.progress,100);assert.ok(!walk(tree).some(n=>n.props?.role==="alertdialog"));
+});
+test("PDF zoom reaches 600 percent and resets to fit width",()=>{
+ const React=nativeRequire("react"),slots=[];let cursor=0;
+ const hookReact={...React,useEffect(){},useRef:value=>({current:value}),useState(value){const i=cursor++;if(!(i in slots))slots[i]=value;return[slots[i],next=>slots[i]=typeof next==="function"?next(slots[i]):next];}};
+ const {PdfPreview}=loadModule("src/components/common/PdfPreview.tsx",{react:hookReact});const render=()=>{cursor=0;return PdfPreview({url:"/fixture.pdf"});};const walk=node=>Array.isArray(node)?node.flatMap(walk):node&&typeof node==="object"?[node,...walk(node.props?.children)]:[];
+ for(let i=0;i<15;i++)walk(render()).find(n=>n.props?.["aria-label"]==="PDF 확대").props.onClick();
+ assert.equal(walk(render()).find(n=>n.props?.["aria-label"]==="PDF 확대").props.disabled,true);
+ assert.equal(walk(render()).find(n=>n.props?.["aria-live"]==="polite").props.children[0],600);
+ walk(render()).find(n=>n.type==="button"&&n.props.children==="폭 맞춤").props.onClick();assert.equal(walk(render()).find(n=>n.props?.["aria-live"]==="polite").props.children[0],100);
 });

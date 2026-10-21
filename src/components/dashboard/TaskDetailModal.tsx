@@ -5,6 +5,7 @@ import { isDrawingAttachment } from "@/lib/drawing-attachments";
 import { WorkEditorModal } from "@/components/common/WorkEditorModal";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
 import { ConstructionPhotoDropZone } from "@/components/common/ConstructionPhotoDropZone";
+import { useModalBack } from "@/lib/use-modal-back";
 import { PdfPreview } from "@/components/common/PdfPreview";
 import { WorkDetailGate } from "@/components/common/WorkDetailGate";
 import { STATUS_PROGRESS } from "@/lib/work-form";
@@ -57,6 +58,9 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
   const item = workItems.find((w) => w.id === originalItem.id) || originalItem;
   const liveItem = item;
 
+  const [completionPrompt,setCompletionPrompt]=useState(false);
+  const [completionError,setCompletionError]=useState("");
+  const completionLock=useRef(false);
   const [photoOpen,setPhotoOpen]=useState(!!startPhotoUpload);
   const [photoFiles,setPhotoFiles]=useState<File[]>([]);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -258,7 +262,17 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
   const STAGES: WorkStatus[] = ["대기", "오피스", "공장", "준비완료", "시공완료"];
 
   const handleStageChange = (newStatus: WorkStatus) => { void updateWorkItem(item.id, { status: newStatus, progress: STATUS_PROGRESS[newStatus] }).catch(() => {}); };
+  useModalBack(completionPrompt,()=>{if(completionLock.current)return false;setCompletionPrompt(false);});
+  useModalBack(!!activePdfUrl,()=>setActivePdfUrl(null));
   const handleClose = onClose;
+  const finishWork=async()=>{
+    if(completionLock.current)return;completionLock.current=true;setCompletionError("");
+    try {await updateWorkItem(item.id,{status:"시공완료",progress:100});setCompletionPrompt(false);}
+    catch {setCompletionError("완료 상태 저장에 실패했습니다. 다시 시도해주세요.");}
+    finally {completionLock.current=false;}
+  };
+  const requestCompletion=()=>{if(liveItem.status!=="시공완료"){setCompletionError("");setCompletionPrompt(true);}};
+  const completedLabel=workStatusLabel(liveItem,"시공완료");
 
   const deliveryDate = liveItem?.deliveryDate || item.dueDate;
   const daysUntilDelivery = Math.ceil((new Date(deliveryDate).getTime() - new Date(getToday()).getTime()) / 86400000);
@@ -266,15 +280,16 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
 
   return (
     <>
+      {completionPrompt && <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/50 p-5" role="alertdialog" aria-modal="true" aria-label="시공완료 확인"><div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"><h2 className="text-lg font-bold">{completedLabel} 처리할까요?</h2><p className="mt-2 text-sm text-slate-500">확인하면 업무 상태가 {completedLabel}로 변경됩니다.</p>{completionError && <p role="alert" className="mt-3 text-sm text-rose-600">{completionError}</p>}<div className="mt-6 flex gap-3"><button disabled={isSaving} onClick={()=>setCompletionPrompt(false)} className="flex-1 rounded-xl border py-3 text-sm">나중에</button><button disabled={isSaving} onClick={()=>void finishWork()} className="flex-1 rounded-xl bg-teal-600 py-3 text-sm font-semibold text-white">{isSaving?"저장 중…":completedLabel}</button></div></div></div>}
       {editorOpen && <WorkEditorModal item={liveItem} onClose={() => setEditorOpen(false)} />}
       <div role="dialog" aria-modal="true" aria-label="업무 상세" inert={editorOpen} aria-hidden={editorOpen}
         className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-5 bg-black/70 backdrop-blur-xs animate-in fade-in overflow-y-auto">
-        {photoOpen && <ConstructionPhotoPicker title={liveItem.title} initialFiles={photoFiles} onClose={()=>setPhotoOpen(false)} onUpload={photos=>addComment(liveItem.id,user?.name || "시공기사",newCommentText.trim() || "[시공 사진]",photos)} />}
+        {photoOpen && <ConstructionPhotoPicker onUploaded={()=>{setPhotoOpen(false);setNewCommentText("");requestCompletion();}} title={liveItem.title} initialFiles={photoFiles} onClose={()=>setPhotoOpen(false)} onUpload={photos=>addComment(liveItem.id,user?.name || "시공기사",newCommentText.trim() || "[시공 사진]",photos)} />}
       <div className="w-full sm:max-w-4xl bg-white rounded-none sm:rounded-2xl shadow-2xl border-0 sm:border border-slate-200 overflow-hidden flex flex-col h-[100dvh] sm:h-auto max-h-[100dvh] sm:max-h-[92vh]">
           {/* Top Bar */}
-          <div className="sm:hidden flex items-center gap-2 border-b border-slate-200 px-3 py-2 shrink-0 bg-white">
-            <span className="text-xs text-slate-500 shrink-0">{(liveItem?.deliveryDate || item.dueDate || "").slice(5).replace("-", ".")}</span>
-            <h1 className="min-w-0 flex-1 text-sm font-bold truncate">{getWorkTitle(liveItem || item)}</h1>
+          <div className="sm:hidden flex items-center gap-3 border-b border-slate-100 px-4 py-3 shrink-0 bg-white">
+            <h1 className="min-w-0 flex-1 text-base font-bold text-slate-900">일정 상세</h1>
+            <button type="button" disabled={isSaving || liveItem.status==="시공완료"} onClick={requestCompletion} className={cn("rounded-full px-3 py-1.5 text-xs font-semibold",liveItem.status==="시공완료"?"bg-teal-50 text-teal-700":"bg-slate-100 text-slate-600")}>{workStatusLabel(liveItem,liveItem.status)}{liveItem.status!=="시공완료"&&" · 완료하기"}</button>
             <button aria-label="상세 닫기" onClick={handleClose} className="p-1.5"><X className="h-5 w-5" /></button>
           </div>
           <div className="hidden sm:flex px-6 py-4 border-b border-slate-200 bg-slate-50 items-center justify-between">
@@ -295,6 +310,7 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
               )}
             </div>
 
+            <button type="button" disabled={isSaving || liveItem.status==="시공완료"} onClick={requestCompletion} className="ml-auto mr-3 rounded-full bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-700">{workStatusLabel(liveItem,liveItem.status)}{liveItem.status!=="시공완료"&&" · 완료하기"}</button>
             <button
               onClick={handleClose}
               className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition cursor-pointer"
@@ -304,16 +320,20 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
           </div>
 
           {/* Modal Main Scrollable Content */}
-          <div className="flex-1 overflow-y-auto px-0 py-3 sm:p-6 space-y-4">
-            <section className="space-y-3 px-3 sm:px-0" aria-label="기본정보와 본문">
+          <div className="flex-1 overflow-y-auto bg-slate-50/80 px-3 py-4 sm:p-6 space-y-4">
+            <section className="space-y-4 rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-sm" aria-label="기본정보와 본문">
               <h3 className="sr-only">기본정보 · 업무 내용</h3>
-              <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-bold">{getWorkTitle(liveItem || item)}</h2><button type="button" onClick={startEditingSpecs} className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">업무 수정</button></div>
-              {!!liveItem?.tags?.length && <div aria-label="업무 태그" className="flex flex-wrap gap-2">{liveItem.tags.map(tag => <span key={tag} className="rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white">{tag}</span>)}</div>}
-              <dl className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-sm sm:grid-cols-4">{[["예정일", liveItem?.deliveryDate || item.dueDate], ["일정 종류", liveItem?.deadlineType], ["업무 등록자", liveItem?.createdBy || "기존 기록 없음"], ["시공팀", liveItem?.installationTeam], ["진행 상태", liveItem?.status]].map(([label,value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 font-medium">{value || "미입력"}</dd></div>)}</dl>
-              <div className="flex items-center gap-3 text-sm"><label className="flex items-center gap-2">현재 상태<select aria-label="현재 업무 상태" value={liveItem?.status || item.status} disabled={isSaving} onChange={e => handleStageChange(e.target.value as WorkStatus)} className="rounded-lg border p-2">{(["대기", "오피스", "공장", "준비완료", "시공완료"] as WorkStatus[]).map(status => <option key={status} value={status}>{workStatusLabel(liveItem || item, status)}</option>)}</select></label><span className="text-xs text-slate-500" role="status">{isSaving ? "저장 중…" : "상태 변경은 즉시 저장됩니다"}</span></div>
+              <div className="flex items-center gap-4 border-b border-slate-100 pb-4">
+                <div className="w-16 shrink-0 overflow-hidden rounded-xl bg-teal-50 text-center"><div className="py-1 text-[11px] font-semibold text-teal-700">{deliveryDate?.slice(0,7)||"날짜 미정"}</div><div className="bg-teal-600 py-2 text-2xl font-bold text-white">{deliveryDate?.slice(8,10)||"—"}</div></div>
+                <div className="min-w-0 flex-1"><h2 className="text-lg font-bold leading-snug text-slate-900">{getWorkTitle(liveItem || item)}</h2><p className="mt-1 text-sm text-slate-500">{deliveryDate || "일정 미정"} · {liveItem.deadlineType || "시공일"}</p></div>
+                <button type="button" aria-label="업무 수정" onClick={startEditingSpecs} className="self-start shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50">수정</button>
+              </div>
+              {!!liveItem?.tags?.length && <div aria-label="업무 태그" className="flex flex-wrap gap-2">{liveItem.tags.map(tag => <span key={tag} className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">{tag}</span>)}</div>}
+              <dl className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-sm sm:grid-cols-4">{[["업무 등록자", liveItem?.createdBy || "기존 기록 없음"], ["시공팀", liveItem?.installationTeam], ["현장 주소", liveItem?.siteAddress]].map(([label,value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 font-medium">{value || "미입력"}</dd></div>)}</dl>
+              <details className="rounded-lg text-xs text-slate-500"><summary className="cursor-pointer py-1">상세 상태 변경</summary><div className="flex items-center gap-3 pt-2 text-sm"><label className="flex items-center gap-2">현재 상태<select aria-label="현재 업무 상태" value={liveItem?.status || item.status} disabled={isSaving} onChange={e => handleStageChange(e.target.value as WorkStatus)} className="rounded-lg border p-2">{(["대기", "오피스", "공장", "준비완료", "시공완료"] as WorkStatus[]).map(status => <option key={status} value={status}>{workStatusLabel(liveItem || item, status)}</option>)}</select></label><span className="text-xs text-slate-500" role="status">{isSaving ? "저장 중…" : "상태 변경은 즉시 저장됩니다"}</span></div></details>
               <div className="flex items-center gap-2"><button type="button" aria-pressed={!!liveItem?.confirmationPending} disabled={isSaving} onClick={() => { void updateWorkItem(item.id, { confirmationPending: !liveItem?.confirmationPending, confirmationCompleted: false }); }} className={cn("rounded-lg border px-2.5 py-1.5 text-xs font-bold cursor-pointer disabled:opacity-50", liveItem?.confirmationCompleted ? "border-emerald-300 bg-emerald-100 text-emerald-800" : liveItem?.confirmationPending ? "border-amber-400 bg-amber-100 text-amber-800 shadow-sm" : "border-slate-200 bg-slate-100 text-slate-500")}><span className={cn("inline-block mr-1.5 h-2 w-2 rounded-full", liveItem?.confirmationCompleted ? "bg-emerald-500" : liveItem?.confirmationPending ? "bg-amber-500" : "bg-slate-300")} />{liveItem?.confirmationCompleted ? "컨펌완료 ✓" : "컨펌중"}</button></div>
-              <UnifiedBoardEditor description={liveItem?.description || liveItem?.notes || ""} onChangeDescription={() => {}} attachments={(liveItem?.attachments ?? []).filter(attachment => !isDrawingAttachment(attachment))} onChangeAttachments={() => {}} readOnly minRows={6} onOpenAttachment={attachment => {if (attachment.fileType === "pdf") {setActivePdfUrl(attachment.url);setActivePdfTitle(attachment.name);} else window.open(attachment.url,"_blank","noopener,noreferrer");}} />
-              <div className="pt-4"><DrawingUploadBlock attachments={liveItem?.attachments ?? []} onChange={() => {}} readOnly /></div>
+              {!!(liveItem?.description || liveItem?.notes || (liveItem.attachments??[]).filter(a=>!isDrawingAttachment(a)).length) && <UnifiedBoardEditor description={liveItem?.description || liveItem?.notes || ""} onChangeDescription={() => {}} attachments={(liveItem?.attachments ?? []).filter(attachment => !isDrawingAttachment(attachment))} onChangeAttachments={() => {}} readOnly minRows={3} onOpenAttachment={attachment => {if (attachment.fileType === "pdf") {setActivePdfUrl(attachment.url);setActivePdfTitle(attachment.name);} else window.open(attachment.url,"_blank","noopener,noreferrer");}} />}
+              <div className="space-y-2 border-t border-slate-100 pt-4">{(liveItem.attachments??[]).filter(isDrawingAttachment).map(file=><button key={file.id} onClick={()=>{setActivePdfUrl(file.url);setActivePdfTitle(file.name);}} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left hover:bg-slate-50"><span className="rounded-xl bg-rose-50 px-3 py-3 text-xs font-bold text-rose-600">PDF</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-800">{file.name}</span><span className="text-xs text-slate-400">{file.size} · 도면 보기</span></span><ChevronRight className="h-4 w-4 text-slate-400" /></button>)}</div>
             </section>
 
             {(liveItem?.cardType || "도면") === "도면" && (
@@ -730,9 +750,9 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
       {/* PDF Instant In-App Viewer Modal */}
 
       {activePdfUrl && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-5xl bg-white rounded-2xl shadow-2xl border border-slate-300 overflow-hidden flex flex-col h-[90vh]">
-            <div className="px-5 py-3 bg-slate-900 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-0 sm:p-6 bg-slate-950/60 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-5xl bg-white rounded-none sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col h-[100dvh] sm:h-[92vh]">
+            <div className="px-4 py-3 bg-white text-slate-800 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-extrabold px-2 py-0.5 bg-rose-600 rounded">
                   PDF 뷰어
@@ -752,7 +772,7 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
                 </a>
                 <button
                   onClick={() => setActivePdfUrl(null)}
-                  className="p-1.5 text-slate-400 hover:text-white rounded-lg transition cursor-pointer"
+                  aria-label="PDF 닫기" className="p-1.5 text-slate-500 hover:text-slate-900 rounded-lg transition cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
