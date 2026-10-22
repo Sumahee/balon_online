@@ -127,7 +127,7 @@ export default function GalleryPage() {
 
   const selection = useBulkSelection(filteredImages.map(image => image.id), deleteImage);
 
-  const displayFolders = galleryFolders(folders, images);
+  const displayFolders = galleryFolders(folders, images).filter(folder => folder.id === "folder-construction" || folder.id === ORDER_FOLDER);
   const activeFolder = displayFolders.find((f) => f.id === selectedFolderId);
 
   const handleCreateFolder = async (e: React.FormEvent) => {
