@@ -212,6 +212,7 @@ export function Sidebar() {
         </div>
 
         {/* System Status Footer */}
+        <Link href="/install" className="mx-3 rounded-lg border border-slate-700 px-3 py-2 text-center text-xs font-semibold text-slate-300 hover:bg-slate-800">BALON 앱 설치</Link>
         <div className="p-3.5 m-3 rounded-xl bg-slate-900/90 border border-slate-800/80">
           <div className="flex items-center justify-between mb-2">
             <div className={cn("flex items-center gap-1.5", error ? "text-amber-400" : isLoading ? "text-slate-400" : "text-emerald-400")}>

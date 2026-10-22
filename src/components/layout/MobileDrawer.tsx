@@ -97,7 +97,7 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
       />
 
       {/* Slide-out Drawer Panel */}
-      <div className="fixed top-0 left-0 bottom-0 w-80 max-w-[85vw] bg-slate-950 text-slate-100 border-r border-slate-800 shadow-2xl flex flex-col z-50 animate-in slide-in-from-left duration-300">
+      <div className="mobile-app-drawer fixed top-0 left-0 bottom-0 w-80 max-w-[85vw] bg-slate-950 text-slate-100 border-r border-slate-800 shadow-2xl flex flex-col z-50 animate-in slide-in-from-left duration-300">
         {/* Drawer Header */}
         <div className="h-16 px-5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -213,6 +213,7 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
 
         {/* Drawer Footer */}
         <div className="p-4 border-t border-slate-800 text-center text-xs text-slate-500">
+          <Link href="/install" onClick={onClose} className="mb-3 inline-block rounded-lg border border-slate-700 px-4 py-2 font-semibold text-slate-200 hover:bg-slate-800">홈 화면에 앱 설치</Link>
           <p className="font-semibold text-slate-400">BALON INT ONLINE</p>
           <p className="text-[10px] mt-0.5 text-slate-500">{APP_VERSION}</p>
         </div>

@@ -21,6 +21,7 @@ export function MobileHeader({ onOpenDrawer }: MobileHeaderProps) {
 
   const getPageTitle = () => {
     switch (pathname) {
+      case "/install": return "앱 설치";
       case "/equipment": return "설비 관리";
       case "/":
         return "업무 칸반";
@@ -44,7 +45,7 @@ export function MobileHeader({ onOpenDrawer }: MobileHeaderProps) {
   };
 
   return (
-    <header className={`${pathname === "/calendar" && calendarCompact ? "hidden" : "flex"} lg:hidden sticky top-0 z-30 h-14 bg-slate-950 text-white border-b border-slate-800 px-3 items-center justify-between shadow-md`}>
+    <header className={`${pathname === "/calendar" && calendarCompact ? "hidden" : "flex"} mobile-app-header lg:hidden sticky top-0 z-30 h-14 bg-slate-950 text-white border-b border-slate-800 px-3 items-center justify-between shadow-md`}>
       {/* Left: Circular Hamburger Button 🔘☰ */}
       <div className="flex items-center gap-2.5">
         <button

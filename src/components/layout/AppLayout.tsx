@@ -20,7 +20,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
       <DataProvider>
-        <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row">
+        <div className="app-shell min-h-screen bg-slate-50 flex flex-col lg:flex-row">
           {/* Mobile Specific Circular Hamburger Header (lg:hidden) */}
           <MobileHeader onOpenDrawer={() => setIsMobileDrawerOpen(true)} />
 
