@@ -316,8 +316,8 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
           </div>
 
           {/* Modal Main Scrollable Content */}
-          <div className="flex-1 overflow-y-auto bg-slate-50/80 px-3 py-4 sm:p-6 space-y-4">
-            <section className="space-y-4 rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-sm" aria-label="기본정보와 본문">
+          <div className="flex-1 overflow-y-auto bg-slate-50/80 px-3 py-3 sm:p-5 space-y-3">
+            <section className="space-y-3 rounded-xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-sm" aria-label="기본정보와 본문">
               <h3 className="sr-only">기본정보 · 업무 내용</h3>
               <WorkDetailHeader item={liveItem} onEdit={startEditingSpecs} />
               {!!liveItem?.tags?.length && <div aria-label="업무 태그" className="flex flex-wrap gap-2">{liveItem.tags.map(tag => <span key={tag} className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">{tag}</span>)}</div>}
