@@ -647,7 +647,7 @@ test("detail edit opens the shared editor with the live work item", () => {
   const {TaskDetailModal}=loadModule("src/components/dashboard/TaskDetailModal.tsx",{react:hookReact,"@/context/AuthContext":{useAuth:()=>({user:{name:"담당자"}})},"@/context/DataContext":{useData:()=>({workItems:[item],isSaving:false})},"@/components/common/WorkEditorModal":{WorkEditorModal:SharedEditor}});
   const render=()=>{cursor=0;const gate=TaskDetailModal({item,onClose(){}});const content=gate.props.children(item);return content.type(content.props);};
   const walk=node=>Array.isArray(node)?node.flatMap(walk):node&&typeof node==="object"?[node,...walk(node.props?.children)]:[];
-  let tree=render();walk(tree).find(node=>node.type==="button"&&node.props["aria-label"]==="업무 수정").props.onClick();tree=render();
+  let tree=render();walk(tree).find(node=>node.type?.name==="WorkDetailHeader").props.onEdit();tree=render();
   const editor=walk(tree).find(node=>node.type===SharedEditor);assert.ok(editor);assert.equal(editor.props.item.id,item.id);
   editor.props.onClose();assert.ok(!walk(render()).some(node=>node.type===SharedEditor));
 });

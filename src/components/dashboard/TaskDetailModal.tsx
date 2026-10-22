@@ -3,6 +3,7 @@ import { ConstructionPhotoPicker } from "@/components/common/ConstructionPhotoPi
 import { DrawingUploadBlock } from "@/components/common/DrawingUploadBlock";
 import { isDrawingAttachment } from "@/lib/drawing-attachments";
 import { WorkEditorModal } from "@/components/common/WorkEditorModal";
+import { WorkDetailHeader } from "@/components/common/WorkDetailHeader";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
 import { useModalBack } from "@/lib/use-modal-back";
 import { PdfPreview } from "@/components/common/PdfPreview";
@@ -318,23 +319,8 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
           <div className="flex-1 overflow-y-auto bg-slate-50/80 px-3 py-4 sm:p-6 space-y-4">
             <section className="space-y-4 rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-sm" aria-label="기본정보와 본문">
               <h3 className="sr-only">기본정보 · 업무 내용</h3>
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="min-w-0 truncate font-semibold text-slate-800">{liveItem.createdBy || liveItem.assignee || "등록자 미입력"}</span>
-                <time className="shrink-0 text-xs text-slate-400" dateTime={liveItem.createdAt}>{liveItem.createdAt ? new Date(liveItem.createdAt).toLocaleDateString("ko-KR", {timeZone:"Asia/Seoul"}) : ""}</time>
-              </div>
-              <div className="flex items-center gap-4 border-b border-slate-100 pb-4">
-                <div className="w-16 shrink-0 overflow-hidden rounded-xl bg-teal-50 text-center"><div className="py-1 text-[11px] font-semibold text-teal-700">{deliveryDate?.slice(0,7)||"날짜 미정"}</div><div className="bg-teal-600 py-2 text-2xl font-bold text-white">{deliveryDate?.slice(8,10)||"—"}</div></div>
-                <div className="min-w-0 flex-1"><h2 className="text-lg font-bold leading-snug text-slate-900">{getWorkTitle(liveItem || item)}</h2><p className="mt-1 text-sm text-slate-500">{deliveryDate || "일정 미정"} · {liveItem.deadlineType || "시공일"}</p></div>
-                <button type="button" aria-label="업무 수정" onClick={startEditingSpecs} className="self-start shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50">수정</button>
-              </div>
+              <WorkDetailHeader item={liveItem} onEdit={startEditingSpecs} />
               {!!liveItem?.tags?.length && <div aria-label="업무 태그" className="flex flex-wrap gap-2">{liveItem.tags.map(tag => <span key={tag} className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">{tag}</span>)}</div>}
-              <dl className="space-y-2 text-sm text-slate-700">
-                {[
-                  ["시공팀", liveItem.installationTeam],
-                  ["시공 현장주소", liveItem.siteAddress],
-                  ["연락처", liveItem.siteContactPhone],
-                ].map(([label,value]) => <div key={label} className="flex gap-2"><dt className="shrink-0 text-slate-500">{label} :</dt><dd className="min-w-0 break-words font-medium">{value || "미입력"}</dd></div>)}
-              </dl>
               {!!(liveItem?.description || liveItem?.notes || (liveItem.attachments??[]).filter(a=>!isDrawingAttachment(a)).length) && <UnifiedBoardEditor description={liveItem?.description || liveItem?.notes || ""} onChangeDescription={() => {}} attachments={(liveItem?.attachments ?? []).filter(attachment => !isDrawingAttachment(attachment))} onChangeAttachments={() => {}} readOnly minRows={3} onOpenAttachment={attachment => {if (attachment.fileType === "pdf") {setActivePdfUrl(attachment.url);setActivePdfTitle(attachment.name);} else window.open(attachment.url,"_blank","noopener,noreferrer");}} />}
               <div className="space-y-2 border-t border-slate-100 pt-4">{(liveItem.attachments??[]).filter(isDrawingAttachment).map(file=><button key={file.id} onClick={()=>{setActivePdfUrl(file.url);setActivePdfTitle(file.name);}} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left hover:bg-slate-50"><span className="rounded-xl bg-rose-50 px-3 py-3 text-xs font-bold text-rose-600">PDF</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-800">{file.name}</span><span className="text-xs text-slate-400">{file.size} · 도면 보기</span></span><ChevronRight className="h-4 w-4 text-slate-400" /></button>)}</div>
               <details className="rounded-lg text-xs text-slate-500"><summary className="cursor-pointer py-1">상세 상태 변경</summary><div className="flex items-center gap-3 pt-2 text-sm"><label className="flex items-center gap-2">현재 상태<select aria-label="현재 업무 상태" value={liveItem?.status || item.status} disabled={isSaving} onChange={e => handleStageChange(e.target.value as WorkStatus)} className="rounded-lg border p-2">{(["대기", "오피스", "공장", "준비완료", "시공완료"] as WorkStatus[]).map(status => <option key={status} value={status}>{workStatusLabel(liveItem || item, status)}</option>)}</select></label><span className="text-xs text-slate-500" role="status">{isSaving ? "저장 중…" : "상태 변경은 즉시 저장됩니다"}</span></div></details>
