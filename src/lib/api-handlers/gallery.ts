@@ -6,6 +6,7 @@ import { db, executeQuery, executeMutation } from "@/lib/db";
 import { commentGalleryImages, orderGalleryImage, galleryFolders, matchesGalleryFolder, ORDER_FOLDER, orderFolderId } from "@/lib/construction-gallery";
 import type { GalleryImage, WorkItem } from "@/types";
 import { photoResponse } from "@/lib/gallery-thumbnail";
+import { storeConstructionPhoto } from "@/lib/r2-storage";
 
 function lightImage(image: GalleryImage): GalleryImage {return {...image,url:image.url.startsWith("data:image/") ? `/api/gallery?source=gallery&id=${encodeURIComponent(image.id)}` : image.url};}
 function storedMatches(image:GalleryImage,params:URLSearchParams) {
@@ -137,7 +138,7 @@ export async function POST(request: NextRequest) {
       const image = serverStore.addImage({
         folderId: folderId || "folder-1",
         title,
-        url,
+        url: await storeConstructionPhoto(url),
         siteName: siteName || "바론 시공 현장",
         tags: Array.isArray(tags) ? tags : ["현장시공"],
         dimensions: dimensions || "1920 x 1080",

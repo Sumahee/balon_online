@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { executeQuery, executeMutation } from "@/lib/db";
+import { storeConstructionPhoto } from "@/lib/r2-storage";
 
 // GET /api/comments?workItemId=xxx
 export async function GET(request: Request) {
@@ -51,7 +52,8 @@ export async function POST(request: Request) {
     const commentId = `cmt-${crypto.randomUUID()}`;
     const authorName = author || "바론 INT 담당자";
     const now = new Date().toISOString();
-    const imagesStr = images ? (Array.isArray(images) ? JSON.stringify(images) : String(images)) : null;
+    const storedImages = await Promise.all((images || []).map((url: string) => storeConstructionPhoto(url)));
+    const imagesStr = images ? JSON.stringify(storedImages) : null;
 
     await executeMutation(
       `INSERT INTO bo_work_item_comments (id, work_item_id, author, content, images, created_at) 
@@ -61,7 +63,7 @@ export async function POST(request: Request) {
 
     const comment = {
       id:commentId, workItemId, author:authorName, content, createdAt:now,
-      images:(images || []).map((url:string,index:number)=>url.startsWith("data:image/") ? `/api/gallery?source=comment&id=${encodeURIComponent(commentId)}&index=${index}` : url),
+      images: storedImages,
     };
     return NextResponse.json({
       success: true,

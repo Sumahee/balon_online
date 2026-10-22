@@ -31,6 +31,40 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
 
 const request = (body) => ({ json: async () => body });
 
+test("R2 photos use server credentials, retain URL references and propagate storage failures", async () => {
+  const calls=[];
+  let fail=false;
+  class Command { constructor(input) { this.input=input; } }
+  const sdk={S3Client:class {async send(command) {calls.push(command.input);if(fail)throw new Error("R2 unavailable");return {Body:{transformToByteArray:async()=>new Uint8Array([1,2])},ContentType:"image/jpeg"};}},PutObjectCommand:Command,GetObjectCommand:Command};
+  const storage=loadModule("src/lib/r2-storage.ts",{"@aws-sdk/client-s3":sdk},{process:{env:{R2_ACCOUNT_ID:"account",R2_ACCESS_KEY_ID:"key",R2_SECRET_ACCESS_KEY:"secret",R2_BUCKET_NAME:"balononline"}}});
+  const url=await storage.storeConstructionPhoto("data:image/jpeg;base64,aW1hZ2U=");
+  assert.match(url,/^\/api\/construction-photo\?key=/);
+  assert.equal(calls[0].Bucket,"balononline");
+  assert.equal(calls[0].Body.toString(),"image");
+  assert.equal(await storage.storeConstructionPhoto(url),url);
+  assert.equal(calls.length,1);
+  const key=new URL(url,"http://localhost").searchParams.get("key");
+  assert.equal((await storage.readConstructionPhoto(key)).contentType,"image/jpeg");
+  await assert.rejects(storage.readConstructionPhoto("../secret"));
+  fail=true;
+  await assert.rejects(storage.storeConstructionPhoto("data:image/jpeg;base64,aW1hZ2U="),/R2 unavailable/);
+});
+
+test("private R2 photo endpoint checks employee session before reading objects", async () => {
+  let reads=0;
+  let allowed=false;
+  const handler=loadModule("src/lib/api-handlers/construction-photo.ts",{"./auth":{VERIFY:async()=>new Response("",{status:allowed?200:401})},"@/lib/r2-storage":{readConstructionPhoto:async()=>{reads++;return {bytes:new Uint8Array([1]),contentType:"image/jpeg"};}}},{Response});
+  const request={url:"http://localhost/api/construction-photo?key=construction-photos%2F2026-10-23%2Fabc.jpg"};
+  assert.equal((await handler.GET(request)).status,401);
+  assert.equal(reads,0);
+  allowed=true;
+  const response=await handler.GET(request);
+  assert.equal(response.status,200);
+  assert.equal(response.headers.get("cache-control"),"private, max-age=3600");
+  assert.equal((await handler.GET({url:"http://localhost/api/construction-photo?key=../other"})).status,400);
+  assert.equal(reads,1);
+});
+
 test("equipment stores photos, sums cost categories, filters dates and guards concurrent edits", async () => {
   const database=nativeRequire("@libsql/client").createClient({url:"file::memory:"});
   try {
@@ -547,17 +581,21 @@ test("inline material add retains input after failure and clears it only after s
 
 test("comment photos persist once and failed writes never report success", async () => {
   const writes=[];
-  const {POST}=loadModule("src/lib/api-handlers/comments.ts",{"@/lib/db":{executeMutation:async(sql,args)=>{writes.push({sql,args});},executeQuery:async()=>({success:true,rows:[]})}});
+  const photoUrl="/api/construction-photo?key=construction-photos%2F2026-10-23%2Fabc.jpg";
+  const storage={storeConstructionPhoto:async()=>photoUrl};
+  const {POST}=loadModule("src/lib/api-handlers/comments.ts",{"@/lib/r2-storage":storage,"@/lib/db":{executeMutation:async(sql,args)=>{writes.push({sql,args});},executeQuery:async()=>({success:true,rows:[]})}});
   const image="data:image/jpeg;base64,"+Buffer.from("image").toString("base64");
   const response=await POST(request({workItemId:"work-1",author:"기사",content:"완료",images:[image]}));
   const saved=await response.json();
   assert.equal(writes.length,1);
-  assert.equal(writes[0].args[4],JSON.stringify([image]));
-  assert.match(saved.data.comment.images[0],/^\/api\/gallery\?source=comment/);
-  const failing=loadModule("src/lib/api-handlers/comments.ts",{"@/lib/db":{executeMutation:async()=>{throw new Error("DB failed");}}});
+  assert.equal(writes[0].args[4],JSON.stringify([photoUrl]));
+  assert.equal(saved.data.comment.images[0],photoUrl);
+  const failing=loadModule("src/lib/api-handlers/comments.ts",{"@/lib/r2-storage":storage,"@/lib/db":{executeMutation:async()=>{throw new Error("DB failed");}}});
   assert.equal((await failing.POST(request({workItemId:"work-1",content:"완료",images:[image]}))).status,500);
   assert.equal((await POST(request({workItemId:"work-1",content:"완료",images:Array(20).fill(image)}))).status,200);
   assert.equal((await POST(request({workItemId:"work-1",content:"완료",images:Array(21).fill(image)}))).status,400);
+  const unavailable=loadModule("src/lib/api-handlers/comments.ts",{"@/lib/r2-storage":{storeConstructionPhoto:async()=>{throw new Error("R2 unavailable");}},"@/lib/db":{executeMutation:async()=>{assert.fail("Must not save after failed photo upload");}}});
+  assert.equal((await unavailable.POST(request({workItemId:"work-1",content:"완료",images:[image]}))).status,500);
 });
 
 test("AS intake persists installation, received and scheduled dates with paid reason", async () => {

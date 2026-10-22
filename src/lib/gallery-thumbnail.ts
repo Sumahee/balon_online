@@ -35,5 +35,6 @@ export async function photoResponse(url: string, requestUrl: string, width: numb
     return new Response(new Uint8Array(bytes), { headers: { "Content-Type": contentType, "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff" } });
   }
   if (/^(https?:\/\/|\/uploads\/)/.test(url)) return Response.redirect(new URL(url, requestUrl));
+  if (url.startsWith("/api/construction-photo?")) return Response.redirect(new URL(url, requestUrl));
   return new Response("Invalid photo", { status: 400 });
 }
