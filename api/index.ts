@@ -49,6 +49,8 @@ export async function GET(request: NextRequest, context?: RouteContext) {
     const { domain } = await resolveDomain(request, context);
 
     switch (domain) {
+      case "storage-usage":
+        return await (await import("@/lib/api-handlers/storage-usage")).GET(request);
       case "construction-photo":
         return await (await import("@/lib/api-handlers/construction-photo")).GET(request);
       case "equipment":

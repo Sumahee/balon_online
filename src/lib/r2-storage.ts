@@ -1,5 +1,40 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { randomUUID } from "node:crypto";
+
+export const STORAGE_WARNING_BYTES = 8_000_000_000;
+type StorageUsage = { totalBytes: number; objectCount: number; checkedAt: string; warningBytes: number; overWarning: boolean };
+let usageCache: StorageUsage | undefined;
+let usagePending: Promise<StorageUsage> | undefined;
+let storageRevision = 0;
+
+export async function getStorageUsage(): Promise<StorageUsage> {
+  if (usageCache && Date.now() - Date.parse(usageCache.checkedAt) < 60_000) return usageCache;
+  if (usagePending) return usagePending;
+  const revision = storageRevision;
+  usagePending = (async () => {
+    const { client, bucket } = storage();
+    let totalBytes = 0, objectCount = 0;
+    let token: string | undefined;
+    const seen = new Set<string>();
+    try {
+      do {
+        const page = await client.send(new ListObjectsV2Command({ Bucket: bucket, MaxKeys: 1000, ContinuationToken: token }), { abortSignal: AbortSignal.timeout(15_000) });
+        for (const object of page.Contents || []) {
+          totalBytes += object.Size || 0;
+          objectCount++;
+        }
+        token = page.IsTruncated ? page.NextContinuationToken : undefined;
+        if (page.IsTruncated && (!token || seen.has(token))) throw new Error("Incomplete storage listing");
+        if (token) seen.add(token);
+      } while (token);
+      const result = { totalBytes, objectCount, checkedAt: new Date().toISOString(), warningBytes: STORAGE_WARNING_BYTES, overWarning: totalBytes > STORAGE_WARNING_BYTES };
+      if (revision === storageRevision) usageCache = result;
+      return result;
+    } finally { client.destroy(); }
+  })();
+  try { return await usagePending; }
+  finally { usagePending = undefined; }
+}
 
 function storage() {
   const { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME } = process.env;
@@ -19,6 +54,8 @@ export async function storeConstructionPhoto(url: string): Promise<string> {
   const key = `construction-photos/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.${match[1] === "jpeg" ? "jpg" : match[1]}`;
   const { client, bucket } = storage();
   await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: Buffer.from(match[2], "base64"), ContentType: `image/${match[1]}` }));
+  storageRevision++;
+  usageCache = undefined;
   return `/api/construction-photo?key=${encodeURIComponent(key)}`;
 }
 

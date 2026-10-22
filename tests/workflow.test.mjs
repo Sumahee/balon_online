@@ -31,6 +31,46 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
 
 const request = (body) => ({ json: async () => body });
 
+test("storage usage includes every bucket page, caches totals and warns only above 8 GB", async () => {
+  const calls=[];
+  let fail=false;
+  let over=false;
+  class Command { constructor(input) {this.input=input;} }
+  const sdk={ListObjectsV2Command:Command,PutObjectCommand:Command,S3Client:class {destroy(){} async send(command){
+    calls.push(command.input);
+    if(fail)throw new Error("Unavailable");
+    if(command.input.Body)return {};
+    if(!command.input.ContinuationToken)return {Contents:[{Key:"img/old.jpg",Size:4_000_000_000}],IsTruncated:true,NextContinuationToken:"next"};
+    return {Contents:[{Key:"construction-photos/new.jpg",Size:4_000_000_000+(over?1:0)}],IsTruncated:false};
+  }}};
+  const globals={process:{env:{R2_ACCOUNT_ID:"account",R2_ACCESS_KEY_ID:"key",R2_SECRET_ACCESS_KEY:"secret",R2_BUCKET_NAME:"balononline"}}};
+  const storage=loadModule("src/lib/r2-storage.ts",{"@aws-sdk/client-s3":sdk},globals);
+  const [one,two]=await Promise.all([storage.getStorageUsage(),storage.getStorageUsage()]);
+  assert.equal(one.totalBytes,8_000_000_000);assert.equal(one.objectCount,2);assert.equal(one.overWarning,false);
+  assert.equal(two.totalBytes,one.totalBytes);assert.equal(calls.length,2);assert.equal(calls[1].ContinuationToken,"next");
+  assert.equal(calls[0].Prefix,undefined);
+  await storage.getStorageUsage();assert.equal(calls.length,2);
+  await storage.storeConstructionPhoto("data:image/jpeg;base64,aW1hZ2U=");
+  over=true;
+  assert.equal((await storage.getStorageUsage()).overWarning,true);
+  fail=true;
+  const unavailable=loadModule("src/lib/r2-storage.ts",{"@aws-sdk/client-s3":sdk},globals);
+  await assert.rejects(unavailable.getStorageUsage(),/Unavailable/);
+  fail=false;
+  assert.equal((await unavailable.getStorageUsage()).totalBytes,8_000_000_001);
+});
+
+test("storage usage requires authentication and reports errors instead of zero bytes", async () => {
+  let allowed=false,failed=false,reads=0;
+  const handler=loadModule("src/lib/api-handlers/storage-usage.ts",{"./auth":{VERIFY:async()=>new Response("",{status:allowed?200:401})},"@/lib/r2-storage":{getStorageUsage:async()=>{reads++;if(failed)throw new Error("secret details");return {totalBytes:12,objectCount:1};}}},{Response});
+  assert.equal((await handler.GET({})).status,401);assert.equal(reads,0);
+  allowed=true;
+  const response=await handler.GET({});assert.equal(response.status,200);assert.equal((await response.json()).data.totalBytes,12);
+  assert.equal(response.headers.get("cache-control"),"private, no-store");
+  failed=true;
+  const failure=await handler.GET({});assert.equal(failure.status,503);assert.equal((await failure.json()).data,undefined);
+});
+
 test("R2 photos use server credentials, retain URL references and propagate storage failures", async () => {
   const calls=[];
   let fail=false;

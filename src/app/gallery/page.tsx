@@ -2,6 +2,7 @@
 
 import { WORK_TAGS } from "@/lib/work-tags";
 import { PageHeader } from "@/components/common/PageHeader";
+import { StorageUsage } from "@/components/common/StorageUsage";
 
 import React, { useEffect, useState, useRef } from "react";
 import {
@@ -235,6 +236,8 @@ export default function GalleryPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="시공 사진" description="현장과 자재별 사진을 모아 보고, 이름이나 태그로 찾아보세요." actions={<><button onClick={() => setShowFolderModal(true)} className="action-secondary"><FolderPlus className="h-4 w-4" />새 폴더</button><button onClick={() => setShowUploadModal(true)} className="action-primary"><UploadCloud className="h-4 w-4" />사진 업로드</button></>} />
+
+      <StorageUsage saving={isSaving} />
 
       {/* 🔍 Smart Tag & Attribute Search Toolbar */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs space-y-3">
