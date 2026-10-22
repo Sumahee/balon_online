@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { executeQuery, executeMutation } from "@/lib/db";
-import { storeConstructionPhoto } from "@/lib/r2-storage";
+import { storeConstructionPhoto, deleteConstructionPhotos } from "@/lib/r2-storage";
+import { VERIFY } from "./auth";
 
 // GET /api/comments?workItemId=xxx
 export async function GET(request: Request) {
@@ -77,9 +78,18 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const auth = await VERIFY(request);
+    if (!auth.ok) return auth;
     const query=new URL(request.url).searchParams;
     const id=query.get("id"), workItemId=query.get("workItemId");
     if (!id || !workItemId) return NextResponse.json({success:false,message:"댓글 ID가 필요합니다."},{status:400});
+    const result = await executeQuery("SELECT images FROM bo_work_item_comments WHERE id = ? AND work_item_id = ?", [id, workItemId]);
+    if (!result.success) throw new Error("Photo lookup failed");
+    for (const row of result.rows) {
+      const images = JSON.parse(String(row.images || "[]"));
+      if (!Array.isArray(images)) throw new Error("Invalid photo data");
+      await deleteConstructionPhotos(images.filter((url): url is string => typeof url === "string"));
+    }
     await executeMutation("DELETE FROM bo_work_item_comments WHERE id = ? AND work_item_id = ?",[id,workItemId]);
     return NextResponse.json({success:true});
   } catch { return NextResponse.json({success:false,message:"댓글 삭제 실패"},{status:500}); }

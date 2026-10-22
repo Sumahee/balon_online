@@ -31,6 +31,51 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
 
 const request = (body) => ({ json: async () => body });
 
+test("R2 photo deletion targets only app keys, deduplicates and propagates failures", async () => {
+  const calls=[];let failed=false;
+  class Command {constructor(input){this.input=input;}}
+  const sdk={DeleteObjectCommand:Command,S3Client:class {destroy(){} async send(command){calls.push(command.input);if(failed)throw new Error("R2 failed");}}};
+  const storage=loadModule("src/lib/r2-storage.ts",{"@aws-sdk/client-s3":sdk},{process:{env:{R2_ACCOUNT_ID:"account",R2_ACCESS_KEY_ID:"key",R2_SECRET_ACCESS_KEY:"secret",R2_BUCKET_NAME:"balononline"}}});
+  const url="/api/construction-photo?key=construction-photos%2F2026-10-23%2Fabc.jpg";
+  await storage.deleteConstructionPhotos([url,url,"data:image/jpeg;base64,aA==","https://other.example/photo.jpg","/uploads/old.jpg"]);
+  assert.equal(calls.length,1);assert.equal(calls[0].Key,"construction-photos/2026-10-23/abc.jpg");assert.equal(calls[0].Bucket,"balononline");
+  await assert.rejects(storage.deleteConstructionPhotos(["/api/construction-photo?key=../secret"]));
+  assert.equal(calls.length,1);
+  failed=true;await assert.rejects(storage.deleteConstructionPhotos([url]),/R2 failed/);
+});
+
+test("gallery deletion removes the selected R2 file before clearing its database reference", async () => {
+  const events=[];let failed=false,allowed=true;
+  const urls=["/api/construction-photo?key=construction-photos%2F2026-10-23%2Fabc.jpg","data:image/jpeg;base64,aA=="];
+  const handler=loadModule("src/lib/api-handlers/gallery.ts",{
+    "./auth":{VERIFY:async()=>new Response("",{status:allowed?200:401})},
+    "@/lib/db":{db:{},executeQuery:async()=>({success:true,rows:[{images:JSON.stringify(urls)}]}),executeMutation:async(sql,args)=>{events.push({type:"db",sql,args});}},
+    "@/lib/r2-storage":{deleteConstructionPhotos:async photos=>{events.push({type:"r2",photos});if(failed)throw new Error("R2 failed");}}
+  },{Response});
+  const req={url:"http://localhost/api/gallery?type=image&id=comment-cmt-test-0"};
+  assert.equal((await handler.DELETE(req)).status,200);assert.equal(events[0].type,"r2");assert.equal(events[0].photos[0],urls[0]);
+  assert.equal(JSON.parse(events[1].args[0])[0],"");assert.equal(JSON.parse(events[1].args[0])[1],urls[1]);
+  events.length=0;failed=true;
+  assert.equal((await handler.DELETE(req)).status,500);assert.equal(events.length,1);
+  events.length=0;allowed=false;
+  assert.equal((await handler.DELETE(req)).status,401);assert.equal(events.length,0);
+});
+
+test("deleting a comment or work also removes its R2 photos and stops on storage failure", async () => {
+  for(const file of ["comments","posts"]){
+    const events=[];let failed=false;
+    const handler=loadModule(`src/lib/api-handlers/${file}.ts`,{
+      "./auth":{VERIFY:async()=>new Response("",{status:200})},
+      "@/lib/db":{db:{},executeQuery:async sql=>({success:true,rows:sql.includes("SELECT images")?[{images:JSON.stringify(["/api/construction-photo?key=test"])}]:[]}),executeMutation:async()=>{events.push("db");}},
+      "@/lib/r2-storage":{deleteConstructionPhotos:async photos=>{assert.equal(photos.length,1);events.push("r2");if(failed)throw new Error("offline");}}
+    },{Response});
+    const req={url:file==="comments"?"http://localhost/api/comments?id=cmt-test&workItemId=work-test":"http://localhost/api/posts?id=work-test&type=work"};
+    assert.equal((await handler.DELETE(req)).status,200);assert.equal(events[0],"r2");assert.ok(events.includes("db"));
+    events.length=0;failed=true;
+    assert.equal((await handler.DELETE(req)).status,500);assert.equal(events.join(","),"r2");
+  }
+});
+
 test("storage usage includes every bucket page, caches totals and warns only above 8 GB", async () => {
   const calls=[];
   let fail=false;
@@ -467,6 +512,7 @@ test("gallery thumbnail returns a smaller WebP and keeps original available", as
 
 test("gallery attachment deletion reports database failures instead of success", async () => {
   const { DELETE } = loadModule("src/lib/api-handlers/gallery.ts", {
+    "./auth": { VERIFY: async () => new Response("", {status:200}) },
     "@/lib/db": { db: {}, executeQuery: async () => ({ success: true, rows: [{ id: "photo" }] }), executeMutation: async () => { throw new Error("offline"); } },
   });
   const result = await DELETE({ url: "http://localhost/api/gallery?type=image&id=attachment-photo" });

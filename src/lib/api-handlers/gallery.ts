@@ -6,7 +6,8 @@ import { db, executeQuery, executeMutation } from "@/lib/db";
 import { commentGalleryImages, orderGalleryImage, galleryFolders, matchesGalleryFolder, ORDER_FOLDER, orderFolderId } from "@/lib/construction-gallery";
 import type { GalleryImage, WorkItem } from "@/types";
 import { photoResponse } from "@/lib/gallery-thumbnail";
-import { storeConstructionPhoto } from "@/lib/r2-storage";
+import { storeConstructionPhoto, deleteConstructionPhotos } from "@/lib/r2-storage";
+import { VERIFY } from "./auth";
 
 function lightImage(image: GalleryImage): GalleryImage {return {...image,url:image.url.startsWith("data:image/") ? `/api/gallery?source=gallery&id=${encodeURIComponent(image.id)}` : image.url};}
 function storedMatches(image:GalleryImage,params:URLSearchParams) {
@@ -154,6 +155,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const auth = await VERIFY(request);
+  if (!auth.ok) return auth;
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   const type = searchParams.get("type"); // 'image' or 'folder'
@@ -166,9 +169,10 @@ export async function DELETE(request: NextRequest) {
     if (db && id.startsWith("attachment-")) {
       try {
         const photoId = id.slice("attachment-".length);
-        const existing = await executeQuery("SELECT id FROM bo_attachments WHERE id = ? AND file_type = 'image'", [photoId]);
+        const existing = await executeQuery("SELECT id, url FROM bo_attachments WHERE id = ? AND file_type = 'image'", [photoId]);
         if (!existing.success) throw new Error("Photo lookup failed");
         if (!existing.rows.length) return NextResponse.json({success:false,message:"사진을 찾지 못했습니다."},{status:404});
+        await deleteConstructionPhotos([String(existing.rows[0].url || "")]);
         await executeMutation("DELETE FROM bo_attachments WHERE id = ? AND file_type = 'image'", [photoId]);
         return NextResponse.json({success:true});
       } catch { return NextResponse.json({success:false,message:"사진 삭제 실패"},{status:500}); }
@@ -180,10 +184,18 @@ export async function DELETE(request: NextRequest) {
         const row=await executeQuery("SELECT images FROM bo_work_item_comments WHERE id = ?",[match[1]]);
         if (!row.success || !row.rows.length) return NextResponse.json({success:false,message:"사진을 찾지 못했습니다."},{status:404});
         const urls=JSON.parse(String(row.rows[0].images || "[]"));
+        const index = Number(match[2]);
+        if (!Array.isArray(urls) || !Number.isSafeInteger(index) || index >= urls.length) return NextResponse.json({success:false,message:"사진을 찾지 못했습니다."},{status:404});
+        await deleteConstructionPhotos([String(urls[index] || "")]);
         urls[Number(match[2])]="";
         await executeMutation("UPDATE bo_work_item_comments SET images = ? WHERE id = ?",[JSON.stringify(urls),match[1]]);
         return NextResponse.json({success:true});
       } catch { return NextResponse.json({success:false,message:"사진 삭제 실패"},{status:500}); }
+    }
+    const image = serverStore.getImages().find(image => image.id === id);
+    if (image) {
+      try { await deleteConstructionPhotos([image.url]); }
+      catch { return NextResponse.json({success:false,message:"사진 파일 삭제 실패"},{status:500}); }
     }
     const success = serverStore.deleteImage(id);
     if (!success) {

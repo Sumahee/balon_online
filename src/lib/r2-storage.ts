@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { randomUUID } from "node:crypto";
 
 export const STORAGE_WARNING_BYTES = 8_000_000_000;
@@ -45,6 +45,27 @@ function storage() {
     region: "auto", endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
     credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY },
   }) };
+}
+
+// Only delete keys stored by this app; never interpret arbitrary remote URLs as bucket keys.
+export async function deleteConstructionPhotos(urls: string[]) {
+  const keys = new Set<string>();
+  for (const url of urls) {
+    if (!url.startsWith("/api/construction-photo?")) continue;
+    const key = new URL(url, "https://balon.invalid").searchParams.get("key") || "";
+    if (!/^(?:construction-photos\/\d{4}-\d{2}-\d{2}\/[a-f0-9-]+|img\/[a-f0-9]{64})\.(jpg|png|webp|gif)$/.test(key)) throw new Error("Invalid photo key");
+    keys.add(key);
+  }
+  if (!keys.size) return;
+  const { client, bucket } = storage();
+  try {
+    for (const key of keys) {
+      // DeleteObject is retryable even if an earlier attempt already removed the file.
+      await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+      storageRevision++;
+      usageCache = undefined;
+    }
+  } finally { client.destroy(); }
 }
 
 export async function storeConstructionPhoto(url: string): Promise<string> {

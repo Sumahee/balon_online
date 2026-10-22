@@ -12,6 +12,7 @@ import { ensureWorkConfirmationSchema } from "@/lib/work-confirmation-schema";
 import { ensureWorkCalendarSchema } from "@/lib/work-calendar-schema";
 import { workSummary, WORK_SUMMARY_COLUMNS } from "@/lib/work-list";
 import { isCalendarVisible } from "@/lib/calendar-visibility";
+import { deleteConstructionPhotos } from "@/lib/r2-storage";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -736,6 +737,18 @@ export async function DELETE(request: NextRequest) {
 
     if (type === "work") {
       if (db) {
+        const auth = await VERIFY(request);
+        if (!auth.ok) return auth;
+        const attachments = await executeQuery("SELECT url FROM bo_attachments WHERE work_item_id = ?", [id]);
+        const comments = await executeQuery("SELECT images FROM bo_work_item_comments WHERE work_item_id = ?", [id]);
+        if (!attachments.success || !comments.success) throw new Error("Photo lookup failed");
+        const urls = attachments.rows.map(row => String(row.url || ""));
+        for (const row of comments.rows) {
+          const images = JSON.parse(String(row.images || "[]"));
+          if (!Array.isArray(images)) throw new Error("Invalid photo data");
+          urls.push(...images.filter((url): url is string => typeof url === "string"));
+        }
+        await deleteConstructionPhotos(urls);
         await executeMutation("DELETE FROM bo_attachments WHERE work_item_id = ?", [id]);
         await executeMutation("DELETE FROM bo_work_item_comments WHERE work_item_id = ?", [id]);
         await executeMutation("DELETE FROM bo_work_items WHERE id = ?", [id]);
