@@ -8,13 +8,14 @@ const SESSION_DURATION = 1000 * 60 * 60 * 24 * 30;
 type UserRow = Record<string, unknown>;
 
 export function isBaronStaff(row: UserRow): boolean {
-  return [null, 0, "", "0"].includes(row.client_id as null | number | string)
+  return Number(row.level) >= 4 && Number(row.level) <= 10
+    && [null, 0, "", "0"].includes(row.client_id as null | number | string)
     && row.status === "APPROVED";
 }
 
 function publicUser(row: UserRow): UserInfo {
   return {
-    onlineRole: row.manager_rank === "시공자" ? "installer" : "staff",
+    onlineRole: ["시공자", "시공기사"].includes(String(row.manager_rank)) ? "installer" : "staff",
     id: row.id as UserInfo["id"],
     name: String(row.name || row.login_id || "바론 직원"),
     phone: row.phone ? String(row.phone) : undefined,
@@ -100,7 +101,7 @@ export async function VERIFY(request: Request) {
     const decoded = token ? verifyToken(token) : null;
     if (!decoded) return denied();
     // Re-check membership on every restored session, including drawing-program tokens.
-    const result = await executeQuery("SELECT id, login_id, name, email, phone, manager_rank, client_id, status FROM users WHERE id = ?", [decoded.id]);
+    const result = await executeQuery("SELECT id, login_id, name, email, phone, level, manager_rank, client_id, status FROM users WHERE id = ?", [decoded.id]);
     if (!result.success) return unavailable();
     if (result.rows.length !== 1 || !isBaronStaff(result.rows[0] as UserRow)) return denied();
     const user = publicUser(result.rows[0] as UserRow);

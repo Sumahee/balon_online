@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   const session = await VERIFY(request);
   if (!session.ok) return session;
   const result = await executeQuery(
-    "SELECT id, name, login_id, manager_rank FROM users WHERE (client_id IS NULL OR client_id = 0 OR client_id = '') AND status = 'APPROVED' ORDER BY name ASC", []
+    "SELECT id, name, login_id, manager_rank FROM users WHERE (client_id IS NULL OR client_id = 0 OR client_id = '') AND level >= 4 AND level <= 10 AND status = 'APPROVED' ORDER BY name ASC", []
   );
   if (!result.success) {
     return NextResponse.json({ success: false, message: "직원 목록을 불러올 수 없습니다." }, { status: 503 });

@@ -98,7 +98,9 @@ test("shared-account installer signup, approval, login renewal and revocation ro
     assert.equal(login.status,200);const body=await login.json();assert.equal(body.user.onlineRole,"installer");assert.match(login.headers.get("set-cookie"),/Max-Age=2592000/);
     const verifyRequest=new Request("https://app.test/api/auth",{headers:{Authorization:`Bearer ${body.token}`}});
     const renewed=await auth.VERIFY(verifyRequest);assert.equal(renewed.status,200);assert.ok((await renewed.json()).token);
-    await database.execute("UPDATE users SET status='PENDING'");
+    await database.execute("UPDATE users SET level=2");
+    assert.equal((await auth.VERIFY(verifyRequest)).status,401);
+    await database.execute("UPDATE users SET level=4,status='PENDING'");
     assert.equal((await auth.VERIFY(verifyRequest)).status,401);
   } finally {database.close();}
 });
@@ -1033,7 +1035,7 @@ test("image positions survive storage and legacy text remains safe", () => {
 
 
 const authEnvironment = { process: { env: { NODE_ENV: "test", JWT_SECRET: "test-only-signing-secret" } } };
-const approvedStaff = { id: 42, login_id: "staff-account", name: "등록 직원", client_id: null, status: "APPROVED", password: "correct-password" };
+const approvedStaff = { id: 42, login_id: "staff-account", name: "등록 직원", level: 4, client_id: null, status: "APPROVED", password: "correct-password" };
 function authHandlers(rows, success = true, connected = true) {
   return loadModule("src/lib/api-handlers/auth.ts", {
     "@/lib/db": { db: connected ? {} : null, executeQuery: async () => ({ success, rows }) },
@@ -1041,7 +1043,7 @@ function authHandlers(rows, success = true, connected = true) {
 }
 
 test("unregistered, client, pending, missing membership and wrong-password accounts cannot sign in", async () => {
-  for (const rows of [[], [{ ...approvedStaff, client_id: 99 }], [{ ...approvedStaff, status: "PENDING" }], [{ ...approvedStaff, client_id: undefined }], [approvedStaff, approvedStaff]]) {
+  for (const rows of [[{ ...approvedStaff, level: 2 }], [{ ...approvedStaff, level: undefined }], [], [{ ...approvedStaff, client_id: 99 }], [{ ...approvedStaff, status: "PENDING" }], [{ ...approvedStaff, client_id: undefined }], [approvedStaff, approvedStaff]]) {
     const response = await authHandlers(rows).LOGIN(request({ loginId: "staff-account", password: "correct-password" }));
     assert.equal(response.status, 401);
     assert.equal((await response.json()).token, undefined);
