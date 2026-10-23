@@ -868,6 +868,7 @@ test("drawing launch link contains only a short-lived random key and stores the 
   const writes = [];
   const { saveDrawingHandoff } = loadModule("src/lib/drawing-handoff.ts", {
     "./db": { executeMutation: async (sql, args) => { writes.push({ sql, args }); } },
+    "./drawing-links": { linkDrawingProject: async () => "project-test" },
   }, { URLSearchParams });
   const snapshot = { id: "request-test", workItemId: "work-test", drawingType: "천정형", siteAddress: "서울 현장", boardColor: "네츄럴오크", postColor: "11 다크그레이" };
   const before = Date.now();
@@ -879,7 +880,7 @@ test("drawing launch link contains only a short-lived random key and stores the 
   assert.equal(url.search, "");
   const saved = writes.find(write => write.sql.startsWith("INSERT"));
   assert.notEqual(saved.args[1], token);
-  assert.deepEqual(JSON.parse(saved.args[2]), {...snapshot, postColor:"DARK_GRAY"});
+  assert.deepEqual(JSON.parse(saved.args[2]), {...snapshot, drawingProjectId:"project-test", postColor:"DARK_GRAY"});
   assert.ok(saved.args[3] >= before + 15 * 60 * 1000);
   assert.ok(saved.args[3] <= Date.now() + 15 * 60 * 1000);
 });

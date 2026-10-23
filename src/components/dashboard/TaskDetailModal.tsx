@@ -35,6 +35,7 @@ Sparkles,
 Trash2,
 X
 } from "lucide-react";
+import { DrawingLinksPanel } from "./DrawingLinksPanel";
 import React,{ useRef,useState } from "react";
 
 import { UnifiedBoardEditor } from "@/components/common/UnifiedBoardEditor";
@@ -164,8 +165,8 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
 
   if (!item) return null;
 
-  const handleSendDrawingRequest = async () => {
-    if (!liveItem) return;
+  const handleSendDrawingRequest = async (drawingProjectId?: string) => {
+    if (!liveItem || isSendingReq) return;
     if (editorOpen) {
       window.alert("본문과 도면 사양을 저장한 뒤 전송해 주세요.");
       return;
@@ -186,6 +187,7 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           workItemId: liveItem.id,
+          drawingProjectId,
           drawingType: liveItem.drawingType || "옴니버스",
           clientName: liveItem.clientName,
           siteAddress: liveItem.siteAddress || "",
@@ -348,6 +350,7 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
               </button>
             </section>
 
+            <DrawingLinksPanel workItemId={liveItem.id} token={token} onOpen={projectId => { void handleSendDrawingRequest(projectId); }} />
             {(liveItem?.cardType || "도면") === "도면" && (
               <details className="hidden sm:block rounded-xl border border-indigo-200 bg-indigo-50/30">
                 <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-indigo-950">도면 정보 · {drawingReq ? "전달 내역 및 도면 확인" : "아직 전달하지 않음"}</summary>
@@ -366,14 +369,14 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
                       </span>
                     </h3>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      전송하면 바론웹이 새 창으로 열리고 해당 도면 화면에 주소, 컬러, 업체와 요청사항이 입력됩니다. 바론웹 로그인이 필요할 수 있습니다.
+                      현장 정보와 연결번호를 바론웹에 전달합니다. 기존 시트 구성은 유지하며, 컬러·천고 설정은 웹에서 확인 후 선택하여 적용합니다. 연결된 도면은 이어서 열 수 있습니다.
                     </p>
                   </div>
                 </div>
 
                 {/* Dispatch Button */}
                 <button
-                  onClick={handleSendDrawingRequest}
+                  onClick={() => void handleSendDrawingRequest()}
                   disabled={isSendingReq}
                   className={cn(
                     "px-4 py-2 rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-2 cursor-pointer shrink-0",

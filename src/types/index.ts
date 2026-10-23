@@ -255,6 +255,7 @@ export type DrawingRequestStatus = 'pending' | 'in_progress' | 'review_pending' 
 
 
 export interface DrawingRequest {
+  drawingProjectId?: string;
   ceilingHeight?: string;
   id: string;
   workItemId: string;

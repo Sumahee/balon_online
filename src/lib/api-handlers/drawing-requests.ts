@@ -5,11 +5,13 @@ import { DrawingRequest } from "@/types";
 import { ensureDrawingHandoffs, saveDrawingHandoff } from "@/lib/drawing-handoff";
 import { VERIFY } from "./auth";
 import crypto from "node:crypto";
+import { drawingLinksForWork } from "@/lib/drawing-links";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workItemId = searchParams.get("workItemId");
   const status = searchParams.get("status");
+  const links = db && workItemId ? await drawingLinksForWork(workItemId) : [];
 
   if (db) {
     await ensureDrawingHandoffs();
@@ -32,6 +34,7 @@ export async function GET(request: Request) {
     sql += " ORDER BY created_at DESC";
 
     const res = await executeQuery(sql, args);
+    if (!res.success) return NextResponse.json({success:false,error:"도면 연결 내역을 조회하지 못했습니다."},{status:503});
     if (res.success && res.rows) {
       const requests: DrawingRequest[] = res.rows.map((row: any) => ({
         ...(row.handoff_data ? JSON.parse(String(row.handoff_data)) : {}),
@@ -55,7 +58,7 @@ export async function GET(request: Request) {
         createdAt: String(row.created_at || ""),
         updatedAt: String(row.updated_at || ""),
       }));
-      return NextResponse.json({ success: true, requests });
+      return NextResponse.json({ success: true, requests, links });
     }
   }
 
@@ -74,6 +77,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       workItemId,
+      drawingProjectId,
       drawingType,
       clientName,
       siteAddress,
@@ -102,8 +106,8 @@ export async function POST(request: Request) {
     if (db) {
       const sql = `
         INSERT INTO drawing_requests 
-        (id, work_item_id, client_name, site_address, delivery_date, contact_name, contact_phone, title, description, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+        (id, work_item_id, client_name, site_address, delivery_date, contact_name, contact_phone, title, description, status, created_at, updated_at, drawing_type, post_color, board_color, drawing_assignee)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
       `;
       const args = [
         id,
@@ -117,6 +121,7 @@ export async function POST(request: Request) {
         description || null,
         now,
         now,
+        drawingType || "기타",postColor || "",boardColor || "",drawingAssignee || "",
       ];
 
       const res = await executeMutation(sql, args);
@@ -124,6 +129,7 @@ export async function POST(request: Request) {
         const newReq: DrawingRequest = {
           id,
           workItemId,
+          drawingProjectId,
           drawingType,
           clientName,
           siteAddress,

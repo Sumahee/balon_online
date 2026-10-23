@@ -56,6 +56,13 @@ export default function WorkBoardPage() {
   // Detail Modal & Edit Modal state
   const [selectedTask, setSelectedTask] = useState<WorkItem | null>(null);
   const [editingItem, setEditingItem] = useState<WorkItem | null>(null);
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("workId");
+    if (!id || !loadWorkDetail) return;
+    let active = true;
+    void loadWorkDetail(id).then(item => {if(active)setSelectedTask(item);}).catch(() => {if(active)alert("연결된 업무를 불러오지 못했습니다.");});
+    return () => {active=false;};
+  },[loadWorkDetail]);
   const openEdit=async(item:WorkItem)=>{try{setEditingItem(loadWorkDetail ? await loadWorkDetail(item.id) : item);}catch{alert("업무 내용을 불러오지 못했습니다. 다시 시도해주세요.");}};
 
   // Filter items
