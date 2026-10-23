@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import Link from "next/link";
+import { APP_VERSION } from "@/lib/app-version";
 import { ShieldCheck, User, Lock, ArrowRight, AlertCircle, Building2 } from "lucide-react";
 
 export default function LoginPage() {
@@ -15,7 +17,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user) {
-      router.push("/work");
+      router.push("/calendar");
     }
   }, [user, router]);
 
@@ -33,7 +35,7 @@ export default function LoginPage() {
     try {
       const result = await login(loginId, password);
       if (result.success) {
-        router.push("/work");
+        router.push("/calendar");
       } else {
         setErrorMsg(result.message || "로그인에 실패했습니다.");
       }
@@ -59,6 +61,7 @@ export default function LoginPage() {
         <h2 className="text-center text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-400">
           BALON ONLINE
         </h2>
+        <p className="mt-1 text-center text-xs text-slate-500" aria-label={`Version ${APP_VERSION}`}>{APP_VERSION}</p>
         <p className="mt-2 text-center text-sm text-slate-400">
           바론 INT 본사 직원 전용 통합 업무 및 공정 플랫폼
         </p>
@@ -73,6 +76,8 @@ export default function LoginPage() {
             </div>
           )}
 
+          <p className="mb-5 text-sm text-slate-300">기존 바론웹 계정으로 로그인하세요. 한 번 로그인하면 이 기기에서 자동 로그인됩니다.</p>
+          <Link href="/signup" className="mb-5 inline-block text-sm font-semibold text-blue-300 underline">직원·시공자 회원가입</Link>
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="staff-login" className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">

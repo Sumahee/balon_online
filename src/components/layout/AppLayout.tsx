@@ -1,7 +1,9 @@
 "use client";
 
-import React, { ReactNode, useState } from "react";
-import { AuthProvider } from "@/context/AuthContext";
+import React, { ReactNode, useState, useEffect } from "react";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { usePathname, useRouter } from "next/navigation";
+import { isInstaller } from "@/lib/access";
 import { DataProvider } from "@/context/DataContext";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
@@ -15,10 +17,29 @@ const QuickModals=dynamic(()=>import("@/components/layout/QuickModals").then(mod
 function LazyQuickModals(){const {quickModalType}=useData();return quickModalType ? <QuickModals /> : null;}
 
 export function AppLayout({ children }: { children: ReactNode }) {
+  return <AuthProvider><SessionBoundary>{children}</SessionBoundary></AuthProvider>;
+}
+
+function SessionBoundary({ children }: { children: ReactNode }) {
+  const { user, isLoading } = useAuth();
+  const pathname = usePathname();
+  const router = useRouter();
+  const publicPage = ["/login", "/signup", "/install"].includes(pathname);
+  const restricted = isInstaller(user) && pathname !== "/calendar";
+  useEffect(() => {
+    if (isLoading || publicPage) return;
+    if (!user) router.replace("/login");
+    else if (restricted) router.replace("/calendar");
+  }, [isLoading, publicPage, user, restricted, router]);
+  if (publicPage) return <main>{children}</main>;
+  if (isLoading || !user || restricted) return <div role="status" className="flex min-h-screen items-center justify-center text-sm text-slate-500">로그인 확인 중…</div>;
+  return <AuthenticatedLayout key={String(user.id)}>{children}</AuthenticatedLayout>;
+}
+
+function AuthenticatedLayout({ children }: { children: ReactNode }) {
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
 
   return (
-    <AuthProvider>
       <DataProvider>
         <div className="app-shell min-h-screen bg-slate-50 flex flex-col lg:flex-row">
           {/* Mobile Specific Circular Hamburger Header (lg:hidden) */}
@@ -59,6 +80,5 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <LazyQuickModals />
         </div>
       </DataProvider>
-    </AuthProvider>
   );
 }

@@ -1,4 +1,6 @@
 "use client";
+import { useAuth } from "@/context/AuthContext";
+import { isInstaller } from "@/lib/access";
 
 import { STATUS_PROGRESS } from "@/lib/work-form";
 import { getDrawingAttachment } from "@/lib/drawing-attachments";
@@ -83,6 +85,7 @@ const STORAGE_KEYS = {
 
 export const DataProvider = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
+  const { user: sessionUser } = useAuth();
   const workRequest = useRef(0);
   const galleryRequest = useRef(0);
   const lastWorkParams=useRef("limit=30");
@@ -104,11 +107,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [pendingWrites, setPendingWrites] = useState(0);
   const [metricCounts,setMetricCounts]=useState<Pick<DashboardMetrics,"totalProjects"|"inProgressTasks"|"urgentAsCount"|"completionRate"|"todoCount"|"readyCount"> | null>(null);
   useEffect(()=>{
-    if(pendingWrites || pathname === "/login")return;
+    if(pendingWrites || pathname === "/login" || isInstaller(sessionUser))return;
     let active=true;
     const timer=setTimeout(()=>{void requestApi<NonNullable<typeof metricCounts>>("/api/dashboard").then(result=>{if(active && result.data)setMetricCounts(result.data);}).catch(()=>{});},100);
     return()=>{active=false;clearTimeout(timer);};
-  },[pendingWrites,pathname]);
+  },[pendingWrites,pathname,sessionUser]);
   const [workHasMore,setWorkHasMore]=useState(false);
   const loadWorkList = useCallback(async (params: string, append = false) => {
     const version = ++workRequest.current;

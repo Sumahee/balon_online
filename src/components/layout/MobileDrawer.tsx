@@ -1,4 +1,5 @@
 "use client";
+import { isInstaller } from "@/lib/access";
 import { APP_VERSION } from "@/lib/app-version";
 
 import React from "react";
@@ -137,7 +138,7 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
                 </span>
               </p>
               <p className="text-[11px] text-slate-400 truncate max-w-[140px]">
-                {user?.email || "baron@barononline.co.kr"}
+                {user?.email || "?? ??"}
               </p>
             </div>
           </div>
@@ -155,13 +156,14 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
           )}
         </div>
 
+        {!user && <Link href="/login" onClick={onClose} className="mx-4 rounded-lg bg-blue-600 p-3 text-center text-sm">?? ???</Link>}
         {/* Menu Navigation */}
         <div className="flex-1 px-3 py-2 overflow-y-auto space-y-1">
           <div className="px-3 pb-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
             메뉴 목록
           </div>
 
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter(item => !isInstaller(user) || item.path === "/calendar").map((item) => {
             const isActive = pathname === item.path || (item.path === "/calendar" && pathname === "/");
             const Icon = item.icon;
 

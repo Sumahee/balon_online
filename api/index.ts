@@ -1,3 +1,4 @@
+import { authorizeApi } from "@/lib/api-access";
 import * as equipmentHandler from "@/lib/api-handlers/equipment";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -47,6 +48,8 @@ async function resolveDomain(request: Request, context?: RouteContext) {
 export async function GET(request: NextRequest, context?: RouteContext) {
   try {
     const { domain } = await resolveDomain(request, context);
+    const denied = await authorizeApi(request, domain);
+    if (denied) return denied;
 
     switch (domain) {
       case "storage-usage":
@@ -112,6 +115,8 @@ export async function GET(request: NextRequest, context?: RouteContext) {
 export async function POST(request: NextRequest, context?: RouteContext) {
   try {
     const { domain, subPath } = await resolveDomain(request, context);
+    const denied = await authorizeApi(request, domain);
+    if (denied) return denied;
 
     switch (domain) {
       case "equipment":
@@ -121,7 +126,11 @@ export async function POST(request: NextRequest, context?: RouteContext) {
       case "clients":
         return await clientsHandler.POST();
       case "comments":
-        return await commentsHandler.POST(request);
+        const session = await authHandler.VERIFY(request);
+        if (!session.ok) return session;
+        const { user } = await session.json();
+        const commentBody = await request.json();
+        return await commentsHandler.POST(new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ ...commentBody, author: user.name }) }));
       case "drawing-requests":
         return await drawingRequestsHandler.POST(request);
       case "upload":
@@ -133,7 +142,7 @@ export async function POST(request: NextRequest, context?: RouteContext) {
       case "materials":
         return await materialsHandler.POST(request);
       case "auth":
-        return await authHandler.LOGIN(request);
+        return new URL(request.url).searchParams.get("action") === "register" ? await authHandler.REGISTER(request) : await authHandler.LOGIN(request);
       case "purchases":
         return await purchasesHandler.POST(request);
       case "drawer":
@@ -156,6 +165,8 @@ export async function POST(request: NextRequest, context?: RouteContext) {
 export async function PUT(request: NextRequest, context?: RouteContext) {
   try {
     const { domain } = await resolveDomain(request, context);
+    const denied = await authorizeApi(request, domain);
+    if (denied) return denied;
 
     switch (domain) {
       case "equipment":
@@ -181,6 +192,8 @@ export async function PUT(request: NextRequest, context?: RouteContext) {
 export async function PATCH(request: NextRequest, context?: RouteContext) {
   try {
     const { domain } = await resolveDomain(request, context);
+    const denied = await authorizeApi(request, domain);
+    if (denied) return denied;
 
     switch (domain) {
       case "drawing-requests":
@@ -200,6 +213,8 @@ export async function PATCH(request: NextRequest, context?: RouteContext) {
 export async function DELETE(request: NextRequest, context?: RouteContext) {
   try {
     const { domain } = await resolveDomain(request, context);
+    const denied = await authorizeApi(request, domain);
+    if (denied) return denied;
 
     switch (domain) {
       case "posts":

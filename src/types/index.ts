@@ -243,6 +243,7 @@ export interface ClientInfo {
 }
 
 export interface UserInfo {
+  onlineRole?: "staff" | "installer";
   id: number | string;
   name: string;
   phone?: string;

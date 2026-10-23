@@ -1,4 +1,6 @@
 "use client";
+import { useAuth } from "@/context/AuthContext";
+import { isInstaller } from "@/lib/access";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { WorkEditorModal } from "@/components/common/WorkEditorModal";
@@ -84,6 +86,8 @@ interface CalendarEvent {
 }
 
 export default function CalendarPage() {
+  const { user } = useAuth();
+  const installer = isInstaller(user);
   const { workItems, asItems, loadWorkList } = useData();
 
   const [currentDate, setCurrentDate] = useState(new Date(`${getToday()}T00:00:00`));
@@ -201,7 +205,7 @@ export default function CalendarPage() {
     <div className="space-y-6 pb-12">
       <MobileMonthCalendar key={`${currentDate.getFullYear()}-${currentDate.getMonth()}`} year={currentDate.getFullYear()} month={currentDate.getMonth()} days={calendarDays} events={filteredEvents} regions={REGIONS} region={selectedRegion} search={searchQuery} onRegion={setSelectedRegion} onSearch={setSearchQuery} onPrevious={handlePrevMonth} onNext={handleNextMonth} onToday={()=>setCurrentDate(new Date(`${getToday()}T00:00:00`))} onAdd={date=>{if(date)setNewDate(date);setIsAddModalOpen(true);}} onPhoto={event=>{const original=filteredEvents.find(value=>value.id===event.id && value.type===event.type);if(original?.originalWorkItem){setStartPhotoUpload(true);setSelectedItem(original.originalWorkItem);}}} onOpen={event=>{setStartPhotoUpload(false);const original=filteredEvents.find(value=>value.id===event.id && value.type===event.type);if(original?.originalWorkItem)setSelectedItem(original.originalWorkItem);if(original?.originalAsItem)setSelectedAsItem(original.originalAsItem);}} />
       <div className="hidden lg:block space-y-6">
-      <PageHeader title="일정 관리" description="시공·배송·요청 일정을 확인하고 현장별 업무를 열어보세요." actions={<button onClick={() => {setNewDate(getToday());setIsAddModalOpen(true);}} className="action-primary"><Plus className="h-4 w-4" />일정 추가</button>} />
+      <PageHeader title="일정 관리" description="시공·배송·요청 일정을 확인하고 현장별 업무를 열어보세요." actions={!installer && <button onClick={() => {setNewDate(getToday());setIsAddModalOpen(true);}} className="action-primary"><Plus className="h-4 w-4" />일정 추가</button>} />
 
       {/* Control Bar: Filters & Month Navigator */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -439,7 +443,7 @@ export default function CalendarPage() {
 
       {/* NEW SCHEDULE EVENT MODAL */}
       </div>
-      {isAddModalOpen && <WorkEditorModal initialDate={newDate} onClose={() => setIsAddModalOpen(false)} />}
+      {!installer && isAddModalOpen && <WorkEditorModal initialDate={newDate} onClose={() => setIsAddModalOpen(false)} />}
 
       {/* EVENT DETAIL MODAL */}
       {selectedItem && (

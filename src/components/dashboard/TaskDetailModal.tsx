@@ -5,6 +5,8 @@ import { isDrawingAttachment } from "@/lib/drawing-attachments";
 import { WorkEditorModal } from "@/components/common/WorkEditorModal";
 import { WorkDetailHeader } from "@/components/common/WorkDetailHeader";
 import { PhotoImage } from "@/components/common/PhotoImage";
+import { isInstaller } from "@/lib/access";
+import { InstallerTaskDetail } from "@/components/dashboard/InstallerTaskDetail";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
 import { useModalBack } from "@/lib/use-modal-back";
 import { PdfPreview } from "@/components/common/PdfPreview";
@@ -50,7 +52,7 @@ interface TaskDetailModalProps {
   onClose: () => void;
 }
 
-export function TaskDetailModal({item,onClose,startPhotoUpload}:TaskDetailModalProps) { return <WorkDetailGate item={item} onClose={onClose}>{loaded => <TaskDetailContent item={loaded} onClose={onClose} startPhotoUpload={startPhotoUpload} />}</WorkDetailGate>; }
+export function TaskDetailModal({item,onClose,startPhotoUpload}:TaskDetailModalProps) { const {user}=useAuth(); return <WorkDetailGate item={item} onClose={onClose}>{loaded => isInstaller(user) ? <InstallerTaskDetail item={loaded} onClose={onClose} startPhotoUpload={startPhotoUpload} /> : <TaskDetailContent item={loaded} onClose={onClose} startPhotoUpload={startPhotoUpload} />}</WorkDetailGate>; }
 function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { item: WorkItem; onClose: () => void; startPhotoUpload?: boolean }) {
   const { workItems, updateWorkItem, isSaving, addComment, deleteComment, deleteCommentImage, loadMoreComments } = useData();
   const { user, token } = useAuth();

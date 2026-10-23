@@ -1,4 +1,5 @@
 "use client";
+import { isInstaller } from "@/lib/access";
 
 import React, { useState } from "react";
 import Link from "next/link";
@@ -148,7 +149,7 @@ export function Sidebar() {
             메인 메뉴
           </div>
 
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter(item => !isInstaller(user) || item.path === "/calendar").map((item) => {
             const isActive = pathname === item.path;
             const Icon = item.icon;
             const badgeValue = item.badgeKey ? badgeCounts[item.badgeKey] : null;

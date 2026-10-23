@@ -1,4 +1,5 @@
 "use client";
+import { useAuth } from "@/context/AuthContext";
 import { APP_VERSION } from "@/lib/app-version";
 
 import React, { useEffect, useState } from "react";
@@ -12,6 +13,7 @@ interface MobileHeaderProps {
 
 export function MobileHeader({ onOpenDrawer }: MobileHeaderProps) {
   const pathname = usePathname();
+  const { user } = useAuth();
   const [calendarCompact, setCalendarCompact] = useState(false);
   useEffect(() => {
     const handle = (event: Event) => setCalendarCompact(Boolean((event as CustomEvent<boolean>).detail));
@@ -66,6 +68,7 @@ export function MobileHeader({ onOpenDrawer }: MobileHeaderProps) {
 
       {/* Center/Right: Current Active Page Title & Date Badge */}
       <div className="flex items-center gap-2">
+        {user ? <button onClick={onOpenDrawer} aria-label="로그인 계정 및 로그아웃" className="max-w-20 truncate rounded-full border border-slate-600 px-2 py-1 text-xs">{user.name}</button> : <Link href="/login" className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold">로그인</Link>}
         <span className="text-xs font-bold text-slate-200 bg-slate-800/80 border border-slate-700/80 px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-2xs">
           <CalendarIcon className="w-3 h-3 text-blue-400" />
           <span>{getPageTitle()}</span>

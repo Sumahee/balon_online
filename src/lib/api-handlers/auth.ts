@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { executeQuery, db } from "@/lib/db";
+import { executeQuery, executeMutation, db } from "@/lib/db";
 import type { UserInfo } from "@/types";
 import crypto from "node:crypto";
 
 const SECRET_KEY = process.env.JWT_SECRET;
-const SESSION_DURATION = 1000 * 60 * 60 * 24 * 7;
+const SESSION_DURATION = 1000 * 60 * 60 * 24 * 30;
 type UserRow = Record<string, unknown>;
 
 export function isBaronStaff(row: UserRow): boolean {
@@ -14,6 +14,7 @@ export function isBaronStaff(row: UserRow): boolean {
 
 function publicUser(row: UserRow): UserInfo {
   return {
+    onlineRole: row.manager_rank === "시공자" ? "installer" : "staff",
     id: row.id as UserInfo["id"],
     name: String(row.name || row.login_id || "바론 직원"),
     phone: row.phone ? String(row.phone) : undefined,
@@ -102,8 +103,29 @@ export async function VERIFY(request: Request) {
     const result = await executeQuery("SELECT id, login_id, name, email, phone, manager_rank, client_id, status FROM users WHERE id = ?", [decoded.id]);
     if (!result.success) return unavailable();
     if (result.rows.length !== 1 || !isBaronStaff(result.rows[0] as UserRow)) return denied();
-    return NextResponse.json({ success: true, valid: true, user: publicUser(result.rows[0] as UserRow) });
+    const user = publicUser(result.rows[0] as UserRow);
+    return NextResponse.json({ success: true, valid: true, user, token: generateToken(user) });
   } catch {
     return unavailable();
   }
+}
+
+export async function REGISTER(request: Request) {
+  try {
+    if (!db) return unavailable();
+    const body = await request.json();
+    const loginId = typeof body.loginId === "string" ? body.loginId.trim() : "";
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    const phone = typeof body.phone === "string" ? body.phone.trim() : "";
+    if (!/^[A-Za-z0-9_.-]{4,40}$/.test(loginId) || !name || name.length > 50 || password.length < 8 || password.length > 128 || !/^[0-9+() -]{8,25}$/.test(phone) || !["staff","installer"].includes(body.accountType)) {
+      return NextResponse.json({success:false,message:"아이디 4~40자, 비밀번호 8자 이상, 이름·연락처와 가입 등급을 확인해주세요."},{status:400});
+    }
+    const existing = await executeQuery("SELECT id FROM users WHERE login_id = ?", [loginId]);
+    if (!existing.success) return unavailable();
+    if (existing.rows.length) return NextResponse.json({success:false,message:"이미 사용 중인 아이디입니다."},{status:409});
+    // Keep the existing Baron Web account format and PENDING approval workflow.
+    await executeMutation("INSERT INTO users (login_id,password,name,phone,email,level,status,client_id,company_name,manager_rank) VALUES (?,?,?,?,?,4,'PENDING',NULL,?,?)", [loginId,password,name,phone,typeof body.email === "string" ? body.email.trim().slice(0,200) : "","바론",body.accountType === "installer" ? "시공자" : "직원"]);
+    return NextResponse.json({success:true,message:"가입 신청이 완료되었습니다. 기존 바론웹에서 관리자 승인 후 로그인해주세요."},{status:201});
+  } catch { return NextResponse.json({success:false,message:"가입 신청에 실패했습니다. 아이디 중복 여부를 확인해주세요."},{status:503}); }
 }

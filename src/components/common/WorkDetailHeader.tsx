@@ -4,7 +4,7 @@ import { CalendarDays, ChevronDown, MapPin, Pencil, Phone, UserRound, UsersRound
 import type { WorkItem } from "@/types";
 import { getWorkTitle } from "@/lib/work-title";
 
-export function WorkDetailHeader({ item, onEdit }: { item: WorkItem; onEdit: () => void }) {
+export function WorkDetailHeader({ item, onEdit, readOnly = false }: { item: WorkItem; onEdit: () => void; readOnly?: boolean }) {
   const date = item.deliveryDate || item.dueDate;
   const scheduled = date ? new Date(`${date.slice(0, 10)}T12:00:00+09:00`) : null;
   const dateLabel = scheduled && !Number.isNaN(scheduled.getTime())
@@ -26,7 +26,7 @@ export function WorkDetailHeader({ item, onEdit }: { item: WorkItem; onEdit: () 
           <time dateTime={date || undefined} className="whitespace-nowrap text-xs font-bold tracking-tight text-slate-900 sm:text-lg">{dateLabel}</time>
         </div>
       </div>
-      <button type="button" aria-label="업무 수정" onClick={onEdit} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><Pencil aria-hidden="true" className="h-3.5 w-3.5" />수정</button>
+      {!readOnly && <button type="button" aria-label="업무 수정" onClick={onEdit} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><Pencil aria-hidden="true" className="h-3.5 w-3.5" />수정</button>}
     </div>
 
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_180px] sm:gap-4">
@@ -41,8 +41,8 @@ export function WorkDetailHeader({ item, onEdit }: { item: WorkItem; onEdit: () 
       <aside aria-label="담당 정보" className="min-w-0 border-l border-slate-100 pl-3 sm:pl-4">
         <p className="mb-2 flex items-center gap-1 whitespace-nowrap text-[10px] text-slate-500 sm:text-[11px]"><span>등록일</span><time dateTime={item.createdAt || undefined}>{registeredLabel.replace(/\s/g, "")}</time></p>
         <div className="grid grid-cols-1 gap-1.5">
-          <button type="button" onClick={onEdit} aria-label="담당자 정보 확인 및 업무 수정" className={control}><UserRound aria-hidden="true" className="h-3 w-3 shrink-0 text-indigo-700" /><span className="flex min-w-0 flex-1 items-center gap-1"><span className="shrink-0 text-[10px] text-slate-500 sm:text-[11px]">담당자 · </span><strong className="truncate font-semibold">{item.assignee || item.createdBy || "미지정"}</strong></span><ChevronDown aria-hidden="true" className="h-2.5 w-2.5 shrink-0 text-slate-400" /></button>
-          <button type="button" onClick={onEdit} aria-label="시공팀 선택 및 업무 수정" className={control}><UsersRound aria-hidden="true" className="h-3 w-3 shrink-0 text-indigo-700" /><span className="flex min-w-0 flex-1 items-center gap-1"><span className="shrink-0 text-[10px] text-slate-500 sm:text-[11px]">시공팀 · </span><strong className="truncate font-semibold">{item.installationTeam || "선택"}</strong></span><ChevronDown aria-hidden="true" className="h-2.5 w-2.5 shrink-0 text-slate-400" /></button>
+          <button disabled={readOnly} type="button" onClick={onEdit} aria-label="담당자 정보 확인 및 업무 수정" className={control}><UserRound aria-hidden="true" className="h-3 w-3 shrink-0 text-indigo-700" /><span className="flex min-w-0 flex-1 items-center gap-1"><span className="shrink-0 text-[10px] text-slate-500 sm:text-[11px]">담당자 · </span><strong className="truncate font-semibold">{item.assignee || item.createdBy || "미지정"}</strong></span><ChevronDown aria-hidden="true" className="h-2.5 w-2.5 shrink-0 text-slate-400" /></button>
+          <button disabled={readOnly} type="button" onClick={onEdit} aria-label="시공팀 선택 및 업무 수정" className={control}><UsersRound aria-hidden="true" className="h-3 w-3 shrink-0 text-indigo-700" /><span className="flex min-w-0 flex-1 items-center gap-1"><span className="shrink-0 text-[10px] text-slate-500 sm:text-[11px]">시공팀 · </span><strong className="truncate font-semibold">{item.installationTeam || "선택"}</strong></span><ChevronDown aria-hidden="true" className="h-2.5 w-2.5 shrink-0 text-slate-400" /></button>
         </div>
       </aside>
     </div>

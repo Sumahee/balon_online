@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { UserInfo } from "@/types";
 
 interface AuthContextType {
@@ -20,23 +20,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<UserInfo | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const sessionEpoch = useRef(0);
 
   // Restore session from LocalStorage / Cookie / URL Query param
   useEffect(() => {
     async function restoreSession() {
+      const epoch = sessionEpoch.current;
       try {
         const urlToken = new URLSearchParams(window.location.search).get("token");
         const savedToken = urlToken || localStorage.getItem(TOKEN_KEY) || getCookie(TOKEN_KEY);
         // Cached user names never grant a session before the server checks membership.
         localStorage.removeItem(USER_KEY);
         if (savedToken) {
-          const res = await fetch(`/api/auth?token=${encodeURIComponent(savedToken)}`, { signal: AbortSignal.timeout(15_000), cache: "no-store" });
+          const res = await fetch("/api/auth", { headers: { Authorization: `Bearer ${savedToken}` }, signal: AbortSignal.timeout(15_000), cache: "no-store" });
           const data = await res.json();
+          if (epoch !== sessionEpoch.current) return;
           if (res.ok && data.success && data.user) {
-            document.cookie = `${TOKEN_KEY}=${encodeURIComponent(savedToken)}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
+            const renewedToken = data.token || savedToken;
+            document.cookie = `${TOKEN_KEY}=${encodeURIComponent(renewedToken)}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
             setUser(data.user);
-            setToken(savedToken);
-            localStorage.setItem(TOKEN_KEY, savedToken);
+            setToken(renewedToken);
+            localStorage.setItem(TOKEN_KEY, renewedToken);
             localStorage.setItem(USER_KEY, JSON.stringify(data.user));
             if (urlToken) {
               const cleanUrl = new URL(window.location.href);
@@ -44,6 +48,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               window.history.replaceState(null, "", cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
             }
           } else if (res.status === 401 || res.status === 403) {
+            setUser(null);
+            setToken(null);
             localStorage.removeItem(TOKEN_KEY);
             document.cookie = `${TOKEN_KEY}=; path=/; max-age=0`;
           }
@@ -55,10 +61,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    restoreSession();
+    void restoreSession();
+    const refresh = () => { void restoreSession(); };
+    window.addEventListener("focus", refresh);
+    const timer = window.setInterval(refresh, 10 * 60 * 1000);
+    return () => { window.removeEventListener("focus", refresh); window.clearInterval(timer); };
   }, []);
 
   const login = async (loginIdOrName: string, password?: string) => {
+    sessionEpoch.current++;
     try {
       const res = await fetch("/api/auth", {
         method: "POST",
@@ -81,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       localStorage.setItem(TOKEN_KEY, data.token);
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-      document.cookie = `${TOKEN_KEY}=${encodeURIComponent(data.token)}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
+      document.cookie = `${TOKEN_KEY}=${encodeURIComponent(data.token)}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
 
       return { success: true, message: data.message };
     } catch {
@@ -90,6 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    sessionEpoch.current++;
     setUser(null);
     setToken(null);
     localStorage.removeItem(TOKEN_KEY);

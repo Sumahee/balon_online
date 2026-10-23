@@ -25,11 +25,83 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
     return nativeRequire(name);
   };
   new Script(`(function(require, module, exports) { ${code}\n})`, { filename: path })
-    .runInNewContext({ ...globalThis, console, Buffer, URL, Intl, AbortSignal, process: { env: { NODE_ENV: "production" } }, crypto: globalThis.crypto, ...globals })(require, loaded, loaded.exports);
+    .runInNewContext({ ...globalThis, console, Buffer, URL, URLSearchParams, Headers, Request, Response, Intl, AbortSignal, process: { env: { NODE_ENV: "production" } }, crypto: globalThis.crypto, ...globals })(require, loaded, loaded.exports);
   return loaded.exports;
 }
 
 const request = (body) => ({ json: async () => body });
+
+test("installer API access is limited to visible calendar tasks, photos and new comments", async () => {
+  const database=nativeRequire("@libsql/client").createClient({url:"file::memory:"});
+  await database.executeMultiple("CREATE TABLE bo_work_items(id TEXT,calendar_visible INTEGER,deadline_type TEXT,delivery_date TEXT,due_date TEXT);CREATE TABLE bo_work_item_comments(id TEXT,work_item_id TEXT,images TEXT);CREATE TABLE bo_attachments(id TEXT,work_item_id TEXT,url TEXT);INSERT INTO bo_work_items VALUES('visible',1,'시공일','2026-10-24',''),('hidden',0,'시공일','2026-10-24',''),('undated',1,'시공일','','');INSERT INTO bo_work_item_comments VALUES('comment-visible','visible','[]'),('comment-hidden','hidden','[]');INSERT INTO bo_attachments VALUES('att-visible','visible','/test'),('att-hidden','hidden','/test');");
+  let user={id:4,onlineRole:"installer",role:"시공자"};
+  const {authorizeApi}=loadModule("src/lib/api-access.ts",{"@/lib/api-handlers/auth":{VERIFY:async()=>user?Response.json({user}):new Response("",{status:401})},"@/lib/work-calendar-schema":{ensureWorkCalendarSchema:async()=>{}},"@/lib/db":{executeQuery:async(sql,args)=>({success:true,rows:(await database.execute({sql,args})).rows})}});
+  const check=(path,method="GET",body)=>authorizeApi(new Request("https://app.test/api/"+path,{method,...(body?{headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{})}),path.split("?")[0]);
+  try {
+    assert.equal(await check("posts?type=work&summary=1&mode=calendar"),null);
+    assert.equal(await check("posts?type=work&id=visible"),null);
+    for(const path of ["posts?type=work&id=hidden","posts?type=work&id=undated","posts?type=work","posts?type=as","posts?type=work&summary=1","users","dashboard","storage-usage","gallery?limit=30","posts?type=work&attachment_id=att-hidden","gallery?source=comment&id=comment-hidden"])assert.equal((await check(path)).status,403,path);
+    assert.equal(await check("posts?type=work&attachment_id=att-visible"),null);
+    assert.equal(await check("gallery?source=comment&id=comment-visible"),null);
+    assert.equal(await check("comments","POST",{workItemId:"visible",content:"완료",images:["data:image/jpeg;base64,aA=="]}),null);
+    assert.equal((await check("comments","POST",{workItemId:"hidden",content:"test"})).status,403);
+    assert.equal((await check("comments","POST",{workItemId:"visible",images:["/api/construction-photo?key=other"]})).status,403);
+    for(const method of ["PUT","DELETE"])assert.equal((await check("posts?type=work&id=visible",method)).status,403);
+    assert.equal((await check("comments?id=comment-visible","DELETE")).status,403);
+    user={id:1,onlineRole:"staff"};assert.equal(await check("purchases"),null);
+    user=null;assert.equal((await check("posts?type=work&id=visible")).status,401);assert.equal(await check("auth","POST"),null);
+  } finally {database.close();}
+});
+
+test("online signup uses shared users with pending staff approval and fixed installer rank", async () => {
+  const writes=[];let duplicate=false;
+  const {REGISTER}=loadModule("src/lib/api-handlers/auth.ts",{"@/lib/db":{db:{},executeQuery:async()=>({success:true,rows:duplicate?[{id:1}]:[]}),executeMutation:async(sql,args)=>writes.push({sql,args})}});
+  const input={loginId:"installer01",password:"password123",name:"시공자",phone:"010-1234-5678",accountType:"installer",level:0,status:"APPROVED",manager_rank:"관리자"};
+  assert.equal((await REGISTER(request(input))).status,201);
+  assert.match(writes[0].sql,/'PENDING'/);assert.match(writes[0].sql,/,4,/);assert.equal(writes[0].args.at(-1),"시공자");
+  duplicate=true;assert.equal((await REGISTER(request(input))).status,409);assert.equal(writes.length,1);
+  assert.equal((await REGISTER(request({...input,accountType:"admin"}))).status,400);
+});
+
+test("API bridge enforces login on every method and uses the verified comment author", async () => {
+  let user=null,captured;
+  const mocks={"@/lib/api-handlers/auth":{VERIFY:async()=>user?Response.json({success:true,user}):new Response("",{status:401})},"@/lib/db":{db:{},executeQuery:async()=>({success:true,rows:[{id:"visible"}]})},"@/lib/work-calendar-schema":{ensureWorkCalendarSchema:async()=>{}},"@/lib/api-handlers/comments":{POST:async request=>{captured=await request.json();return Response.json({success:true});}}};
+  const bridge=loadModule("api/index.ts",mocks);
+  for(const method of ["GET","POST","PUT","PATCH","DELETE"]){const req=new Request("https://app.test/api/posts",{method});assert.equal((await bridge[method](req)).status,401,method);}
+  user={id:9,name:"확인된 시공자",onlineRole:"installer"};
+  const response=await bridge.POST(new Request("https://app.test/api/comments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workItemId:"visible",author:"관리자 사칭",content:"사진 등록"})}));
+  assert.equal(response.status,200);assert.equal(captured.author,user.name);
+  assert.equal((await bridge.PUT(new Request("https://app.test/api/posts?type=work&id=visible",{method:"PUT"}))).status,403);
+});
+
+test("mobile installer menu exposes calendar and a real account instead of staff management menus", () => {
+  const React=nativeRequire("react"),{renderToStaticMarkup}=nativeRequire("react-dom/server");
+  const mocks={"next/navigation":{usePathname:()=>"/calendar"},"@/context/AuthContext":{useAuth:()=>({user:{name:"테스트 시공자",role:"시공자",onlineRole:"installer"},logout(){}})},"@/context/DataContext":{useData:()=>({metrics:{inProgressTasks:3},images:[],purchaseItems:[]})}};
+  const {MobileDrawer}=loadModule("src/components/layout/MobileDrawer.tsx",mocks);
+  const html=renderToStaticMarkup(React.createElement(MobileDrawer,{isOpen:true,onClose(){}}));
+  assert.match(html,/테스트 시공자/);assert.match(html,/href="\/calendar"/);assert.doesNotMatch(html,/href="\/(work|as|purchases|gallery|equipment|drawer|materials)"/);
+  const {MobileHeader}=loadModule("src/components/layout/MobileHeader.tsx",mocks);
+  assert.match(renderToStaticMarkup(React.createElement(MobileHeader,{onOpenDrawer(){}})),/로그인 계정 및 로그아웃/);
+});
+
+test("shared-account installer signup, approval, login renewal and revocation round trip", async () => {
+  const database=nativeRequire("@libsql/client").createClient({url:"file::memory:"});
+  await database.execute("CREATE TABLE users(id INTEGER PRIMARY KEY,login_id TEXT UNIQUE,password TEXT,name TEXT,phone TEXT,email TEXT,level INTEGER,status TEXT,client_id INTEGER,company_name TEXT,manager_rank TEXT)");
+  const query=async(sql,args=[])=>({success:true,rows:(await database.execute({sql,args})).rows});
+  const auth=loadModule("src/lib/api-handlers/auth.ts",{"@/lib/db":{db:{},executeQuery:query,executeMutation:query}},{process:{env:{JWT_SECRET:"isolated-session-secret",NODE_ENV:"production"}}});
+  try {
+    const input={loginId:"crew1",password:"password123",name:"시공 사용자",phone:"010-1234-5678",accountType:"installer"};
+    assert.equal((await auth.REGISTER(request(input))).status,201);
+    assert.equal((await auth.LOGIN(request({loginId:input.loginId,password:input.password}))).status,401);
+    await database.execute("UPDATE users SET status='APPROVED'");
+    const login=await auth.LOGIN(request({loginId:input.loginId,password:input.password}));
+    assert.equal(login.status,200);const body=await login.json();assert.equal(body.user.onlineRole,"installer");assert.match(login.headers.get("set-cookie"),/Max-Age=2592000/);
+    const verifyRequest=new Request("https://app.test/api/auth",{headers:{Authorization:`Bearer ${body.token}`}});
+    const renewed=await auth.VERIFY(verifyRequest);assert.equal(renewed.status,200);assert.ok((await renewed.json()).token);
+    await database.execute("UPDATE users SET status='PENDING'");
+    assert.equal((await auth.VERIFY(verifyRequest)).status,401);
+  } finally {database.close();}
+});
 
 test("protected photo loading sends the restored Bearer token without relying on cookies", async () => {
   let input;
@@ -48,10 +120,10 @@ test("protected photo loading sends the restored Bearer token without relying on
 
 test("verified localStorage session restores the image cookie before publishing its token", async () => {
   const React=nativeRequire("react");let effect;const events=[];
-  const hookReact={...React,useState:initial=>[initial,value=>events.push(value)],useEffect:fn=>{effect=fn;}};
+  const hookReact={...React,useRef:value=>({current:value}),useState:initial=>[initial,value=>events.push(value)],useEffect:fn=>{effect=fn;}};
   const store=new Map([["baron_auth_token","cached-token"]]);
   const document={set cookie(value){events.push({cookie:value});},get cookie(){return "";}};
-  const auth=loadModule("src/context/AuthContext.tsx",{react:hookReact},{URLSearchParams,document,window:{location:{search:"",protocol:"https:"}},localStorage:{getItem:key=>store.get(key),setItem:(key,value)=>store.set(key,value),removeItem:key=>store.delete(key)},fetch:async()=>({ok:true,status:200,json:async()=>({success:true,user:{name:"직원"}})})});
+  const auth=loadModule("src/context/AuthContext.tsx",{react:hookReact},{URLSearchParams,document,window:{location:{search:"",protocol:"https:"},addEventListener(){},removeEventListener(){},setInterval(){return 1;},clearInterval(){}},localStorage:{getItem:key=>store.get(key),setItem:(key,value)=>store.set(key,value),removeItem:key=>store.delete(key)},fetch:async()=>({ok:true,status:200,json:async()=>({success:true,user:{name:"직원"}})})});
   auth.AuthProvider({children:null});effect();await new Promise(resolve=>setTimeout(resolve,0));
   const cookieIndex=events.findIndex(value=>value?.cookie);
   assert.ok(cookieIndex>=0);assert.match(events[cookieIndex].cookie,/baron_auth_token=cached-token; path=\//);
