@@ -3,6 +3,7 @@
 import { WORK_TAGS } from "@/lib/work-tags";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StorageUsage } from "@/components/common/StorageUsage";
+import { PhotoImage } from "@/components/common/PhotoImage";
 
 import React, { useEffect, useState, useRef } from "react";
 import {
@@ -422,7 +423,7 @@ export default function GalleryPage() {
                 className={cn("relative bg-slate-100 overflow-hidden cursor-pointer shrink-0", viewMode === "list" ? "w-20 h-16 sm:w-28 sm:h-20 rounded-lg" : "aspect-4/3")}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <PhotoImage
                   src={thumbnailUrl(img.url, img.id, viewMode === "list" ? 160 : 480)}
                   alt={img.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
@@ -524,7 +525,7 @@ export default function GalleryPage() {
           <div className="max-w-5xl w-full max-h-[90vh] flex flex-col items-center justify-center space-y-4">
             <div className="relative max-h-[75vh] overflow-hidden rounded-xl shadow-2xl">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <PhotoImage
                 src={currentLightboxImage.url}
                 alt={currentLightboxImage.title}
                 className="max-h-[75vh] w-auto object-contain rounded-xl"

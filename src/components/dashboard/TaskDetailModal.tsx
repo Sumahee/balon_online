@@ -4,6 +4,7 @@ import { DrawingUploadBlock } from "@/components/common/DrawingUploadBlock";
 import { isDrawingAttachment } from "@/lib/drawing-attachments";
 import { WorkEditorModal } from "@/components/common/WorkEditorModal";
 import { WorkDetailHeader } from "@/components/common/WorkDetailHeader";
+import { PhotoImage } from "@/components/common/PhotoImage";
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
 import { useModalBack } from "@/lib/use-modal-back";
 import { PdfPreview } from "@/components/common/PdfPreview";
@@ -334,7 +335,7 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
                   <div key={cmt.id + "-" + index} className="relative overflow-hidden rounded-xl bg-slate-100">
                     <button type="button" aria-label={"시공사진 확대 " + (index + 1)} onClick={()=>setActivePhotoIndex(allPhotos.findIndex(photo=>photo.id==="cmt-photo-"+cmt.id+"-"+index))} className="block aspect-square w-full">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt="시공사진" loading="lazy" className="h-full w-full object-cover" />
+                      <PhotoImage src={url} alt="시공사진" loading="lazy" className="h-full w-full object-cover" />
                     </button>
                     <button type="button" aria-label="시공사진 삭제" disabled={isSaving} onClick={()=>void deleteCommentImage(liveItem.id,cmt.id,url)} className="absolute right-1 top-1 rounded-full bg-black/60 p-1.5 text-white"><X className="h-4 w-4" /></button>
                   </div>
@@ -797,7 +798,7 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
               )}
 
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <PhotoImage
                 src={
                   activePhotoIndex !== null && allPhotos[activePhotoIndex]
                     ? allPhotos[activePhotoIndex].url

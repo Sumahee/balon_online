@@ -31,6 +31,34 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
 
 const request = (body) => ({ json: async () => body });
 
+test("protected photo loading sends the restored Bearer token without relying on cookies", async () => {
+  let input;
+  let response=new Response(new Uint8Array([1,2]),{headers:{"content-type":"image/jpeg"}});
+  const access=loadModule("src/lib/photo-access.ts",{},{fetch:async(url,init)=>{input={url,init};return response;},Response});
+  const signal=new AbortController().signal;
+  const blob=await access.fetchPhotoBlob("/api/gallery?source=comment&id=test&index=0","restored-token",signal);
+  assert.equal(blob.size,2);assert.equal(input.init.headers.Authorization,"Bearer restored-token");
+  assert.equal(input.url.includes("restored-token"),false);assert.equal(input.init.credentials,"same-origin");
+  await assert.rejects(access.fetchPhotoBlob("https://other.example/photo.jpg","restored-token",signal),/Invalid photo/);
+  response=new Response("{}",{headers:{"content-type":"application/json"}});
+  await assert.rejects(access.fetchPhotoBlob("/api/construction-photo?key=test","restored-token",signal));
+  response=new Response("denied",{status:401});
+  await assert.rejects(access.fetchPhotoBlob("/api/construction-photo?key=test","restored-token",signal));
+});
+
+test("verified localStorage session restores the image cookie before publishing its token", async () => {
+  const React=nativeRequire("react");let effect;const events=[];
+  const hookReact={...React,useState:initial=>[initial,value=>events.push(value)],useEffect:fn=>{effect=fn;}};
+  const store=new Map([["baron_auth_token","cached-token"]]);
+  const document={set cookie(value){events.push({cookie:value});},get cookie(){return "";}};
+  const auth=loadModule("src/context/AuthContext.tsx",{react:hookReact},{URLSearchParams,document,window:{location:{search:"",protocol:"https:"}},localStorage:{getItem:key=>store.get(key),setItem:(key,value)=>store.set(key,value),removeItem:key=>store.delete(key)},fetch:async()=>({ok:true,status:200,json:async()=>({success:true,user:{name:"직원"}})})});
+  auth.AuthProvider({children:null});effect();await new Promise(resolve=>setTimeout(resolve,0));
+  const cookieIndex=events.findIndex(value=>value?.cookie);
+  assert.ok(cookieIndex>=0);assert.match(events[cookieIndex].cookie,/baron_auth_token=cached-token; path=\//);
+  assert.match(events[cookieIndex].cookie,/SameSite=Lax; Secure/);
+  assert.ok(cookieIndex<events.indexOf("cached-token"));
+});
+
 test("R2 photo deletion targets only app keys, deduplicates and propagates failures", async () => {
   const calls=[];let failed=false;
   class Command {constructor(input){this.input=input;}}

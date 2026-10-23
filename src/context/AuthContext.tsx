@@ -33,6 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const res = await fetch(`/api/auth?token=${encodeURIComponent(savedToken)}`, { signal: AbortSignal.timeout(15_000), cache: "no-store" });
           const data = await res.json();
           if (res.ok && data.success && data.user) {
+            document.cookie = `${TOKEN_KEY}=${encodeURIComponent(savedToken)}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
             setUser(data.user);
             setToken(savedToken);
             localStorage.setItem(TOKEN_KEY, savedToken);
@@ -80,7 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       localStorage.setItem(TOKEN_KEY, data.token);
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-      document.cookie = `${TOKEN_KEY}=${data.token}; path=/; max-age=${60 * 60 * 24 * 7}`;
+      document.cookie = `${TOKEN_KEY}=${encodeURIComponent(data.token)}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
 
       return { success: true, message: data.message };
     } catch {
