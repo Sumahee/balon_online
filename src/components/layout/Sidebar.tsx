@@ -25,6 +25,7 @@ import { useData } from "@/context/DataContext";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
+  { name: "\uACAC\uC801\uC11C \uAC8C\uC2DC\uD310", path: "/quotations", icon: ClipboardList, badgeKey: null },
   {
     name: "메인 대시보드",
     path: "/",

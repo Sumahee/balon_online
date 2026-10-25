@@ -1,0 +1,42 @@
+.quotation-overlay{position:fixed;inset:0;z-index:100;background:#e2e8f0;overflow:auto;color:#0f172a}
+.quotation-toolbar{position:sticky;top:0;z-index:1;background:#0f172a;color:white;padding:10px 24px;display:flex;align-items:center;justify-content:space-between}
+.quotation-archive-document{width:190mm;margin:5mm auto;font-family:Arial,'Malgun Gothic',sans-serif;font-size:11pt;line-height:1.25}
+.quotation-page{page:baron-quotation;width:190mm;height:270mm;box-sizing:border-box;padding:6mm;background:white;box-shadow:0 2px 10px #0002;margin-bottom:5mm;display:flex;flex-direction:column;gap:2mm;break-inside:avoid;page-break-inside:avoid;break-after:page;page-break-after:always}
+.quotation-page:last-child{break-after:auto;page-break-after:auto}
+.quotation-page{font-family:Arial,'Malgun Gothic',sans-serif;font-size:11pt;line-height:1.25}
+.quotation-header{height:63mm;flex-shrink:0;display:flex;flex-direction:column;justify-content:space-between}
+.quotation-header h1{text-align:center;font-size:21pt;letter-spacing:1em;margin:0;padding-left:1em;font-weight:bold}
+.quotation-meta{display:flex;align-items:center;justify-content:flex-end;font-size:10pt}
+.quotation-meta .quotation-field,.quotation-meta .quotation-print-value{text-align:right}
+.quotation-parties{display:grid;grid-template-columns:1.1fr 1fr;gap:2mm;height:31mm}
+.quotation-recipient{border:1px solid #94a3b8;display:grid;grid-template-rows:1fr 1fr 1.6fr 1fr}
+.quotation-recipient label{display:flex;align-items:center;min-width:0;border-bottom:1px solid #cbd5e1;padding:0 1mm}
+.quotation-recipient label:last-child{border:0}.quotation-recipient label>span:first-child{width:20mm;flex-shrink:0;font-size:10pt}
+.quotation-recipient label>.quotation-print-value{flex:1;min-width:0}.quotation-recipient label>.quotation-print-value+.quotation-print-value{padding-left:2mm}
+.quotation-recipient-name{display:flex;align-items:center;gap:1mm;flex:1;min-width:0}.quotation-recipient-name>.quotation-field{flex:1;width:0}.quotation-recipient-name>.quotation-print-value{flex:0 1 auto;min-width:0}.quotation-recipient-name>span:last-child{flex-shrink:0}
+.quotation-recipient-site{font-size:10pt}
+.quotation-recipient-site textarea.quotation-field{height:8.5mm;line-height:1.2}
+.quotation-recipient-site .quotation-print-value{line-height:1.2}
+.quotation-supplier{table-layout:fixed;border-collapse:collapse;width:100%;font-size:9pt}
+.quotation-supplier th,.quotation-supplier td{border:1px solid #94a3b8;padding:0 .7mm;font-weight:normal}.quotation-supplier th{background:#f8fafc}
+.quotation-amount{border-block:2px solid #334155;background:#f1f5f9;padding:2mm;display:flex;justify-content:space-between;align-items:center}.quotation-amount strong{font-size:16pt}
+.quotation-body{flex:1;min-height:0;position:relative;isolation:isolate}.quotation-watermark{position:absolute;left:12%;top:47%;width:76%;height:auto;transform:translateY(-50%);opacity:.035;pointer-events:none;z-index:0}.quotation-items{position:relative;z-index:1;table-layout:fixed;border-collapse:collapse;width:100%;height:100%;font-size:10pt}
+.quotation-items th,.quotation-items td{border:1px solid #94a3b8;padding:0 1.2mm;vertical-align:middle;box-sizing:border-box}
+.quotation-items thead tr{height:6mm;background:#f1f5f9}.quotation-items th{font-weight:bold}
+.quotation-items .quotation-heading{background:#f1f5f9;font-weight:bold}.quotation-items .quotation-marker td{text-align:center;border-top:1px dashed #64748b;border-bottom:1px dashed #64748b;font-size:10pt;letter-spacing:.15em}
+.quotation-footer{height:48mm;flex-shrink:0;display:flex;flex-direction:column;gap:1mm}
+.quotation-totals{width:100%;border-collapse:collapse;font-size:10pt;table-layout:fixed}.quotation-totals tr{height:5mm}.quotation-totals td{border:1px solid #94a3b8;text-align:right;padding:0 2mm}.quotation-totals td:last-child{width:36mm}.quotation-totals tr:last-child{font-weight:bold;background:#f8fafc}
+.quotation-warning{font-size:9pt;color:#b91c1c;min-height:3mm}.quotation-notes{border:1px solid #94a3b8;flex:1;min-height:0;display:flex;flex-direction:column}
+.quotation-notes-heading{font-size:10pt;background:#f1f5f9;border-bottom:1px solid #94a3b8;display:flex;justify-content:space-between;padding:.7mm 1.5mm;font-weight:bold}
+.quotation-notes-text{position:relative;flex:1;min-height:0;padding:1.5mm 34mm 1.5mm 1.5mm;font-size:10pt;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.3}
+.quotation-signature{position:absolute;right:2mm;bottom:2mm;width:27mm;text-align:center;white-space:normal;color:#64748b;font-size:9pt;letter-spacing:.08em;pointer-events:none}.quotation-signature img{display:block;width:100%;height:auto;margin-bottom:1mm}
+.quotation-field{border:1px solid transparent;background:transparent;min-width:0;width:100%;padding:0;box-sizing:border-box;font:inherit;color:inherit;outline:none}.quotation-field:hover{border-color:#cbd5e1}.quotation-field:focus{border-color:#2563eb}
+textarea.quotation-field{resize:none;display:block;height:100%;line-height:1.25}.quotation-field-number{text-align:right}
+.quotation-print-value{display:none;white-space:pre-wrap;overflow-wrap:anywhere}.quotation-dummy{font-size:8pt;color:#92400e}
+.quotation-pdf-snapshot .quotation-page{margin:0;box-shadow:none}
+.quotation-pdf-snapshot .quotation-field{display:none!important}
+.quotation-pdf-snapshot .quotation-print-value{display:block}
+
+.quotation-archive-document .quotation-print-value{display:block}
+.quotation-archive-document{min-width:190mm}
+.quotation-toolbar{z-index:2;gap:16px}

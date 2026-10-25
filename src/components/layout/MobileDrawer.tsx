@@ -37,6 +37,7 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
   if (!isOpen) return null;
 
   const NAV_ITEMS = [
+    { name: "\uACAC\uC801\uC11C \uAC8C\uC2DC\uD310", path: "/quotations", icon: ClipboardList, badge: null, color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
     {
       name: "메인 스케줄러 (달력)",
       path: "/calendar",

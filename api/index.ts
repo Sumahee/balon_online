@@ -52,6 +52,8 @@ export async function GET(request: NextRequest, context?: RouteContext) {
     if (denied) return denied;
 
     switch (domain) {
+      case "quotations":
+        return await (await import("@/lib/api-handlers/quotations")).GET(request);
       case "storage-usage":
         return await (await import("@/lib/api-handlers/storage-usage")).GET(request);
       case "construction-photo":
