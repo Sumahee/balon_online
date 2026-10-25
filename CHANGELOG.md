@@ -1,3 +1,8 @@
+## 1.11.1beta - 2026-10-25
+
+- Move the quotation board directly below the work board in desktop and mobile navigation.
+- Validation: production build and menu order checked locally.
+
 ## 1.11beta — 2026-10-25
 
 - 직원 전용 견적서 게시판을 추가했습니다. 업체·현장·등록자로 검색하고 최종 견적서 양식을 열어볼 수 있습니다.

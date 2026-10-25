@@ -1,2 +1,2 @@
 // Shared display version. Release policy: AGENTS.md.
-export const APP_VERSION = "1.11beta";
+export const APP_VERSION = "1.11.1beta";
