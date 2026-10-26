@@ -25,6 +25,7 @@ export function MobileHeader({ onOpenDrawer }: MobileHeaderProps) {
     switch (pathname) {
       case "/install": return "앱 설치";
       case "/equipment": return "설비 관리";
+      case "/shipping": return "택배 송장";
       case "/":
         return "업무 칸반";
       case "/calendar":

@@ -1,0 +1,31 @@
+.invoices { display:grid; gap:24px; margin-top:20px; }
+.sheet { background:white; border:1px solid #cbd5e1; padding:24px; color:#000; min-width:1000px; font-family:"Malgun Gothic",Arial,sans-serif; }
+.sheet h2 { font-size:24px; font-weight:700; margin:0 0 24px; }
+.companies { display:grid; grid-template-columns:1fr 1fr; border:1.5px solid black; text-align:center; font-size:12px; }
+.companies>div { padding:6px; } .companies>div+div { border-left:1.5px solid black; }
+.companies b { display:block; margin-bottom:4px; } .companies p { margin:2px 0; }
+.date { text-align:right; font-size:12px; margin:10px 0; font-weight:700; }
+.invoiceTable { width:100%; table-layout:fixed; border-collapse:collapse; font-size:11px; }
+.invoiceTable th,.invoiceTable td { border:1px solid #000; padding:5px 3px; text-align:center; overflow-wrap:anywhere; }
+.invoiceTable th { font-weight:700; padding:4px 2px; } .invoiceTable td { height:56px; }
+.mode,.circled { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; width:40px; height:46px; line-height:1.2; }
+.circled { border:2px solid #000; border-radius:50%; font-weight:700; }
+.preview { overflow-x:auto; }
+.printOnly { display:none; }
+@media print {
+  @page { size:A4 landscape; margin:8mm; }
+  :global(body):has(.printOnly) { background:#fff!important; }
+  :global(body):has(>.printOnly)>:not(.printOnly) { display:none!important; }
+  .printOnly { display:block; width:100%; margin:0; padding:0; }
+  .invoices { display:block; margin:0; }
+  .sheet { border:0; padding:0; margin:0; min-width:0; width:100%; break-after:page; page-break-after:always; }
+  .sheet:last-child { break-after:auto; page-break-after:auto; }
+  .sheet h2 { margin-bottom:5mm; font-size:17pt; }
+  .companies { font-size:9pt; }
+  .invoiceTable { font-size:8pt; }
+  .invoiceTable td { height:9.8mm; padding:1mm; }
+  .invoiceTable th { font-size:7.5pt; padding:1mm .3mm; }
+  .mode,.circled { width:8mm; height:8.5mm; }
+  .circled { border-width:1.3pt; }
+  .date { margin:2mm 0; font-size:9pt; }
+}

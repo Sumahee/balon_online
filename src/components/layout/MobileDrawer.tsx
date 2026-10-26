@@ -19,6 +19,7 @@ import {
   LogOut,
   ChevronRight,
   Sparkles,
+  Package,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useData } from "@/context/DataContext";
@@ -74,6 +75,7 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
       color: "text-purple-400 bg-purple-500/10 border-purple-500/20",
     },
     { name: "설비 관리", path: "/equipment", icon: Wrench, badge: null, color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
+    { name: "택배 송장", path: "/shipping", icon: Package, badge: null, color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
     {
       name: "서랍장 자동화 계산기",
       path: "/drawer",

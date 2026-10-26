@@ -1,5 +1,6 @@
 import { authorizeApi } from "@/lib/api-access";
 import * as equipmentHandler from "@/lib/api-handlers/equipment";
+import * as shippingHandler from "@/lib/api-handlers/shipping";
 import { NextRequest, NextResponse } from "next/server";
 
 import * as plywoodsHandler from "@/lib/api-handlers/plywoods";
@@ -60,6 +61,8 @@ export async function GET(request: NextRequest, context?: RouteContext) {
         return await (await import("@/lib/api-handlers/construction-photo")).GET(request);
       case "equipment":
         return await equipmentHandler.GET(request);
+      case "shipping":
+        return await shippingHandler.GET(request);
       case "posts":
         return await postsHandler.GET(request);
       case "clients":
@@ -123,6 +126,8 @@ export async function POST(request: NextRequest, context?: RouteContext) {
     switch (domain) {
       case "equipment":
         return await equipmentHandler.POST(request);
+      case "shipping":
+        return await shippingHandler.POST(request);
       case "posts":
         return await postsHandler.POST(request);
       case "clients":
