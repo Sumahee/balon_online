@@ -85,7 +85,7 @@ export function parseShippingRows(rows: unknown[][], sheetName: string) {
     }
     const qty=quantityCol<0||!value(quantityCol)?null:Number(value(quantityCol).replace(/,/g,""));
     entries.push({id:`${sheetName}:${i+1}`,sender:customer.replace(/\s/g,"").includes("홈파트너")?"homepartner":"baron",customer,...extractRecipient(note,customer),mode,
-      product:productCol<0?"":value(productCol),quantity:qty!==null&&Number.isSafeInteger(qty)&&qty>0?qty:null,packaging:"",freight:"",note,source});
+      product:productCol<0?"":value(productCol),quantity:qty!==null&&Number.isSafeInteger(qty)&&qty>0?qty:null,packaging:"양호",freight:"",note,source});
   }
   return {entries,excluded};
 }
