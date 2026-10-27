@@ -19,7 +19,7 @@ function storedMatches(image:GalleryImage,params:URLSearchParams) {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const folderId = searchParams.get("folder_id") || undefined;
-  const thumbnail = searchParams.has("thumbnail") ? (Number(searchParams.get("thumbnail")) <= 160 ? 160 : 480) : null;
+  const thumbnail = searchParams.has("thumbnail") ? (Number(searchParams.get("thumbnail")) <= 160 ? 160 : Number(searchParams.get("thumbnail")) <= 240 ? 240 : 480) : null;
   if (searchParams.get("source") === "gallery") {
     const image = [...serverStore.getImages(),...serverStore.getWorkItems().flatMap(item=>(item.attachments || []).filter(attachment=>attachment.fileType === "image").map(attachment=>orderGalleryImage(item,attachment)))].find(image => image.id === searchParams.get("id"));
     if (!image) return new Response("Photo not found", { status: 404 });

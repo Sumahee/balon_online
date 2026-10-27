@@ -30,7 +30,7 @@ import { compressPhoto } from "@/lib/photo-compression";
 import { BulkSelectionBar, useBulkSelection } from "@/components/common/BulkSelection";
 
 function thumbnailUrl(url: string, id: string, width: number) {
-  if (url.startsWith("/api/gallery?")) return `${url}&thumbnail=${width}`;
+  if ((url.startsWith("/api/gallery?") || url.startsWith("/api/construction-photo?"))) return `${url}&thumbnail=${width}`;
   if (url.startsWith("data:image/") || url.startsWith("/uploads/")) return `/api/gallery?source=gallery&id=${encodeURIComponent(id)}&thumbnail=${width}`;
   return url;
 }
@@ -40,26 +40,31 @@ export default function GalleryPage() {
   const [galleryLoading,setGalleryLoading]=useState(false);
   const [galleryError,setGalleryError]=useState("");
   const [hasMore,setHasMore]=useState(false);
-  const offset=useRef(0);
+  const [page, setPage] = useState(0);
+  const [pageSize, updatePageSize] = useState(48);
 
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [selectedFolderId, setSelectedFolderId] = useState<string>("folder-construction");
+  const [viewMode, setViewMode] = useState<"grid" | "large" | "list">("grid");
+  const [selectedFolderId, updateSelectedFolderId] = useState<string>("folder-construction");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   // Search & Attribute Filters
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedType, setSelectedType] = useState<string>("all");
-  const [selectedColor, setSelectedColor] = useState<string>("all");
+  const [searchQuery, updateSearchQuery] = useState("");
+  const [selectedType, updateSelectedType] = useState<string>("all");
+  const [selectedColor, updateSelectedColor] = useState<string>("all");
   const [hasMirror, setHasMirror] = useState<boolean | null>(null);
   const [hasDrawer, setHasDrawer] = useState<boolean | null>(null);
-  const galleryParams = new URLSearchParams({folder_id:selectedFolderId,q:searchQuery,drawing:selectedType,color:selectedColor}).toString();
+  const setPageSize = (value: number) => { setPage(0); updatePageSize(value); };
+  const setSelectedFolderId = (value: string) => { setPage(0); updateSelectedFolderId(value); };
+  const setSearchQuery = (value: string) => { setPage(0); updateSearchQuery(value); };
+  const setSelectedType = (value: string) => { setPage(0); updateSelectedType(value); };
+  const setSelectedColor = (value: string) => { setPage(0); updateSelectedColor(value); };
+  const galleryParams = new URLSearchParams({folder_id:selectedFolderId,q:searchQuery,drawing:selectedType,color:selectedColor,limit:String(pageSize),offset:String(page * pageSize)}).toString();
   useEffect(()=>{
     if(!loadGallery)return;
     let active=true;
-    const timer=setTimeout(()=>{setGalleryLoading(true);setGalleryError("");offset.current=0;setLightboxIndex(null);void loadGallery(galleryParams).then(more=>{if(active){setHasMore(more);offset.current=30;}}).catch(cause=>{if(active)setGalleryError(cause instanceof Error?cause.message:"사진 조회 실패");}).finally(()=>{if(active)setGalleryLoading(false);});},200);
+    const timer=setTimeout(()=>{setGalleryLoading(true);setGalleryError("");setLightboxIndex(null);void loadGallery(galleryParams).then(more=>{if(active){setHasMore(more);}}).catch(cause=>{if(active)setGalleryError(cause instanceof Error?cause.message:"사진 조회 실패");}).finally(()=>{if(active)setGalleryLoading(false);});},200);
     return()=>{active=false;clearTimeout(timer);};
   },[galleryParams,loadGallery]);
-  const moreImages=async()=>{if(galleryLoading)return;setGalleryLoading(true);try{setHasMore(await loadGallery(`${galleryParams}&offset=${offset.current}`,true));offset.current+=30;}catch(cause){setGalleryError(cause instanceof Error?cause.message:"사진 조회 실패");}finally{setGalleryLoading(false);}};
 
   // Folder creation modal
   const [showFolderModal, setShowFolderModal] = useState(false);
@@ -388,10 +393,10 @@ export default function GalleryPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap justify-between gap-3"><BulkSelectionBar selection={selection} disabled={isSaving} /><div className="flex gap-2"><button type="button" aria-pressed={viewMode === "grid"} onClick={() => setViewMode("grid")} className="action-secondary">격자 보기</button><button type="button" aria-pressed={viewMode === "list"} onClick={() => setViewMode("list")} className="action-secondary">목록 보기</button></div></div>
+      <div className="flex flex-wrap justify-between gap-3"><BulkSelectionBar selection={selection} disabled={isSaving} /><div className="flex gap-2"><button type="button" aria-pressed={viewMode === "grid"} onClick={() => setViewMode("grid")} className="action-secondary">작은 격자</button><button type="button" aria-pressed={viewMode === "large"} onClick={() => setViewMode("large")} className="action-secondary">큰 격자</button><button type="button" aria-pressed={viewMode === "list"} onClick={() => setViewMode("list")} className="action-secondary">목록 보기</button></div></div>
       {/* Photo Gallery Grid */}
       {galleryError && <p role="alert" className="text-sm text-rose-700">{galleryError}</p>}
-      {filteredImages.length === 0 ? (
+      {filteredImages.length === 0 && !galleryLoading && !galleryError ? (
         <div className="p-16 border-2 border-dashed border-slate-200 rounded-2xl bg-white text-center flex flex-col items-center justify-center gap-3">
           <div className="p-3 bg-slate-100 rounded-full text-slate-400">
             <ImageIcon className="w-8 h-8" />
@@ -410,7 +415,7 @@ export default function GalleryPage() {
           </button>
         </div>
       ) : (
-        <div className={viewMode === "list" ? "space-y-2" : "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"}>
+        <div className={viewMode === "list" ? "space-y-2" : viewMode === "large" ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" : "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2"}>
           {filteredImages.map((img, idx) => (
             <div
               key={img.id}
@@ -420,16 +425,14 @@ export default function GalleryPage() {
               {/* Thumbnail Container */}
               <div
                 onClick={() => setLightboxIndex(idx)}
-                className={cn("relative bg-slate-100 overflow-hidden cursor-pointer shrink-0", viewMode === "list" ? "w-20 h-16 sm:w-28 sm:h-20 rounded-lg" : "aspect-4/3")}
+                className={cn("relative bg-slate-100 overflow-hidden cursor-pointer shrink-0", viewMode === "list" ? "w-12 h-10 sm:w-[67px] sm:h-12 rounded-lg" : "aspect-4/3")}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <PhotoImage
-                  src={thumbnailUrl(img.url, img.id, viewMode === "list" ? 160 : 480)}
+                  src={thumbnailUrl(img.url, img.id, viewMode === "large" ? 480 : viewMode === "list" ? 160 : 240)}
                   alt={img.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   loading="lazy"
                   decoding="async"
-                  onError={e => { if (e.currentTarget.getAttribute("src") !== img.url) e.currentTarget.src = img.url; }}
                 />
 
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
@@ -445,7 +448,7 @@ export default function GalleryPage() {
               </div>
 
               {/* Card Meta */}
-              <div className="p-3.5 min-w-0 flex-1 flex flex-col justify-between space-y-2">
+              <div className={cn("min-w-0 flex-1 flex flex-col justify-between space-y-2", viewMode === "grid" ? "p-2" : "p-3.5")}>
                 <div>
                   <h3
                     onClick={() => setLightboxIndex(idx)}
@@ -464,7 +467,7 @@ export default function GalleryPage() {
                 {/* Tags and Delete */}
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1">
                   <div className="flex flex-wrap gap-1">
-                    {img.tags.map((tag, tIdx) => (
+                    {img.tags.slice(0, viewMode === "grid" ? 2 : 6).map((tag, tIdx) => (
                       <span
                         key={tIdx}
                         className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded"
@@ -494,7 +497,11 @@ export default function GalleryPage() {
 
       {/* Lightbox Modal */}
       {galleryLoading && <p role="status" className="text-center text-sm text-slate-500">사진 목록 불러오는 중…</p>}
-      {hasMore && <button type="button" disabled={galleryLoading} onClick={()=>void moreImages()} className="action-secondary mx-auto">사진 30장 더보기</button>}
+      <div className="flex flex-wrap items-center justify-center gap-3">
+<label className="text-sm">페이지당 <select aria-label="페이지당 사진 수" value={pageSize} onChange={e => setPageSize(Number(e.target.value))} className="rounded border p-2">{[24,48,60].map(size => <option key={size} value={size}>{size}장</option>)}</select></label>
+<button className="action-secondary" disabled={galleryLoading || page === 0} onClick={() => setPage(value => value - 1)}>이전</button>
+<span className="text-sm" aria-live="polite">{page + 1}페이지 · {filteredImages.length}장</span>
+<button className="action-secondary" disabled={galleryLoading || !hasMore || !!galleryError} onClick={() => setPage(value => value + 1)}>다음</button></div>
       {currentLightboxImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in">
           {/* Close button */}
@@ -524,7 +531,6 @@ export default function GalleryPage() {
           {/* Central Stage */}
           <div className="max-w-5xl w-full max-h-[90vh] flex flex-col items-center justify-center space-y-4">
             <div className="relative max-h-[75vh] overflow-hidden rounded-xl shadow-2xl">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <PhotoImage
                 src={currentLightboxImage.url}
                 alt={currentLightboxImage.title}

@@ -439,6 +439,12 @@ test("real SQLite pagination stays small with large photo data and loads files o
     await database.execute({sql:"UPDATE bo_work_items SET work_tags=? WHERE id='064'",args:[JSON.stringify(["장식장"])]});
     const updated=await(await gallery.GET({url:"http://localhost/api/gallery?limit=1&q="+encodeURIComponent("장식장")})).json();
     assert.equal(updated.data.images.length,1);assert.ok(!updated.data.images[0].tags.includes("빗각"));
+    await database.execute({sql:"UPDATE bo_work_item_comments SET images=? WHERE id='c'",args:[JSON.stringify(Array(100).fill("/api/construction-photo?key=existing"))]});
+    const galleryPages=[];
+    for (const offset of [0,48,96]) galleryPages.push(await (await gallery.GET({url:"http://localhost/api/gallery?limit=48&offset="+offset+"&folder_id=folder-construction"})).json());
+    assert.deepEqual(galleryPages.map(page=>page.data.images.length),[48,48,4]);
+    assert.deepEqual(galleryPages.map(page=>page.hasMore),[true,true,false]);
+    assert.equal(new Set(galleryPages.flatMap(page=>page.data.images.map(image=>image.id))).size,100);
     const calendarRows = [
       ["installation", "기타", "시공일", "2027-01-10", "", null],
       ["request", "도면", "요청일", "2027-01-10", "", null],

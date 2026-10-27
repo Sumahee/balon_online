@@ -153,7 +153,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const loadGallery = useCallback(async (params = "", append = false) => {
     const version=++galleryRequest.current;
     if(!append)lastGalleryParams.current=params;
-    const result = await requestApi<{folders:GalleryFolder[];images:GalleryImage[]}>(`/api/gallery?limit=30&${params}`);
+    const result = await requestApi<{folders:GalleryFolder[];images:GalleryImage[]}>(`/api/gallery?${new URLSearchParams({limit:"48", ...Object.fromEntries(new URLSearchParams(params))})}`);
     if(version !== galleryRequest.current) return false;
     if(result.data) { setFolders(result.data.folders); setImages(prev=>append ? [...prev,...result.data!.images.filter(image=>!prev.some(old=>old.id===image.id))] : result.data!.images); }
     return !!result.hasMore;
