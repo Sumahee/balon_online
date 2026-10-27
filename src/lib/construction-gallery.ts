@@ -1,13 +1,21 @@
 import type { AttachmentItem, GalleryFolder, GalleryImage, WorkItem, WorkItemComment } from "@/types";
 
+import { getDrawingAttachment } from "@/lib/drawing-attachments";
+
+function photoWorkInfo(item: WorkItem) {
+  return { workItemId: item.id, clientName: item.clientName, siteAddress: item.siteAddress || item.region,
+    boardColor: item.boardColor, postColor: item.postColor, drawingAttachment: getDrawingAttachment(item) };
+}
+
 export const ORDER_FOLDER = "folder-order-materials";
 export function orderFolderId(clientName: string) { return `${ORDER_FOLDER}-${encodeURIComponent(clientName.trim() || "업체 미지정")}`; }
 export function orderGalleryImage(item: WorkItem, attachment: AttachmentItem): GalleryImage {
   return {
+    ...photoWorkInfo(item),
     id: `attachment-${attachment.id}`, folderId: orderFolderId(item.clientName || ""),
     title: `${item.title} - ${attachment.name}`, url: attachment.url,
     siteName: [item.clientName, item.siteAddress, item.region].filter(Boolean).join(" "),
-    tags: ["발주자료", item.clientName, item.region].filter((value): value is string => !!value?.trim()),
+    tags: ["발주자료", item.clientName, item.region, item.boardColor, item.postColor].filter((value): value is string => !!value?.trim()),
     dimensions: "", size: attachment.size || "", createdAt: attachment.uploadedAt || item.createdAt || "",
   };
 }
@@ -31,6 +39,7 @@ export function constructionTags(item: Pick<WorkItem,"clientName"|"siteAddress"|
 }
 export function commentGalleryImages(item: WorkItem, comment: WorkItemComment): GalleryImage[] {
   return (comment.images ?? []).flatMap((url,index)=>typeof url !== "string" || !url ? [] : [{
+    ...photoWorkInfo(item),
     id:`comment-${comment.id}-${index}`, folderId:"folder-construction", title:`${item.title} - 시공 사진 ${index+1}`,
     url:`/api/gallery?source=comment&id=${encodeURIComponent(comment.id)}&index=${index}`,
     siteName:[item.clientName,item.siteAddress,item.region].filter(Boolean).join(" "),

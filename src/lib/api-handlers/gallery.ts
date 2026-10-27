@@ -10,6 +10,19 @@ import { storeConstructionPhoto, deleteConstructionPhotos } from "@/lib/r2-stora
 import { VERIFY } from "./auth";
 
 function lightImage(image: GalleryImage): GalleryImage {return {...image,url:image.url.startsWith("data:image/") ? `/api/gallery?source=gallery&id=${encodeURIComponent(image.id)}` : image.url};}
+async function attachDrawingMetadata(images: GalleryImage[]) {
+  const ids = [...new Set(images.map(image => image.workItemId).filter((id): id is string => !!id))];
+  if (!ids.length) return images;
+  const result = await executeQuery(`SELECT id,name,work_item_id FROM bo_attachments WHERE work_item_id IN (${ids.map(() => "?").join(",")}) AND (file_type='pdf' OR LOWER(name) LIKE '%.pdf') ORDER BY uploaded_at DESC,id DESC`, ids);
+  if (!result.success) throw new Error("도면 정보 조회 실패");
+  const drawings = new Map<string, {id: string; name: string}>();
+  for (const row of result.rows) {
+    const workId = String(row.work_item_id);
+    if (!drawings.has(workId)) drawings.set(workId, {id: String(row.id), name: String(row.name)});
+  }
+  return images.map(image => image.workItemId ? {...image, drawingAttachment: drawings.get(image.workItemId) || null} : image);
+}
+
 function storedMatches(image:GalleryImage,params:URLSearchParams) {
   const folder=params.get("folder_id"),query=params.get("q")?.trim().replace(/^#+/, "").toLowerCase(),type=params.get("drawing"),color=params.get("color")?.split("/")[0];
   const text=[image.title,image.siteName,...image.tags].filter(Boolean).join(" ").toLowerCase();
@@ -51,14 +64,14 @@ export async function GET(request: NextRequest) {
           UNION ALL SELECT 'gallery',json_extract(j.value,'$.id'),NULL,json_extract(j.value,'$.createdAt'),'','',0,j.value FROM json_each(?) j
         ) p LEFT JOIN bo_work_items w ON w.id=p.work_item_id ${filters.length?`WHERE ${filters.join(" AND ")}`:""} ORDER BY p.created_at DESC,p.photo_id DESC,p.photo_index ASC LIMIT ? OFFSET ?`,[localMetadata,...args,limit+1,offset]);
         if(!result.success) throw new Error("사진 목록 조회 실패");
-        const images=result.rows.slice(0,limit).map(row=>{
+        const images=await attachDrawingMetadata(result.rows.slice(0,limit).map(row=>{
           if(row.source === "gallery")return JSON.parse(String(row.metadata)) as GalleryImage;
           const work={id:String(row.work_id),title:String(row.title || ""),clientName:String(row.client_name || ""),siteAddress:String(row.site_address || ""),region:String(row.region || ""),drawingType:row.drawing_type,boardColor:String(row.board_color || ""),postColor:String(row.post_color || ""),category:row.category,tags:readWorkTags(row.work_tags)} as WorkItem;
           const id=String(row.photo_id),index=Number(row.photo_index);
           if(row.source === "attachment") return orderGalleryImage(work,{id,name:String(row.photo_name),fileType:"image",size:"",uploadedAt:String(row.created_at || ""),url:`/api/gallery?source=attachment&id=${encodeURIComponent(id)}&index=0`});
           const image=commentGalleryImages(work,{id,workItemId:work.id,author:String(row.author || ""),content:"",createdAt:String(row.created_at || ""),images:["photo"]})[0];
           return {...image,id:`comment-${id}-${index}`,url:`/api/gallery?source=comment&id=${encodeURIComponent(id)}&index=${index}`,title:`${work.title} - 시공 사진 ${index+1}`};
-        });
+        }));
         const companies=await executeQuery("SELECT DISTINCT client_name FROM bo_work_items WHERE id IN (SELECT work_item_id FROM bo_attachments WHERE file_type='image')");
         if(!companies.success) throw new Error("업체 폴더 조회 실패");
         const virtual=companies.rows.map(row=>({id:orderFolderId(String(row.client_name || "")),name:`${row.client_name || "업체 미지정"} 발주 자료`,description:"",itemCount:0,createdAt:""}));
@@ -93,7 +106,7 @@ export async function GET(request: NextRequest) {
         orders.push(orderGalleryImage(work, {id:String(row.attachment_id), name:String(row.photo_name), fileType:"image", size:"", uploadedAt:String(row.photo_date || ""), url:`/api/gallery?source=attachment&id=${encodeURIComponent(String(row.attachment_id))}&index=0`}));
       }
       const allImages=[...construction,...orders,...serverStore.getImages()];
-      const images=allImages.filter(image=>storedMatches(image,searchParams));
+      const images=await attachDrawingMetadata(allImages.filter(image=>storedMatches(image,searchParams)));
       const folders=galleryFolders(serverStore.getFolders(),allImages);
       return NextResponse.json({success:true,data:{folders,images,selectedFolderId:folderId || "folder-all"}});
     } catch {

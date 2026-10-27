@@ -426,8 +426,15 @@ test("real SQLite pagination stays small with large photo data and loads files o
     const file=await posts.GET({url:"http://localhost"+detail.data[0].attachments[0].url});
     assert.equal(await file.text(),"pdf contents");
     const gallery=loadModule("src/lib/api-handlers/gallery.ts",{"@/lib/db":mock},{Response},cache);
+    await database.execute("UPDATE bo_work_items SET client_name='테스트 업체',site_address='서울 현장',board_color='화이트',post_color='흑니켈' WHERE id='064'");
     const photos=await(await gallery.GET({url:"http://localhost/api/gallery?limit=30&folder_id=folder-construction"})).json();
     assert.equal(photos.data.images.length,10);assert.ok(!JSON.stringify(photos).includes(photo));
+    assert.equal(photos.data.images[0].clientName,"테스트 업체");
+    assert.equal(photos.data.images[0].siteAddress,"서울 현장");
+    assert.equal(photos.data.images[0].boardColor,"화이트");
+    assert.equal(photos.data.images[0].postColor,"흑니켈");
+    assert.equal(photos.data.images[0].drawingAttachment.id,"a");
+    assert.ok(!JSON.stringify(photos).includes(pdf),"gallery only carries drawing metadata");
     await database.execute({sql:"UPDATE bo_work_items SET work_tags=?,drawing_type='천정형',board_color='화이트',post_color='다크그레이' WHERE id='064'",args:[JSON.stringify(["빗각","조명"])]});
     for(const filter of ["q="+encodeURIComponent("#빗각"),"q="+encodeURIComponent("조명"),"drawing="+encodeURIComponent("천정형"),"color="+encodeURIComponent("다크그레이")]) {
       const result=await(await gallery.GET({url:"http://localhost/api/gallery?limit=1&folder_id=folder-construction&"+filter})).json();
@@ -1416,4 +1423,20 @@ test("PDF zoom reaches 600 percent and resets to fit width",()=>{
  assert.equal(walk(render()).find(n=>n.props?.["aria-label"]==="PDF 확대").props.disabled,true);
  assert.equal(walk(render()).find(n=>n.props?.["aria-live"]==="polite").props.children[0],600);
  walk(render()).find(n=>n.type==="button"&&n.props.children==="폭 맞춤").props.onClick();assert.equal(walk(render()).find(n=>n.props?.["aria-live"]==="polite").props.children[0],100);
+});
+
+test("gallery details show company, site, both colors and only registered drawing actions", () => {
+  const React=nativeRequire("react");
+  const {renderToStaticMarkup}=nativeRequire("react-dom/server");
+  const {GalleryPhotoDetails}=loadModule("src/components/common/GalleryPhotoDetails.tsx", {
+    "./DrawingQuickOpen":{DrawingQuickOpen:({item})=>React.createElement("button",{"data-drawing-id":item.drawingAttachment.id},"도면")},
+  });
+  const image={clientName:"업체명",siteAddress:"긴 현장 주소",boardColor:"화이트",postColor:"흑니켈",drawingAttachment:{id:"pdf-one",name:"도면.pdf"}};
+  const html=renderToStaticMarkup(React.createElement(GalleryPhotoDetails,{image}));
+  for(const text of ["업체명","긴 현장 주소","#선반 화이트","#포스트 흑니켈",'data-drawing-id="pdf-one"'])assert.ok(html.includes(text),text);
+  const empty=renderToStaticMarkup(React.createElement(GalleryPhotoDetails,{image:{siteName:"기존 현장"}}));
+  assert.ok(empty.includes("기존 현장"));
+  assert.ok(!empty.includes("도면 보기"));
+  assert.ok(!empty.includes("#선반"));
+  assert.ok(!empty.includes("#포스트"));
 });

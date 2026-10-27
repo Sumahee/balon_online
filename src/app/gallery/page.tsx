@@ -3,6 +3,7 @@
 import { WORK_TAGS } from "@/lib/work-tags";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StorageUsage } from "@/components/common/StorageUsage";
+import { GalleryPhotoDetails } from "@/components/common/GalleryPhotoDetails";
 import { PhotoImage } from "@/components/common/PhotoImage";
 
 import React, { useEffect, useState, useRef } from "react";
@@ -16,7 +17,6 @@ import {
   Download,
   Trash2,
   Maximize2,
-  Building,
   Image as ImageIcon,
   Search,
   Sparkles,
@@ -456,18 +456,13 @@ export default function GalleryPage() {
                   >
                     {img.title}
                   </h3>
-                  {img.siteName && (
-                    <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5 truncate">
-                      <Building className="w-3 h-3 text-slate-400 shrink-0" />
-                      <span>{img.siteName}</span>
-                    </p>
-                  )}
+                  <GalleryPhotoDetails image={img} />
                 </div>
 
                 {/* Tags and Delete */}
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1">
                   <div className="flex flex-wrap gap-1">
-                    {img.tags.slice(0, viewMode === "grid" ? 2 : 6).map((tag, tIdx) => (
+                    {img.tags.filter(tag => tag !== img.boardColor && tag !== img.postColor).slice(0, viewMode === "grid" ? 2 : 6).map((tag, tIdx) => (
                       <span
                         key={tIdx}
                         className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded"

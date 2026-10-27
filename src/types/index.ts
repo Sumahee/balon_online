@@ -115,6 +115,12 @@ export interface GalleryFolder {
 }
 
 export interface GalleryImage {
+  workItemId?: string;
+  clientName?: string;
+  siteAddress?: string;
+  boardColor?: string;
+  postColor?: string;
+  drawingAttachment?: Pick<AttachmentItem, "id" | "name"> | null;
   id: string;
   folderId: string;
   title: string;
