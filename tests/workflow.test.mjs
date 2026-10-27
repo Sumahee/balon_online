@@ -1440,3 +1440,35 @@ test("gallery details show company, site, both colors and only registered drawin
   assert.ok(!empty.includes("#선반"));
   assert.ok(!empty.includes("#포스트"));
 });
+
+test("gallery ZIP preserves selected original bytes, uses safe unique filenames and sends credentials only to protected photos", async () => {
+  const calls=[];
+  const bytes=Buffer.from([255,216,1,2,3]);
+  const {createGalleryArchive}=loadModule("src/lib/gallery-download.ts",{}, {Blob,fetch:async(url,options)=>{calls.push({url,options});return new Response(bytes,{headers:{"Content-Type":"image/jpeg"}});}});
+  const images=[{id:"one",title:"같은/사진",clientName:"업체",url:"/api/gallery?source=comment&id=c&index=0&thumbnail=240"},{id:"two",title:"같은/사진",clientName:"업체",url:"https://photos.example/image.jpg"}];
+  const progress=[];
+  const archive=await createGalleryArchive(images,"private-session",new AbortController().signal,(done,total)=>progress.push([done,total]));
+  const entries=nativeRequire("fflate").unzipSync(archive);
+  const names=Object.keys(entries);
+  assert.equal(names.length,2);
+  for(const name of names){assert.ok(!name.includes("/"));assert.match(name,/\.jpg$/);assert.deepEqual(Buffer.from(entries[name]),bytes);}
+  assert.ok(!calls[0].url.includes("thumbnail"));
+  assert.equal(calls[0].options.headers.Authorization,"Bearer private-session");
+  assert.equal(calls[1].options.headers,undefined);
+  assert.equal(calls[1].options.credentials,"omit");
+  assert.deepEqual(progress,[[0,2],[1,2],[2,2]]);
+});
+
+test("gallery ZIP stops on failure, cancellation and size limit instead of silently omitting photos", async () => {
+  let calls=0;
+  const images=[{title:"첫 사진",url:"/api/gallery?source=comment&id=1"},{title:"둘째 사진",url:"/api/gallery?source=comment&id=2"}];
+  const failing=loadModule("src/lib/gallery-download.ts",{}, {Blob,fetch:async()=>{calls++;return calls===1 ? new Response("photo",{headers:{"Content-Type":"image/png"}}) : new Response("denied",{status:401});}});
+  await assert.rejects(()=>failing.createGalleryArchive(images,"token",new AbortController().signal,()=>{}),/로그인/);
+  assert.equal(calls,2);
+  const cancelled=new AbortController();cancelled.abort();
+  await assert.rejects(()=>failing.createGalleryArchive(images,"token",cancelled.signal,()=>{}));
+  assert.equal(calls,2,"cancelled requests never fetch");
+  const oversized=loadModule("src/lib/gallery-download.ts",{"@/lib/photo-access":{isProtectedPhoto:()=>true,fetchPhotoBlob:async()=>({size:101*1024*1024})}});
+  await assert.rejects(()=>oversized.createGalleryArchive(images,"token",new AbortController().signal,()=>{}),/100MB/);
+  await assert.rejects(()=>failing.createGalleryArchive([],"token",new AbortController().signal,()=>{}),/선택/);
+});

@@ -3,6 +3,7 @@
 import { WORK_TAGS } from "@/lib/work-tags";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StorageUsage } from "@/components/common/StorageUsage";
+import { GalleryDownloadButton } from "@/components/common/GalleryDownloadButton";
 import { GalleryPhotoDetails } from "@/components/common/GalleryPhotoDetails";
 import { PhotoImage } from "@/components/common/PhotoImage";
 
@@ -37,6 +38,7 @@ function thumbnailUrl(url: string, id: string, width: number) {
 
 export default function GalleryPage() {
   const { folders, images, addFolder, addImage, deleteImage, isSaving, loadGallery } = useData();
+  const [downloading, setDownloading] = useState(false);
   const [galleryLoading,setGalleryLoading]=useState(false);
   const [galleryError,setGalleryError]=useState("");
   const [hasMore,setHasMore]=useState(false);
@@ -393,7 +395,7 @@ export default function GalleryPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap justify-between gap-3"><BulkSelectionBar selection={selection} disabled={isSaving} /><div className="flex gap-2"><button type="button" aria-pressed={viewMode === "grid"} onClick={() => setViewMode("grid")} className="action-secondary">작은 격자</button><button type="button" aria-pressed={viewMode === "large"} onClick={() => setViewMode("large")} className="action-secondary">큰 격자</button><button type="button" aria-pressed={viewMode === "list"} onClick={() => setViewMode("list")} className="action-secondary">목록 보기</button></div></div>
+      <div className="flex flex-wrap justify-between gap-3"><div className="flex flex-wrap items-center gap-3"><BulkSelectionBar selection={selection} disabled={isSaving || downloading || galleryLoading} /><GalleryDownloadButton images={filteredImages.filter(image => selection.selected.has(image.id))} disabled={isSaving || selection.deleting || galleryLoading} onBusyChange={setDownloading} /></div><div className="flex gap-2"><button type="button" aria-pressed={viewMode === "grid"} onClick={() => setViewMode("grid")} className="action-secondary">작은 격자</button><button type="button" aria-pressed={viewMode === "large"} onClick={() => setViewMode("large")} className="action-secondary">큰 격자</button><button type="button" aria-pressed={viewMode === "list"} onClick={() => setViewMode("list")} className="action-secondary">목록 보기</button></div></div>
       {/* Photo Gallery Grid */}
       {galleryError && <p role="alert" className="text-sm text-rose-700">{galleryError}</p>}
       {filteredImages.length === 0 && !galleryLoading && !galleryError ? (
@@ -421,7 +423,7 @@ export default function GalleryPage() {
               key={img.id}
               className={cn("group bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs hover:shadow-lg transition-all duration-300 flex", viewMode === "list" ? "flex-row items-center" : "flex-col")}
             >
-              <label className="p-3 flex items-center gap-2 text-xs"><input type="checkbox" aria-label={`${img.title} 선택`} checked={selection.selected.has(img.id)} disabled={selection.deleting} onChange={() => selection.toggle(img.id)} /><span className="sr-only">사진 선택</span></label>
+              <label className="p-3 flex items-center gap-2 text-xs"><input type="checkbox" aria-label={`${img.title} 선택`} checked={selection.selected.has(img.id)} disabled={selection.deleting || downloading || galleryLoading} onChange={() => selection.toggle(img.id)} /><span className="sr-only">사진 선택</span></label>
               {/* Thumbnail Container */}
               <div
                 onClick={() => setLightboxIndex(idx)}
@@ -494,9 +496,9 @@ export default function GalleryPage() {
       {galleryLoading && <p role="status" className="text-center text-sm text-slate-500">사진 목록 불러오는 중…</p>}
       <div className="flex flex-wrap items-center justify-center gap-3">
 <label className="text-sm">페이지당 <select aria-label="페이지당 사진 수" value={pageSize} onChange={e => setPageSize(Number(e.target.value))} className="rounded border p-2">{[24,48,60].map(size => <option key={size} value={size}>{size}장</option>)}</select></label>
-<button className="action-secondary" disabled={galleryLoading || page === 0} onClick={() => setPage(value => value - 1)}>이전</button>
+<button className="action-secondary" disabled={galleryLoading || downloading || page === 0} onClick={() => setPage(value => value - 1)}>이전</button>
 <span className="text-sm" aria-live="polite">{page + 1}페이지 · {filteredImages.length}장</span>
-<button className="action-secondary" disabled={galleryLoading || !hasMore || !!galleryError} onClick={() => setPage(value => value + 1)}>다음</button></div>
+<button className="action-secondary" disabled={galleryLoading || downloading || !hasMore || !!galleryError} onClick={() => setPage(value => value + 1)}>다음</button></div>
       {currentLightboxImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in">
           {/* Close button */}

@@ -27,7 +27,7 @@ export function useBulkSelection(ids: string[], remove: (id: string) => Promise<
 
 export function BulkSelectionBar({ selection, disabled = false }: { selection: ReturnType<typeof useBulkSelection>; disabled?: boolean }) {
   return <div className="flex flex-wrap items-center gap-3 text-sm">
-    <label className="flex items-center gap-2"><input type="checkbox" aria-label="현재 목록 전체 선택" checked={selection.allSelected} onChange={selection.toggleAll} disabled={selection.deleting} />현재 목록 전체 선택</label>
+    <label className="flex items-center gap-2"><input type="checkbox" aria-label="현재 목록 전체 선택" checked={selection.allSelected} onChange={selection.toggleAll} disabled={disabled || selection.deleting} />현재 목록 전체 선택</label>
     <span>{selection.visible.length}건 선택</span>
     <button type="button" onClick={() => void selection.deleteSelected()} disabled={disabled || selection.deleting || !selection.visible.length} className="px-3 py-2 rounded-lg bg-rose-600 text-white disabled:opacity-40">{selection.deleting ? "삭제 중..." : "선택 삭제"}</button>
     {selection.message && <span role="status">{selection.message}</span>}
