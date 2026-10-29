@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Sparkles,
   Package,
+  Files,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useData } from "@/context/DataContext";
@@ -83,6 +84,7 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
       badge: null,
       color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
     },
+    { name: "바론 문서 & 양식", path: "/documents", icon: Files, badge: null, color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
     {
       name: "합판 자재 샘플",
       path: "/materials",

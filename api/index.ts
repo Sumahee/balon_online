@@ -1,3 +1,4 @@
+import * as documentsHandler from "@/lib/api-handlers/documents";
 import { authorizeApi } from "@/lib/api-access";
 import * as equipmentHandler from "@/lib/api-handlers/equipment";
 import * as shippingHandler from "@/lib/api-handlers/shipping";
@@ -53,6 +54,8 @@ export async function GET(request: NextRequest, context?: RouteContext) {
     if (denied) return denied;
 
     switch (domain) {
+      case "documents":
+        return await documentsHandler.GET(request);
       case "quotations":
         return await (await import("@/lib/api-handlers/quotations")).GET(request);
       case "storage-usage":
@@ -124,6 +127,8 @@ export async function POST(request: NextRequest, context?: RouteContext) {
     if (denied) return denied;
 
     switch (domain) {
+      case "documents":
+        return await documentsHandler.POST(request);
       case "equipment":
         return await equipmentHandler.POST(request);
       case "shipping":
@@ -176,6 +181,8 @@ export async function PUT(request: NextRequest, context?: RouteContext) {
     if (denied) return denied;
 
     switch (domain) {
+      case "documents":
+        return await documentsHandler.PUT(request);
       case "equipment":
         return await equipmentHandler.PUT(request);
       case "posts":
@@ -224,6 +231,8 @@ export async function DELETE(request: NextRequest, context?: RouteContext) {
     if (denied) return denied;
 
     switch (domain) {
+      case "documents":
+        return await documentsHandler.DELETE(request);
       case "posts":
         return await postsHandler.DELETE(request);
       case "gallery":

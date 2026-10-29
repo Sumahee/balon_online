@@ -20,6 +20,7 @@ import {
   Building2,
   ShoppingBag,
   Package,
+  Files,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useData } from "@/context/DataContext";
@@ -72,6 +73,7 @@ const NAV_ITEMS = [
     icon: Calculator,
     badgeKey: null,
   },
+  { name: "바론 문서 & 양식", path: "/documents", icon: Files, badgeKey: null },
   {
     name: "합판 자재 샘플",
     path: "/materials",

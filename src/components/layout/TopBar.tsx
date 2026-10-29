@@ -21,6 +21,7 @@ import { useData } from "@/context/DataContext";
 import { useAuth } from "@/context/AuthContext";
 
 const PAGE_TITLES: Record<string, { title: string; subtitle: string; category: string }> = {
+  "/documents": { title: "바론 문서 & 양식", subtitle: "문서와 양식 공유 · 공지사항", category: "Documents" },
   "/equipment": { title: "설비 관리", subtitle: "공장 기계 정비 이력과 유지보수 비용", category: "Equipment" },
   "/shipping": { title: "택배 송장", subtitle: "바론·홈파트너 송장 작성과 날짜별 기록", category: "Shipping" },
   "/": {
