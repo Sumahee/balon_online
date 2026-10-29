@@ -1,5 +1,5 @@
 .invoices { display:grid; gap:24px; margin-top:20px; }
-.sheet { background:white; border:1px solid #cbd5e1; padding:24px; color:#000; min-width:1000px; font-family:"Malgun Gothic",Arial,sans-serif; }
+.sheet { background:white; border:1px solid #cbd5e1; padding:24px; color:#000; min-width:1000px; font-family:Gulim,"굴림","Malgun Gothic",Arial,sans-serif; letter-spacing:0; line-height:1.35; }
 .sheet h2 { font-size:24px; font-weight:700; margin:0 0 24px; }
 .companies { display:grid; grid-template-columns:1fr 1fr; border:1.5px solid black; text-align:center; font-size:12px; }
 .companies>div { padding:6px; } .companies>div+div { border-left:1.5px solid black; }
@@ -10,6 +10,7 @@
 .invoiceTable th { font-weight:700; padding:4px 2px; } .invoiceTable td { height:56px; }
 .mode,.circled { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; width:40px; height:46px; line-height:1.2; }
 .circled { border:2px solid #000; border-radius:50%; font-weight:700; }
+.modeLabel { display:block; white-space:nowrap; }
 .preview { overflow-x:auto; }
 .printOnly { display:none; }
 @media print {
@@ -18,14 +19,16 @@
   :global(body):has(>.printOnly)>:not(.printOnly) { display:none!important; }
   .printOnly { display:block; width:100%; margin:0; padding:0; }
   .invoices { display:block; margin:0; }
-  .sheet { border:0; padding:0; margin:0; min-width:0; width:100%; break-after:page; page-break-after:always; }
+  /* Print live text and vector borders directly, without screen smoothing or scaling. */
+  .sheet { border:0; padding:0; margin:0; min-width:0; width:100%; break-after:page; page-break-after:always; -webkit-font-smoothing:auto; text-shadow:none; }
   .sheet:last-child { break-after:auto; page-break-after:auto; }
-  .sheet h2 { margin-bottom:5mm; font-size:17pt; }
-  .companies { font-size:9pt; }
-  .invoiceTable { font-size:8pt; }
-  .invoiceTable td { height:9.8mm; padding:1mm; }
-  .invoiceTable th { font-size:7.5pt; padding:1mm .3mm; }
+  .sheet h2 { margin-bottom:5mm; font-size:18pt; }
+  .companies { font-size:10pt; }
+  .invoiceTable { font-size:9pt; }
+  .invoiceTable tr { break-inside:avoid; page-break-inside:avoid; }
+  .invoiceTable td { height:9.8mm; padding:.5mm 1mm; }
+  .invoiceTable th { font-size:8.5pt; padding:.7mm .3mm; }
   .mode,.circled { width:8mm; height:8.5mm; }
   .circled { border-width:1.3pt; }
-  .date { margin:2mm 0; font-size:9pt; }
+  .date { margin:2mm 0; font-size:10pt; }
 }
