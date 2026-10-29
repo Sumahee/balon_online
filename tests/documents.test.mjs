@@ -13,6 +13,17 @@ function load(path, mocks = {}) {
   return module.exports;
 }
 const model = load("src/lib/document-board.ts");
+test("document body links preserve text, queries, Korean paths and balanced parentheses", () => {
+  const body = "양식: https://example.com/한글?q=1&next=2#양식\n(www.example.com/form). https://example.com/a_(b)\n끝";
+  const parts = model.documentBodyParts(body);
+  assert.equal(parts.map(p => p.text).join(""), body);
+  assert.deepEqual(parts.filter(p => p.href).map(p => p.href), [
+    "https://example.com/한글?q=1&next=2#양식", "https://www.example.com/form", "https://example.com/a_(b)",
+  ]);
+  const unsafe = "javascript:alert(1) data:text/html,<script> ftp://example.com https://user:secret@example.com https://";
+  assert.equal(model.documentBodyParts(unsafe).some(p => p.href), false);
+  assert.equal(model.documentBodyParts(unsafe).map(p => p.text).join(""), unsafe);
+});
 function fixture() {
   const db = createClient({ url: "file::memory:" });
   let user = { id: "writer", name: "문서 담당자", onlineRole: "staff" };

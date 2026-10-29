@@ -5,7 +5,7 @@ import { FileText, Paperclip, Pin, Plus, Search, Download, ArrowLeft, Trash2 } f
 import { PageHeader } from "@/components/common/PageHeader";
 import { useAuth } from "@/context/AuthContext";
 import { requestApi } from "@/lib/api-client";
-import { DOCUMENT_FILE_COUNT, DOCUMENT_FILE_LIMIT, type DocumentAttachment, type DocumentPost } from "@/lib/document-board";
+import { DOCUMENT_FILE_COUNT, DOCUMENT_FILE_LIMIT, documentBodyParts, type DocumentAttachment, type DocumentPost } from "@/lib/document-board";
 
 type PendingFile = { key: string; file: File; uploaded?: DocumentAttachment };
 const button = "inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed";
@@ -136,7 +136,7 @@ export default function DocumentsPage() {
       <div className="flex flex-wrap justify-between gap-2"><button className={button} disabled={busy} onClick={() => { setMode("list"); setError(""); }}><ArrowLeft size={16} />목록</button>{String(user?.id) === selected.authorId && <div className="flex gap-2"><button className={button} disabled={busy} onClick={() => edit(selected)}>수정</button><button className={button} disabled={busy} onClick={remove}><Trash2 size={14} />삭제</button></div>}</div>
       <article className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <header className="space-y-3 border-b border-slate-200 p-5 sm:p-7">{selected.pinned && <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700"><Pin size={14} />공지 · 상단 고정</span>}<h2 className="break-words text-xl font-bold text-slate-900">{selected.title}</h2><p className="text-xs text-slate-500">{selected.author} · 등록 {date(selected.createdAt)}{selected.updatedAt !== selected.createdAt && ` · 수정 ${date(selected.updatedAt)}`}</p></header>
-        <div className="min-h-48 whitespace-pre-wrap break-words p-5 text-sm leading-7 text-slate-700 sm:p-7">{selected.body || "본문 내용이 없습니다."}</div>
+        <div className="min-h-48 whitespace-pre-wrap break-words p-5 text-sm leading-7 text-slate-700 sm:p-7">{selected.body ? documentBodyParts(selected.body).map((part, index) => part.href ? <a key={index} href={part.href} target="_blank" rel="noopener noreferrer" className="break-all text-blue-600 underline underline-offset-2 hover:text-blue-800">{part.text}</a> : part.text) : "본문 내용이 없습니다."}</div>
         <section className="border-t border-slate-200 p-5 sm:p-7"><h3 className="mb-3 text-sm font-semibold text-slate-700">첨부파일 {selected.attachments?.length || 0}개</h3><div className="space-y-2">{selected.attachments?.map(file => <button key={file.id} disabled={busy} onClick={() => download(file)} className="flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-left hover:bg-blue-50 disabled:opacity-50"><Download size={16} className="shrink-0 text-blue-600" /><span className="min-w-0 flex-1 break-all text-sm text-slate-700">{file.name}</span><span className="shrink-0 text-xs text-slate-500">{size(file.size)}</span></button>)}</div></section>
       </article>
     </>}
