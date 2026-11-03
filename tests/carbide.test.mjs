@@ -5,11 +5,12 @@ import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@libsql/client";
 import ts from "typescript";
+import sharp from "sharp";
 
 const nativeRequire = createRequire(import.meta.url);
 function load(path, mocks = {}) {
   const module = { exports: {} };
-  const code = ts.transpileModule(readFileSync(path, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const code = ts.transpileModule(readFileSync(path, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
   new Function("require", "module", "exports", code)(name => name in mocks ? mocks[name] : nativeRequire(name), module, module.exports);
   return module.exports;
 }
@@ -133,4 +134,79 @@ test("carbide write failures roll back and schema failures never return a sample
   } finally { f.db.close(); }
   const broken = fixture({ batch: async () => { throw new Error("offline"); } });
   try { assert.equal((await broken.list()).status, 503); assert.equal((await broken.save(sample())).status, 503); } finally { broken.db.close(); }
+});
+
+test("carbide photos persist as original image bytes while list and detail contain only authenticated references", async () => {
+  const bytes = await sharp({ create: { width: 80, height: 50, channels: 3, background: '#cab080' } }).png().toBuffer();
+  const photo = `data:image/png;base64,${bytes.toString('base64')}`;
+  const f = fixture();
+  try {
+    const body = sample({ id: randomUUID(), photos: [photo] });
+    assert.equal((await f.save(body)).status, 201);
+    assert.equal((await f.save(body)).status, 201);
+    f.reload();
+    const listResponse = await f.list();
+    const listText = await listResponse.text();
+    assert.ok(!listText.includes('data:image'));
+    const list = JSON.parse(listText);
+    assert.equal(list.data.count, 1);
+    const item = list.data.items[0];
+    assert.deepEqual(item.photos, [model.carbidePhotoUrl(body.id, 0, 1)]);
+    const detail = await (await f.list(`?id=${body.id}`)).json();
+    assert.deepEqual(detail.data.photos, item.photos);
+    const params = item.photos[0].slice('/api/carbide'.length);
+    f.setUser(null); assert.equal((await f.list(params)).status, 401);
+    f.setUser({ id: 3, onlineRole: 'installer' }); assert.equal((await f.list(params)).status, 403);
+    f.setUser({ id: 1, name: '시험직원', onlineRole: 'staff' });
+    const response = await f.list(params);
+    assert.equal(response.status, 200); assert.equal(response.headers.get('content-type'), 'image/png');
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);
+  } finally { f.db.close(); }
+});
+
+test("carbide photo references preserve existing images, reject cross-record copies and disappear only after saved removal", async () => {
+  const bytes = await sharp({ create: { width: 10, height: 10, channels: 3, background: '#405060' } }).jpeg().toBuffer();
+  const photo = `data:image/jpeg;base64,${bytes.toString('base64')}`;
+  const f = fixture();
+  try {
+    const body = sample({ id: randomUUID(), photos: [photo] }); await f.save(body);
+    const ref = model.carbidePhotoUrl(body.id, 0, 1);
+    const second = sample({ id: randomUUID() }); await f.save(second);
+    assert.equal((await f.save({ ...second, revision: 1, photos: [ref] }, 'PUT')).status, 400);
+    assert.equal((await f.save(sample({ id: randomUUID(), photos: [ref] }))).status, 400);
+    assert.equal((await f.list(`?id=${second.id}`)).status, 200);
+    const { photos, ...legacyBody } = body;
+    const preserved = await f.save({ ...legacyBody, revision: 1, memo: 'legacy update without photos' }, 'PUT');
+    assert.equal(preserved.status, 200);
+    const saved = (await preserved.json()).data;
+    assert.equal(saved.photos.length, 1); assert.equal(saved.revision, 2);
+    assert.equal((await f.list(ref.slice('/api/carbide'.length))).status, 404);
+    f.failSave(true);
+    assert.equal((await f.save({ ...body, revision: 2, photos: [] }, 'PUT')).status, 503);
+    f.failSave(false);
+    assert.equal((await (await f.list(`?id=${body.id}`)).json()).data.photos.length, 1);
+    const updated = await f.save({ ...body, revision: 2, photos: [saved.photos[0]], memo: 'keep reference' }, 'PUT');
+    assert.equal(updated.status, 200);
+    const latest = (await updated.json()).data;
+    assert.equal((await f.save({ ...body, revision: 3, photos: [saved.photos[0]] }, 'PUT')).status, 400);
+    assert.equal((await f.save({ ...body, revision: 3, photos: [] }, 'PUT')).status, 200);
+    assert.equal((await (await f.list(`?id=${body.id}`)).json()).data.photos.length, 0);
+    assert.equal((await f.list(latest.photos[0].slice('/api/carbide'.length))).status, 404);
+  } finally { f.db.close(); }
+});
+
+test("carbide photo validation rejects oversized, spoofed, invalid and unsupported images", async () => {
+  const valid = await sharp({ create: { width: 20, height: 20, channels: 3, background: '#445566' } }).png().toBuffer();
+  const uri = `data:image/png;base64,${valid.toString('base64')}`;
+  const f = fixture();
+  try {
+    for (const photos of [[uri, uri, uri, uri, uri], ['https://example.com/photo.png'], ['data:image/svg+xml;base64,PHN2Zz4='], ['data:image/png;base64,bm90IGFuIGltYWdl'], [`data:image/jpeg;base64,${valid.toString('base64')}`], [`data:image/png;base64,${Buffer.alloc(500 * 1024 + 1).toString('base64')}`]]) assert.equal((await f.save(sample({ id: randomUUID(), photos }))).status, 400);
+    const tooWide = await sharp({ create: { width: 1921, height: 1, channels: 3, background: '#445566' } }).png().toBuffer();
+    assert.equal((await f.save(sample({ photos: [`data:image/png;base64,${tooWide.toString('base64')}`] }))).status, 400);
+    assert.equal((await (await f.list()).json()).data.count, 0);
+    const access = load('src/lib/photo-access.ts');
+    assert.equal(access.isProtectedPhoto(model.carbidePhotoUrl(randomUUID(), 0, 1)), true);
+    assert.equal(access.isProtectedPhoto('https://other.test/api/carbide?photo=private'), false);
+  } finally { f.db.close(); }
 });

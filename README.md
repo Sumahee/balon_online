@@ -17,7 +17,9 @@ Next.js 16.3.4 App Router, React 19, TypeScript, Tailwind CSS 4와 Turso를 사�
 
 날물 사양(외경·절단폭·내경/샹크경·날수), 업체·연락처, 입고 일정, 작업 메모를 기록하고 팁수리·팁교체·세척·평탄/장력 교정·코팅 등을 복수 선택할 수 있습니다. 합계는 기본 단가×날물 수량 + 팁 단가×전체 팁 개수 + 배송비 + 기타비 + 부가세입니다. 부가세는 명세서대로 직접 입력하며 기본 단가에 포함된 팁 작업비를 중복 입력하지 않습니다.
 
-직원 인증 후 전용 DB에 저장합니다. 완료 기록에는 완료·입고일이 필요하며 잘못된 기록은 취소로 남길 수 있습니다. 취소 기록은 금액에서 제외하고 조회 기록 수에는 포함합니다. 기간·구분·상태·검색 결과 전체를 집계하며, DB 오류 시 예시 기록을 표시하거나 저장 성공으로 처리하지 않습니다. 사양·서비스 항목 선정은 [Freud 제품 규격](https://www.freudtools.com/worldwide/en/products/circular-saw-blades/portable-machines/wood/frwtc/)과 [Leitz 날물 서비스 안내](https://shop.leitz.org/en_gb/bath-saw-sharpening)를 참고했습니다.
+등록·수정 창의 **날물 사진**에서 파일을 선택하거나, 사진·화면 캡처를 복사해 **Ctrl+V**로 붙여넣습니다. JPEG·PNG·WebP 사진을 기록당 최대 4장 첨부할 수 있으며 원본 25MB 이하를 1920px·500KB 이하로 자동 압축합니다. **서버에 저장**을 눌러야 사진이 보관되며 수정 중 제거한 사진도 저장 후에만 반영됩니다. 목록의 사진을 누르면 확대할 수 있습니다.
+
+직원 인증 후 전용 DB에 저장합니다. 사진도 직원 인증 후 조회하며, 목록에는 압축 사진 본문을 한꺼번에 보내지 않습니다. 완료 기록에는 완료·입고일이 필요하며 잘못된 기록은 취소로 남길 수 있습니다. 취소 기록은 금액에서 제외하고 조회 기록 수에는 포함합니다. 기간·구분·상태·검색 결과 전체를 집계하며, DB 오류 시 예시 기록을 표시하거나 저장 성공으로 처리하지 않습니다. 사양·서비스 항목 선정은 [Freud 제품 규격](https://www.freudtools.com/worldwide/en/products/circular-saw-blades/portable-machines/wood/frwtc/)과 [Leitz 날물 서비스 안내](https://shop.leitz.org/en_gb/bath-saw-sharpening)를 참고했습니다.
 
 ## A/S 주간 보고서
 

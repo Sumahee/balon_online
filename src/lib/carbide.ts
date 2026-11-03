@@ -8,6 +8,25 @@ export const CARBIDE_OPTIONS = ["팁수리", "팁교체", "세척", "평탄/장�
 export const CARBIDE_PAYMENTS = ["미정", "미지급", "지급완료"] as const;
 export const CARBIDE_MONEY_FIELDS = ["unitPrice", "tipUnitPrice", "shippingCost", "otherCost", "vat"] as const;
 export const CARBIDE_SPEC_FIELDS = ["diameter", "kerf", "bore", "teeth"] as const;
+export const CARBIDE_PHOTO_COUNT = 4;
+export const CARBIDE_PHOTO_BYTES = 500 * 1024;
+export const CARBIDE_REQUEST_LIMIT = Math.ceil(CARBIDE_PHOTO_BYTES * 4 / 3 + 100) * CARBIDE_PHOTO_COUNT + 40_000;
+export function carbidePhotoUrl(id: string, index: number, revision: number) { return `/api/carbide?photo=${id}&index=${index}&v=${revision}`; }
+export function isCarbidePhotoReference(value: string) { return /^\/api\/carbide\?photo=[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}&index=[0-3]&v=[1-9]\d*$/i.test(value); }
+export function validateCarbidePhotos(input: unknown): string[] {
+  if (input === undefined) return [];
+  if (!Array.isArray(input) || input.length > CARBIDE_PHOTO_COUNT) throw new Error("날물 사진은 최대 4장까지 첨부할 수 있습니다.");
+  return input.map(photo => {
+    if (typeof photo !== "string") throw new Error("사진 입력 형식을 확인해 주세요.");
+    if (isCarbidePhotoReference(photo)) return photo;
+    if (photo.length > Math.ceil(CARBIDE_PHOTO_BYTES * 4 / 3) + 50) throw new Error("사진은 압축 후 500KB 이하여야 합니다.");
+    const match = photo.match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/);
+    if (!match || match[2].length % 4 !== 0) throw new Error("JPEG·PNG·WebP 사진만 첨부할 수 있습니다.");
+    const size = match[2].length * 3 / 4 - (match[2].endsWith("==") ? 2 : match[2].endsWith("=") ? 1 : 0);
+    if (!size || size > CARBIDE_PHOTO_BYTES) throw new Error("사진은 압축 후 500KB 이하여야 합니다.");
+    return photo;
+  });
+}
 export interface CarbideValues {
   date: string; kind: typeof CARBIDE_KINDS[number]; status: typeof CARBIDE_STATUSES[number];
   toolName: string; toolCode: string; toolType: typeof CARBIDE_TYPES[number]; material: typeof CARBIDE_MATERIALS[number];
@@ -16,7 +35,7 @@ export interface CarbideValues {
   quantity: number; provider: string; contact: string; phone: string; expectedDate: string; receivedDate: string;
   options: typeof CARBIDE_OPTIONS[number][]; tipCount: number;
   unitPrice: number; tipUnitPrice: number; shippingCost: number; otherCost: number; vat: number;
-  payment: typeof CARBIDE_PAYMENTS[number]; documentNo: string; memo: string;
+  payment: typeof CARBIDE_PAYMENTS[number]; documentNo: string; memo: string; photos: string[];
 }
 export interface CarbideRecord extends CarbideValues {
   id: string; total: number; revision: number; author: string; createdBy: string; updatedBy: string; createdAt: string; updatedAt: string;
@@ -29,7 +48,7 @@ export function validCarbideDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 }
 export function emptyCarbideValues(): CarbideValues {
-  return { date: getToday(), kind: "연마", status: "의뢰/발주", toolName: "", toolCode: "", toolType: "원형 톱날", material: "초경(HW/HM)", brandModel: "", spec: "", machine: "", diameter: null, kerf: null, bore: null, teeth: null, quantity: 1, provider: "", contact: "", phone: "", expectedDate: "", receivedDate: "", options: [], tipCount: 0, unitPrice: 0, tipUnitPrice: 0, shippingCost: 0, otherCost: 0, vat: 0, payment: "미정", documentNo: "", memo: "" };
+  return { date: getToday(), kind: "연마", status: "의뢰/발주", toolName: "", toolCode: "", toolType: "원형 톱날", material: "초경(HW/HM)", brandModel: "", spec: "", machine: "", diameter: null, kerf: null, bore: null, teeth: null, quantity: 1, provider: "", contact: "", phone: "", expectedDate: "", receivedDate: "", options: [], tipCount: 0, unitPrice: 0, tipUnitPrice: 0, shippingCost: 0, otherCost: 0, vat: 0, payment: "미정", documentNo: "", memo: "", photos: [] };
 }
 export function carbideCosts(value: Pick<CarbideValues, "quantity" | "unitPrice" | "tipCount" | "tipUnitPrice" | "shippingCost" | "otherCost" | "vat">) {
   const base = value.quantity * value.unitPrice, tips = value.tipCount * value.tipUnitPrice;
@@ -76,7 +95,7 @@ export function validateCarbideValues(input: unknown): CarbideValues {
     diameter: number("diameter", "외경", 100_000, false, true), kerf: number("kerf", "절단폭", 100_000, false, true), bore: number("bore", "내경·샹크경", 100_000, false, true), teeth: number("teeth", "날수", 100_000, true, true),
     quantity, provider: text("provider", "거래 업체", 150), contact: text("contact", "업체 담당자", 80), phone: text("phone", "업체 연락처", 80), expectedDate, receivedDate, options, tipCount, tipUnitPrice,
     unitPrice: number("unitPrice", "기본 단가", 1_000_000_000)!, shippingCost: number("shippingCost", "배송비", 1_000_000_000)!, otherCost: number("otherCost", "기타 작업비", 1_000_000_000)!, vat: number("vat", "부가세", 1_000_000_000)!,
-    payment: choice("payment", CARBIDE_PAYMENTS), documentNo: text("documentNo", "명세서·전표번호", 100), memo: text("memo", "작업 내용·메모", 6000),
+    payment: choice("payment", CARBIDE_PAYMENTS), documentNo: text("documentNo", "명세서·전표번호", 100), memo: text("memo", "작업 내용·메모", 6000), photos: validateCarbidePhotos(raw.photos),
   };
   for (const key of CARBIDE_SPEC_FIELDS) if (result[key] === 0) throw new Error("규격은 0보다 큰 값으로 입력하거나 비워 주세요.");
   carbideCosts(result);
