@@ -23,6 +23,7 @@ export function MobileHeader({ onOpenDrawer }: MobileHeaderProps) {
 
   const getPageTitle = () => {
     switch (pathname) {
+      case "/carbide": return "초경 관리";
       case "/documents": return "바론 문서 & 양식";
       case "/install": return "앱 설치";
       case "/equipment": return "설비 관리";

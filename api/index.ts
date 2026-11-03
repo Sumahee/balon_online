@@ -1,4 +1,5 @@
 import * as documentsHandler from "@/lib/api-handlers/documents";
+import * as carbideHandler from "@/lib/api-handlers/carbide";
 import { authorizeApi } from "@/lib/api-access";
 import * as equipmentHandler from "@/lib/api-handlers/equipment";
 import * as shippingHandler from "@/lib/api-handlers/shipping";
@@ -54,6 +55,8 @@ export async function GET(request: NextRequest, context?: RouteContext) {
     if (denied) return denied;
 
     switch (domain) {
+      case "carbide":
+        return await carbideHandler.GET(request);
       case "documents":
         return await documentsHandler.GET(request);
       case "quotations":
@@ -127,6 +130,8 @@ export async function POST(request: NextRequest, context?: RouteContext) {
     if (denied) return denied;
 
     switch (domain) {
+      case "carbide":
+        return await carbideHandler.POST(request);
       case "documents":
         return await documentsHandler.POST(request);
       case "equipment":
@@ -181,6 +186,8 @@ export async function PUT(request: NextRequest, context?: RouteContext) {
     if (denied) return denied;
 
     switch (domain) {
+      case "carbide":
+        return await carbideHandler.PUT(request);
       case "documents":
         return await documentsHandler.PUT(request);
       case "equipment":
