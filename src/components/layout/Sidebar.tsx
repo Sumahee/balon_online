@@ -67,7 +67,6 @@ const NAV_ITEMS = [
     badgeKey: "purchaseCount" as const,
   },
   { name: "설비 관리", path: "/equipment", icon: Wrench, badgeKey: null },
-  { name: "초경 관리", path: "/carbide", icon: CircleDot, badgeKey: null },
   { name: "택배 송장", path: "/shipping", icon: Package, badgeKey: null },
   {
     name: "서랍장 자동화",
@@ -76,6 +75,7 @@ const NAV_ITEMS = [
     badgeKey: null,
   },
   { name: "바론 문서 & 양식", path: "/documents", icon: Files, badgeKey: null },
+  { name: "초경 관리", path: "/carbide", icon: CircleDot, badgeKey: null },
   {
     name: "합판 자재 샘플",
     path: "/materials",

@@ -77,7 +77,6 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
       color: "text-purple-400 bg-purple-500/10 border-purple-500/20",
     },
     { name: "설비 관리", path: "/equipment", icon: Wrench, badge: null, color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
-    { name: "초경 관리", path: "/carbide", icon: CircleDot, badge: null, color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
     { name: "택배 송장", path: "/shipping", icon: Package, badge: null, color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
     {
       name: "서랍장 자동화 계산기",
@@ -87,6 +86,7 @@ export function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
       color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
     },
     { name: "바론 문서 & 양식", path: "/documents", icon: Files, badge: null, color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
+    { name: "초경 관리", path: "/carbide", icon: CircleDot, badge: null, color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
     {
       name: "합판 자재 샘플",
       path: "/materials",
