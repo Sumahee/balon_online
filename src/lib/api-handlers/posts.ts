@@ -7,6 +7,7 @@ import { serverStore } from "@/lib/serverStore";
 import { db, executeQuery, executeMutation } from "@/lib/db";
 import { WorkItem, AsItem } from "@/types";
 import { getToday } from "@/lib/date";
+import { asReceivedDate } from "@/lib/as-report";
 import { ensureAsSchema } from "@/lib/as-schema";
 import { ensureWorkConfirmationSchema } from "@/lib/work-confirmation-schema";
 import { ensureWorkCalendarSchema } from "@/lib/work-calendar-schema";
@@ -250,7 +251,7 @@ export async function GET(request: NextRequest) {
           clientName: String(row.client_name || ""),
           constructDate: String(row.construct_date || ""),
           installer: String(row.installer || ""),
-          receivedDate: String(row.received_date || String(row.created_at || "").split("T")[0]),
+          receivedDate: row.received_date ? String(row.received_date) : asReceivedDate({ receivedDate: "", createdAt: String(row.created_at || "") }),
           asDate: String(row.as_date || ""),
           serviceType: row.service_type === "유상" || row.service_type === "무상" ? row.service_type : undefined,
           paidReason: row.paid_reason === "고객과실" || row.paid_reason === "기간만료" ? row.paid_reason : "",

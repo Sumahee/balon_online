@@ -20,6 +20,7 @@ import { AsItem, AsStatus, Priority } from "@/types";
 import { AsDetailModal } from "@/components/as/AsDetailModal";
 import { cn } from "@/lib/utils";
 import { AsIntakeFields } from "@/components/as/AsIntakeFields";
+import { AsReportDialog } from "@/components/as/AsReportDialog";
 
 export default function AsBoardPage() {
   const { asItems, updateAsItem, deleteAsItem, advanceAsStatus, setQuickModalType, isSaving } = useData();
@@ -27,6 +28,7 @@ export default function AsBoardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("전체");
   const [selectedPriority, setSelectedPriority] = useState<string>("전체");
+  const [reportOpen, setReportOpen] = useState(false);
 
   const [selectedAsId, setSelectedAsId] = useState<string | null>(null);
   const selectedAsItem = asItems.find((item) => item.id === selectedAsId);
@@ -125,7 +127,8 @@ export default function AsBoardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="A/S 관리" description="접수부터 방문, 조치 완료까지 확인하세요. 게시물을 누르면 상세정보가 열립니다." actions={<><button onClick={() => setQuickModalType("as")} className="action-primary"><Plus className="h-4 w-4" />A/S 접수</button></>} />
+      <PageHeader title="A/S 관리" description="접수부터 방문, 조치 완료까지 확인하세요. 게시물을 누르면 상세정보가 열립니다." actions={<><button onClick={() => setReportOpen(true)} className="action-secondary"><Printer className="h-4 w-4" />주간 보고서</button><button onClick={() => setQuickModalType("as")} className="action-primary"><Plus className="h-4 w-4" />A/S 접수</button></>} />
+      {reportOpen && <AsReportDialog onClose={() => setReportOpen(false)} />}
 
       {/* Summary Stats Row */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">

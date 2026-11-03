@@ -53,6 +53,21 @@ test("installer API access is limited to visible calendar tasks, photos and new 
   } finally {database.close();}
 });
 
+test("AS API normalizes legacy SQL receipt timestamps to Korean dates for weekly reports", async () => {
+  const handler = loadModule("src/lib/api-handlers/posts.ts", {
+    "@/lib/as-schema": { ensureAsSchema: async () => {} },
+    "@/lib/db": { db: {}, executeQuery: async () => ({ success: true, rows: [
+      { id: "legacy", created_at: "2026-11-01 15:30:00", received_date: null },
+      { id: "explicit", created_at: "2026-11-01 15:30:00", received_date: "2026-10-30" },
+      { id: "invalid", created_at: "2026-11-01 15:30:00", received_date: "invalid" },
+    ] }) },
+  });
+  const response = await handler.GET(new Request("https://app.test/api/posts?type=as"));
+  const result = await response.json();
+  assert.equal(result.isDb, true);
+  assert.deepEqual(Array.from(result.data, item => item.receivedDate), ["2026-11-02", "2026-10-30", "invalid"]);
+});
+
 test("online signup uses shared users with pending staff approval and fixed installer rank", async () => {
   const writes=[];let duplicate=false;
   const {REGISTER}=loadModule("src/lib/api-handlers/auth.ts",{"@/lib/db":{db:{},executeQuery:async()=>({success:true,rows:duplicate?[{id:1}]:[]}),executeMutation:async(sql,args)=>writes.push({sql,args})}});
