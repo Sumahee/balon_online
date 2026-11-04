@@ -1,19 +1,25 @@
 "use client";
 
-import { Building, MapPin } from "lucide-react";
 import type { GalleryImage } from "@/types";
-import { DrawingQuickOpen } from "./DrawingQuickOpen";
 
 export function GalleryPhotoDetails({ image }: { image: GalleryImage }) {
-  return <div className="mt-1 space-y-1.5 text-xs">
-    {image.clientName && <p className="flex items-start gap-1 text-slate-700"><Building className="mt-0.5 h-3 w-3 shrink-0" /><span className="min-w-0 break-words">{image.clientName}</span></p>}
-    {(image.siteAddress || (!image.clientName && image.siteName)) && <p className="flex items-start gap-1 text-slate-500"><MapPin className="mt-0.5 h-3 w-3 shrink-0" /><span className="min-w-0 break-words">{image.siteAddress || image.siteName}</span></p>}
-    {image.drawingAttachment && <div className="flex items-center gap-1 text-emerald-700">
-      <DrawingQuickOpen label="도면 보기" item={{attachments: [], drawingAttachment: image.drawingAttachment, detailsLoaded: false}} />
-    </div>}
-    <div className="flex flex-wrap gap-1">
-      {image.boardColor?.trim() && <span className="max-w-full break-words rounded bg-blue-50 px-1.5 py-0.5 text-blue-700">#선반 {image.boardColor}</span>}
-      {image.postColor?.trim() && <span className="max-w-full break-words rounded bg-violet-50 px-1.5 py-0.5 text-violet-700">#포스트 {image.postColor}</span>}
-    </div>
+  const normalize = (value: string) => value.trim().replace(/^#+/, "").trim();
+  const hiddenTags = new Set(
+    [image.clientName, image.siteAddress, image.siteName, image.boardColor, image.postColor]
+      .filter((value): value is string => !!value?.trim())
+      .map(normalize)
+  );
+  const tags = [...new Set([
+    image.boardColor?.trim() ? `선반 ${normalize(image.boardColor)}` : "",
+    image.postColor?.trim() ? `포스트 ${normalize(image.postColor)}` : "",
+    ...(image.tags ?? []).map(normalize).filter(tag => !hiddenTags.has(tag)),
+  ].filter(Boolean))];
+
+  if (!tags.length) return null;
+
+  return <div aria-label="사진 태그" className="flex max-h-[4.25rem] min-w-0 flex-1 flex-wrap content-start gap-1 overflow-hidden">
+    {tags.map(tag => <span key={tag} title={`#${tag}`} className="inline-flex h-5 max-w-full shrink-0 items-center rounded bg-slate-100 px-1.5 text-xs text-slate-600">
+      <span className="truncate">#{tag}</span>
+    </span>)}
   </div>;
 }

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { StorageUsage } from "@/components/common/StorageUsage";
 import { GalleryDownloadButton } from "@/components/common/GalleryDownloadButton";
 import { GalleryPhotoDetails } from "@/components/common/GalleryPhotoDetails";
+import { DrawingQuickOpen } from "@/components/common/DrawingQuickOpen";
 import { PhotoImage } from "@/components/common/PhotoImage";
 
 import React, { useEffect, useState, useRef } from "react";
@@ -450,37 +451,29 @@ export default function GalleryPage() {
               </div>
 
               {/* Card Meta */}
-              <div className={cn("min-w-0 flex-1 flex flex-col justify-between space-y-2", viewMode === "grid" ? "p-2" : "p-3.5")}>
-                <div>
-                  <h3
-                    onClick={() => setLightboxIndex(idx)}
-                    className="font-bold text-xs sm:text-sm text-slate-900 group-hover:text-blue-600 transition line-clamp-1 cursor-pointer"
-                  >
-                    {img.title}
+              <div className={cn("min-w-0 flex-1 space-y-1.5", viewMode === "grid" ? "p-2" : "p-3.5")}>
+                <div className="flex min-w-0 items-center gap-1">
+                  <h3 className="min-w-0 font-bold text-xs sm:text-sm text-slate-900 group-hover:text-blue-600 transition">
+                    <button type="button" title={img.title} onClick={() => setLightboxIndex(idx)} className="block max-w-full truncate text-left cursor-pointer">
+                      {img.title}
+                    </button>
                   </h3>
-                  <GalleryPhotoDetails image={img} />
+                  {img.drawingAttachment && <DrawingQuickOpen item={{attachments: [], drawingAttachment: img.drawingAttachment, detailsLoaded: false}} />}
                 </div>
 
                 {/* Tags and Delete */}
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1">
-                  <div className="flex flex-wrap gap-1">
-                    {img.tags.filter(tag => tag !== img.boardColor && tag !== img.postColor).slice(0, viewMode === "grid" ? 2 : 6).map((tag, tIdx) => (
-                      <span
-                        key={tIdx}
-                        className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
+                <div className="flex items-end justify-between gap-1">
+                  <GalleryPhotoDetails image={img} />
 
                   <button
+                    type="button"
+                    aria-label={`${img.title} 삭제`}
                     onClick={() => {
                       if (confirm(`'${img.title}' 사진을 삭제하시겠습니까?`)) {
                         deleteImage(img.id);
                       }
                     }}
-                    className="p-1 text-slate-300 hover:text-rose-600 transition cursor-pointer"
+                    className="ml-auto shrink-0 p-1 text-slate-300 hover:text-rose-600 transition cursor-pointer"
                     title="삭제"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

@@ -1440,20 +1440,18 @@ test("PDF zoom reaches 600 percent and resets to fit width",()=>{
  walk(render()).find(n=>n.type==="button"&&n.props.children==="폭 맞춤").props.onClick();assert.equal(walk(render()).find(n=>n.props?.["aria-live"]==="polite").props.children[0],100);
 });
 
-test("gallery details show company, site, both colors and only registered drawing actions", () => {
+test("gallery card tags omit company and address, retain colors and deduplicate registered tags", () => {
   const React=nativeRequire("react");
   const {renderToStaticMarkup}=nativeRequire("react-dom/server");
-  const {GalleryPhotoDetails}=loadModule("src/components/common/GalleryPhotoDetails.tsx", {
-    "./DrawingQuickOpen":{DrawingQuickOpen:({item})=>React.createElement("button",{"data-drawing-id":item.drawingAttachment.id},"도면")},
-  });
-  const image={clientName:"업체명",siteAddress:"긴 현장 주소",boardColor:"화이트",postColor:"흑니켈",drawingAttachment:{id:"pdf-one",name:"도면.pdf"}};
+  const {GalleryPhotoDetails}=loadModule("src/components/common/GalleryPhotoDetails.tsx");
+  const image={clientName:"업체명",siteAddress:"긴 현장 주소",siteName:"업체명 긴 현장 주소",boardColor:"화이트",postColor:"흑니켈",tags:["업체명","긴 현장 주소","업체명 긴 현장 주소","화이트","흑니켈","시공사진"," #시공사진 ","선반 화이트","천장형","서랍"]};
   const html=renderToStaticMarkup(React.createElement(GalleryPhotoDetails,{image}));
-  for(const text of ["업체명","긴 현장 주소","#선반 화이트","#포스트 흑니켈",'data-drawing-id="pdf-one"'])assert.ok(html.includes(text),text);
-  const empty=renderToStaticMarkup(React.createElement(GalleryPhotoDetails,{image:{siteName:"기존 현장"}}));
-  assert.ok(empty.includes("기존 현장"));
-  assert.ok(!empty.includes("도면 보기"));
-  assert.ok(!empty.includes("#선반"));
-  assert.ok(!empty.includes("#포스트"));
+  for(const text of ["#선반 화이트","#포스트 흑니켈","#시공사진","#천장형","#서랍"])assert.ok(html.includes(text),text);
+  for(const text of ["업체명","긴 현장 주소","도면 보기"])assert.ok(!html.includes(text),text);
+  assert.equal((html.match(/title="#시공사진"/g)||[]).length,1);
+  assert.equal((html.match(/title="#선반 화이트"/g)||[]).length,1);
+  const empty=renderToStaticMarkup(React.createElement(GalleryPhotoDetails,{image:{siteName:"기존 현장",tags:["기존 현장"," "]}}));
+  assert.equal(empty,"");
 });
 
 test("gallery ZIP preserves selected original bytes, uses safe unique filenames and sends credentials only to protected photos", async () => {
