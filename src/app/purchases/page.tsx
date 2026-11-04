@@ -74,9 +74,15 @@ export default function PurchasesPage() {
     return Array.from(malls);
   }, [purchaseItems]);
 
+  // Keep newly added and edited purchases in purchase-date order as well.
+  const sortedPurchaseItems = useMemo(() => [...purchaseItems].sort((a, b) =>
+    (b.purchaseDate || "").localeCompare(a.purchaseDate || "") ||
+    (b.createdAt || "").localeCompare(a.createdAt || "")
+  ), [purchaseItems]);
+
   // Filtered List
   const filteredItems = useMemo(() => {
-    return purchaseItems.filter((item) => {
+    return sortedPurchaseItems.filter((item) => {
       const matchesSearch =
         !searchTerm ||
         item.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -89,7 +95,7 @@ export default function PurchasesPage() {
 
       return matchesSearch && matchesMall;
     });
-  }, [purchaseItems, searchTerm, selectedMall]);
+  }, [sortedPurchaseItems, searchTerm, selectedMall]);
 
   // Total calculated statistics
   const totalCount = purchaseItems.length;
@@ -237,9 +243,9 @@ export default function PurchasesPage() {
             <Tag className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-500">최근 업데이트</p>
+            <p className="text-xs font-semibold text-slate-500">최근 구매일</p>
             <p className="text-sm font-bold text-slate-800">
-              {purchaseItems.length > 0 ? purchaseItems[0].purchaseDate : "없음"}
+              {sortedPurchaseItems[0]?.purchaseDate || "없음"}
             </p>
           </div>
         </div>
