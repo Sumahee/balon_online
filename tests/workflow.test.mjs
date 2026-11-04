@@ -1186,6 +1186,30 @@ test("missing upload data cannot create a successful fake attachment URL", async
   assert.equal((await response.json()).success, false);
 });
 
+test("office cards collapse independently, retain drawing access and expand without changing work", () => {
+  const React = nativeRequire("react");
+  const { renderToStaticMarkup } = nativeRequire("react-dom/server");
+  const state = []; let cursor = 0, writes = 0;
+  const Drawing = ({item}) => React.createElement("button", {"aria-label": `${item.id} 도면`}, "도면");
+  const { KanbanBoard } = loadModule("src/components/dashboard/KanbanBoard.tsx", {
+    react: {...React, useState(initial) { const i=cursor++; if (!(i in state)) state[i]=initial; return [state[i], value => { state[i]=typeof value === "function" ? value(state[i]) : value; }]; }},
+    "next/dynamic": {default: () => () => null, __esModule:true},
+    "@/context/DataContext": { useData: () => ({updateWorkItem:()=>writes++, advanceWorkStatus:()=>writes++}) },
+    "@/context/AuthContext": { useAuth: () => ({user:null}) },
+    "@/components/common/DrawingQuickOpen": { DrawingQuickOpen:Drawing },
+    "@/lib/date": { getToday:()=>"2026-11-04", getDaysUntil:date=>date ? (Date.parse(date)-Date.parse("2026-11-04"))/86400000 : null },
+  });
+  const first={id:"one",clientName:"첫업체",title:"숨길 상세제목",status:"오피스",deadlineType:"시공일",deliveryDate:"2026-11-10",dueDate:"2026-11-01",priority:"보통"};
+  const second={...first,id:"two",clientName:"다른업체",title:"남길 상세제목"};
+  const render=()=>{cursor=0;return KanbanBoard({items:[first,second]});};
+  const find=(node,label)=>{if(!node||typeof node!=="object")return null;if(node.props?.["aria-label"]===label)return node;for(const child of React.Children.toArray(node.props?.children)){const found=find(child,label);if(found)return found;}return null;};
+  let tree=render(); find(tree,"첫업체 카드 접기").props.onClick(); tree=render();
+  let html=renderToStaticMarkup(tree);
+  assert.doesNotMatch(html,/숨길 상세제목/);assert.match(html,/남길 상세제목/);assert.match(html,/11-10/);assert.match(html,/D-6/);assert.match(html,/one 도면/);
+  for(const [date,label] of [["2026-11-04","D-DAY"],["2026-11-03","D+1"],["","D-미정"]]) {first.deliveryDate=date;first.dueDate="";assert.ok(renderToStaticMarkup(render()).includes(label));}
+  find(render(),"첫업체 카드 펼치기").props.onClick();html=renderToStaticMarkup(render());assert.match(html,/숨길 상세제목/);assert.equal(writes,0);
+});
+
 test("kanban flags overdue active work but never completed work", () => {
   const React = nativeRequire("react");
   const { renderToStaticMarkup } = nativeRequire("react-dom/server");
