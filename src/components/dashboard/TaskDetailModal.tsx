@@ -10,6 +10,7 @@ import { InstallerTaskDetail } from "@/components/dashboard/InstallerTaskDetail"
 import { MaterialOrderManager } from "@/components/dashboard/MaterialOrderManager";
 import { useModalBack } from "@/lib/use-modal-back";
 import { PdfPreview } from "@/components/common/PdfPreview";
+import { DrawingDownloadButton } from "@/components/common/DrawingDownloadButton";
 import { WorkDetailGate } from "@/components/common/WorkDetailGate";
 import { STATUS_PROGRESS } from "@/lib/work-form";
 import { workStatusLabel } from "@/lib/work-status";
@@ -716,27 +717,28 @@ function TaskDetailContent({ item: originalItem, onClose, startPhotoUpload }: { 
       {activePdfUrl && (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-0 sm:p-6 bg-slate-950/60 backdrop-blur-md animate-in fade-in">
           <div className="w-full max-w-5xl bg-white rounded-none sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col h-[100dvh] sm:h-[92vh]">
-            <div className="px-4 py-3 bg-white text-slate-800 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-extrabold px-2 py-0.5 bg-rose-600 rounded">
+            <div className="shrink-0 px-4 py-3 bg-white text-slate-800 border-b border-slate-100 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <span className="shrink-0 text-xs font-extrabold px-2 py-0.5 bg-rose-600 rounded">
                   PDF 뷰어
                 </span>
-                <span className="font-bold text-sm truncate max-w-md">{activePdfTitle}</span>
+                <span className="min-w-0 font-bold text-sm truncate" title={activePdfTitle}>{activePdfTitle}</span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center justify-end gap-2">
+                <DrawingDownloadButton key={activePdfUrl} url={activePdfUrl} name={activePdfTitle} />
                 <a
                   href={activePdfUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                  className="min-h-11 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span>새 탭에서 열기</span>
                 </a>
                 <button
                   onClick={() => setActivePdfUrl(null)}
-                  aria-label="PDF 닫기" className="p-1.5 text-slate-500 hover:text-slate-900 rounded-lg transition cursor-pointer"
+                  aria-label="PDF 닫기" className="flex h-11 w-11 shrink-0 items-center justify-center text-slate-500 hover:text-slate-900 rounded-lg transition cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>

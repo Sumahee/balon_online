@@ -1012,8 +1012,7 @@ test("editable body renders screenshots inline while documents remain separate",
   assert.doesNotMatch(html, /attachment:image/);
   assert.doesNotMatch(html, /현장.png 이미지 미리보기/);
   assert.match(html, /제작도면.pdf 열기/);
-  assert.match(html, /download="제작도면.pdf"/);
-  assert.match(html, /aria-label="제작도면.pdf 다운로드"/);
+  assert.match(html, /aria-label="도면 다운로드"/);
   assert.match(html, />PDF<\/span>/);
   assert.match(html, /본문에 사진·파일 추가/);
 });
@@ -1552,5 +1551,38 @@ test("installer drawing viewer downloads the selected PDF with its own filename 
     const nodes=render(),download=nodes.find(node=>node.type?.name==="DrawingDownloadButton"),preview=nodes.find(node=>node.type?.name==="PdfPreview");
     assert.equal(download.props.name,file.name);assert.equal(download.props.url,file.url);assert.equal(preview.props.url,file.url);
     nodes.find(node=>node.props?.["aria-label"]==="도면 닫기").props.onClick();assert.ok(!render().some(node=>node.props?.["aria-label"]==="도면 보기"));
+  }
+});
+
+test("staff and administrators can download each drawing from the task detail viewer", () => {
+  for(const role of ["직원","관리자"]){
+    const React=nativeRequire("react"),slots=[];let cursor=0;
+    const hooks={...React,useEffect(){},useMemo:fn=>fn(),useRef(value){const i=cursor++;return slots[i]??(slots[i]={current:value});},useState(value){const i=cursor++;if(!(i in slots))slots[i]=typeof value==="function"?value():value;return [slots[i],next=>slots[i]=next];}};
+    const file={id:"pdf",name:"서울 현장 최종.PDF",url:"/api/posts?type=work&attachment_id=pdf",fileType:"pdf"};
+    const item={id:"work",title:"현장",status:"대기",dueDate:"2026-11-06",cardType:"도면",attachments:[file],comments:[]};
+    const {TaskDetailModal}=loadModule("src/components/dashboard/TaskDetailModal.tsx",{react:hooks,"@/context/AuthContext":{useAuth:()=>({user:{name:"담당자",onlineRole:"staff",role}})},"@/context/DataContext":{useData:()=>({workItems:[item]})},"@/lib/use-modal-back":{useModalBack(){}}});
+    const walk=node=>Array.isArray(node)?node.flatMap(walk):node&&typeof node==="object"?[node,...walk(node.props?.children)]:[];
+    const render=()=>{cursor=0;const gate=TaskDetailModal({item,onClose(){}}),content=gate.props.children(item);return walk(content.type(content.props));};
+    render().find(node=>node.type==="button"&&node.key===file.id).props.onClick();
+    const nodes=render(),download=nodes.find(node=>node.type?.name==="DrawingDownloadButton"),preview=nodes.find(node=>node.type?.name==="PdfPreview");
+    assert.equal(download.props.name,file.name);assert.equal(download.props.url,preview.props.url);assert.equal(download.props.url,file.url);
+    assert.ok(nodes.some(node=>node.type==="a"&&node.props.href===file.url&&node.props.target==="_blank"));
+    nodes.find(node=>node.props?.["aria-label"]==="PDF 닫기").props.onClick();assert.ok(!render().some(node=>node.type?.name==="PdfPreview"));
+  }
+});
+
+test("drawing attachments and preview offer the same download in editable and read-only views", () => {
+  for(const readOnly of [true,false]){
+    const React=nativeRequire("react"),slots=[];let cursor=0;
+    const hooks={...React,useLayoutEffect(){},useRef(value){const i=cursor++;return slots[i]??(slots[i]={current:value});},useState(value){const i=cursor++;if(!(i in slots))slots[i]=typeof value==="function"?value():value;return [slots[i],next=>slots[i]=next];}};
+    const file={id:"pdf",name:"현장.pdf",url:"/uploads/drawing.pdf",fileType:"pdf"};
+    const {UnifiedBoardEditor}=loadModule("src/components/common/UnifiedBoardEditor.tsx",{react:hooks});
+    const walk=node=>Array.isArray(node)?node.flatMap(walk):node&&typeof node==="object"?[node,...walk(node.props?.children)]:[];
+    const render=()=>{cursor=0;return walk(UnifiedBoardEditor({description:"",attachments:[file],onChangeDescription(){},onChangeAttachments(){},readOnly,drawingsOnly:true}));};
+    assert.equal(render().filter(node=>node.type?.name==="DrawingDownloadButton").length,1);
+    render().find(node=>node.props?.["aria-label"]==="현장.pdf 열기").props.onClick();
+    const downloads=render().filter(node=>node.type?.name==="DrawingDownloadButton");assert.equal(downloads.length,2);
+    for(const download of downloads){assert.equal(download.props.url,file.url);assert.equal(download.props.name,file.name);}
+    render().find(node=>node.props?.["aria-label"]==="미리보기 닫기").props.onClick();assert.ok(!render().some(node=>node.props?.role==="dialog"));
   }
 });

@@ -7,6 +7,7 @@ import { bodyHtml, bodyImageIds, serializeBody } from "@/lib/body-content";
 import { cn } from "@/lib/utils";
 import { clipboardFiles } from "@/lib/clipboard-files";
 import { PdfPreview } from "@/components/common/PdfPreview";
+import { DrawingDownloadButton } from "@/components/common/DrawingDownloadButton";
 
 interface UnifiedBoardEditorProps {
   description: string;
@@ -279,7 +280,7 @@ export function UnifiedBoardEditor({
                     </button>
                     {(
                       <div className="flex shrink-0 items-center gap-1 pr-3">
-                        <a href={attachment.url} download={attachment.name} aria-label={`${attachment.name} 다운로드`} title="다운로드" className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"><Download className="h-5 w-5" /></a>
+                        {type === "pdf" ? <DrawingDownloadButton url={attachment.url} name={attachment.name} /> : <a href={attachment.url} download={attachment.name} aria-label={`${attachment.name} 다운로드`} title="다운로드" className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"><Download className="h-5 w-5" /></a>}
                         {!readOnly && <button type="button" disabled={isUploading} onClick={() => void removeAttachment(attachment.id)} aria-label={`${attachment.name} ${drawingsOnly ? "도면에서" : "본문에서"} 제거`} className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700"><X className="h-4 w-4" /></button>}
                       </div>
                     )}
@@ -295,9 +296,9 @@ export function UnifiedBoardEditor({
       {preview && (
         <div role="dialog" aria-modal="true" aria-label={attachmentType(preview) === "pdf" ? "PDF 미리보기" : "이미지 미리보기"} onClick={() => setPreview(null)} onKeyDown={(event) => { if (event.key === "Escape") setPreview(null); }} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-3 sm:p-6">
           <div onClick={(event) => event.stopPropagation()} className={cn("relative overflow-hidden rounded-xl bg-white shadow-xl", attachmentType(preview) === "pdf" ? "flex h-[90vh] w-full max-w-6xl flex-col" : "max-w-5xl")}>
-            <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
+            <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 px-4 py-3">
               <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{preview.name}</p>
-              <a href={preview.url} download={preview.name} aria-label={`${preview.name} 다운로드`} className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-100"><Download className="h-4 w-4" /><span className="hidden sm:inline">다운로드</span></a>
+              {attachmentType(preview) === "pdf" ? <DrawingDownloadButton key={preview.id} url={preview.url} name={preview.name} /> : <a href={preview.url} download={preview.name} aria-label={`${preview.name} 다운로드`} className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-100"><Download className="h-4 w-4" /><span className="hidden sm:inline">다운로드</span></a>}
               <button autoFocus type="button" aria-label="미리보기 닫기" onClick={() => setPreview(null)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><X className="h-5 w-5" /></button>
             </div>
             {attachmentType(preview) === "pdf" ? (
