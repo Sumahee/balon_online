@@ -1,4 +1,5 @@
 import { ensureWorkTagsSchema } from "@/lib/work-tags-schema";
+import { completePastInstallations } from "./complete-past-installations";
 import { readWorkTags, validateWorkTags } from "@/lib/work-tags";
 import { ensureWorkEntrySchema } from "@/lib/work-entry-schema";
 import { VERIFY } from "./auth";
@@ -541,6 +542,8 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { id, type, createdBy: _createdBy, ...updates } = body;
     void _createdBy; // Registration author never changes during editing.
+
+    if (type === "work" && body.action === "complete-past-installations") return await completePastInstallations(request);
 
     if (!id || !type) {
       return NextResponse.json({ success: false, message: "id and type are required" }, { status: 400 });

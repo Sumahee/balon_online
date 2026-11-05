@@ -21,7 +21,7 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
   const require = (name) => {
     if (name in mocks) return mocks[name];
     if (name.startsWith("@/")) return loadModule(`src/${name.slice(2)}.ts`, mocks, globals, cache);
-    if (name.startsWith("./")) return loadModule(resolve(path, "..", `${name}.ts`), mocks, globals, cache);
+    if (name.startsWith("./") || name.startsWith("../")) return loadModule(resolve(path, "..", `${name}.ts`), mocks, globals, cache);
     return nativeRequire(name);
   };
   new Script(`(function(require, module, exports) { ${code}\n})`, { filename: path })
@@ -417,11 +417,11 @@ test("real SQLite pagination stays small with large photo data and loads files o
     await database.execute({sql:"INSERT INTO bo_attachments VALUES ('a','064','도면.pdf','pdf','1 KB','2026-10-13',?)",args:[pdf]});
     const mock={db:database,executeQuery:async(sql,args=[])=>{const result=await database.execute({sql,args});return {success:true,rows:result.rows};},executeMutation:async(sql,args=[])=>{const result=await database.execute({sql,args});return {success:true,rows:result.rows};}};
     const cache=new Map();
-    const posts=loadModule("src/lib/api-handlers/posts.ts",{"@/lib/db":mock},{Response},cache);
+    const posts=loadModule("src/lib/api-handlers/posts.ts",{"@/lib/db":mock,"./db":mock},{Response},cache);
     await database.execute("UPDATE bo_work_items SET confirmation_pending = 1 WHERE id = '064'");
     const completed = await posts.PUT(request({ id: "064", type: "work", confirmationPending: false, confirmationCompleted: true }));
     assert.equal((await completed.json()).success, true);
-    const reloadedPosts = loadModule("src/lib/api-handlers/posts.ts", {"@/lib/db":mock}, {Response});
+    const reloadedPosts = loadModule("src/lib/api-handlers/posts.ts", {"@/lib/db":mock,"./db":mock}, {Response});
     const reloadedSummary = await (await reloadedPosts.GET({url:"http://localhost/api/posts?type=work&summary=1&limit=1"})).json();
     assert.equal(reloadedSummary.data[0].confirmationCompleted, true);
     assert.equal(reloadedSummary.data[0].confirmationPending, false);
@@ -1203,7 +1203,11 @@ test("office cards collapse independently, retain drawing access and expand with
   const second={...first,id:"two",clientName:"다른업체",title:"남길 상세제목"};
   const render=()=>{cursor=0;return KanbanBoard({items:[first,second]});};
   const find=(node,label)=>{if(!node||typeof node!=="object")return null;if(node.props?.["aria-label"]===label)return node;for(const child of React.Children.toArray(node.props?.children)){const found=find(child,label);if(found)return found;}return null;};
-  let tree=render(); find(tree,"첫업체 카드 접기").props.onClick(); tree=render();
+  let tree=render();
+  assert.ok(find(tree,"첫업체 카드 펼치기"));assert.ok(find(tree,"다른업체 카드 펼치기"));
+  find(tree,"다른업체 카드 펼치기").props.onClick();
+  find(render(),"첫업체 카드 펼치기").props.onClick();
+  find(render(),"첫업체 카드 접기").props.onClick(); tree=render();
   let html=renderToStaticMarkup(tree);
   assert.doesNotMatch(html,/숨길 상세제목/);assert.match(html,/남길 상세제목/);assert.match(html,/11-10/);assert.match(html,/D-6/);assert.match(html,/one 도면/);
   for(const [date,label] of [["2026-11-04","D-DAY"],["2026-11-03","D+1"],["","D-미정"]]) {first.deliveryDate=date;first.dueDate="";assert.ok(renderToStaticMarkup(render()).includes(label));}

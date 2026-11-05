@@ -2,6 +2,7 @@
 import { DrawingQuickOpen } from "@/components/common/DrawingQuickOpen";
 import { getWorkTitle } from "@/lib/work-title";
 import { workStatusLabel } from "@/lib/work-status";
+import { isInstaller } from "@/lib/access";
 
 import { getToday, getDaysUntil } from "@/lib/date";
 
@@ -34,15 +35,28 @@ interface KanbanBoardProps {
 }
 
 export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) {
-  const { advanceWorkStatus, updateWorkItem, setQuickModalType } = useData();
+  const { advanceWorkStatus, updateWorkItem, completePastInstallations, isSaving, setQuickModalType } = useData();
   const { user } = useAuth();
   const [savingConfirmation, setSavingConfirmation] = useState<string | null>(null);
-  const [collapsedOfficeIds, setCollapsedOfficeIds] = useState<Set<string>>(new Set());
-  const toggleOfficeCard = (id: string) => setCollapsedOfficeIds(previous => {
-    const next = new Set(previous);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
+  const [cardExpanded, setCardExpanded] = useState<Record<string, boolean>>({});
+  const toggleCard = (id: string, expanded: boolean) => setCardExpanded(previous => ({ ...previous, [id]: !expanded }));
+  const [completingPast, setCompletingPast] = useState(false);
+  const [completionResult, setCompletionResult] = useState("");
+  const [completionError, setCompletionError] = useState("");
+  const finishPastInstallations = async () => {
+    if (completingPast || isSaving) return;
+    setCompletingPast(true);
+    setCompletionResult("");
+    setCompletionError("");
+    try {
+      const count = await completePastInstallations();
+      setCompletionResult(count ? `${count}건을 완료 처리했습니다.` : "시공일이 지난 출고대기 업무가 없습니다.");
+    } catch (error) {
+      setCompletionError(error instanceof Error ? error.message : "일괄 완료에 실패했습니다. 다시 시도해주세요.");
+    } finally {
+      setCompletingPast(false);
+    }
+  };
   const changeConfirmation = async (task: WorkItem) => {
     setSavingConfirmation(task.id);
     try {
@@ -186,6 +200,18 @@ export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) 
                 </span>
               </div>
 
+              {col.status === "준비완료" && !isInstaller(user) && (
+                <div className="border-b border-slate-200 px-3 py-2 space-y-1.5">
+                  <button type="button" disabled={completingPast || isSaving} onClick={() => void finishPastInstallations()} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-wait cursor-pointer">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {completingPast ? "완료 처리 중…" : "지난 시공일 일괄 완료"}
+                  </button>
+                  <p className="text-xs text-slate-500">오늘 이전 시공일 · 전체 출고대기 기준</p>
+                  {completionResult && <p role="status" className="text-xs text-emerald-700">{completionResult}</p>}
+                  {completionError && <p role="alert" className="text-xs text-rose-700">{completionError}</p>}
+                </div>
+              )}
+
               {/* Cards Container: Natural vertical growth so full page scrolls */}
               <div className="flex-1 p-[10.8px] space-y-[10.8px] min-h-[198px]">
                 {/* Non-ToDo columns empty state */}
@@ -200,11 +226,12 @@ export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) 
                   const targetDate = task.deliveryDate || task.dueDate;
                   const diffDays = getDaysUntil(targetDate, todayStr);
                   const isUrgent = task.status !== "시공완료" && (task.priority === "긴급" || (diffDays !== null && diffDays <= 3));
-                  const urgencyLabel = diffDays !== null && diffDays < 0 ? `${Math.abs(diffDays)}일 지연` : task.priority === "긴급" ? "긴급" : diffDays === 0 ? "오늘" : `D-${diffDays}`;
+                  const urgencyLabel = diffDays !== null && diffDays < 0 ? `${Math.abs(diffDays)}일 지연` : diffDays === 0 ? "D-DAY" : diffDays === 1 ? "D-1" : task.priority === "긴급" ? "긴급" : `D-${diffDays}`;
                   const hasPdf = task.attachments?.some((a) => a.fileType === "pdf");
+                  const expanded = cardExpanded[task.id] ?? (task.status !== "시공완료" && (diffDays === 0 || diffDays === 1));
 
-                  if (col.status === "오피스" && collapsedOfficeIds.has(task.id)) {
-                    const dDay = diffDays === null ? "D-미정" : diffDays === 0 ? "D-DAY" : diffDays < 0 ? `D+${Math.abs(diffDays)}` : `D-${diffDays}`;
+                  if (!expanded) {
+                    const dDay = task.status === "시공완료" ? "완료" : diffDays === null ? "D-미정" : diffDays === 0 ? "D-DAY" : diffDays < 0 ? `D+${Math.abs(diffDays)}` : `D-${diffDays}`;
                     return <div key={task.id} className="flex min-w-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-1.5 shadow-2xs" style={{ zoom: 0.9 }}>
                       <button type="button" onClick={() => setSelectedTask(task)} title={task.clientName || "업체 미등록"} className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-900 hover:text-blue-600 cursor-pointer">
                         {task.clientName || "업체 미등록"}
@@ -212,9 +239,9 @@ export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) 
                       <span className="shrink-0 whitespace-nowrap text-xs text-slate-600" title={`${task.deadlineType || "시공일"} ${targetDate || "미정"}`}>
                         {task.deadlineType || "시공일"} {targetDate ? targetDate.substring(5) : "미정"}
                       </span>
-                      <span className={cn("shrink-0 whitespace-nowrap text-xs font-semibold", diffDays !== null && diffDays <= 3 ? "text-rose-600" : "text-slate-600")}>{dDay}</span>
+                      <span title={isUrgent ? urgencyLabel : undefined} className={cn("shrink-0 whitespace-nowrap text-xs font-semibold", isUrgent ? "text-rose-600" : "text-slate-600")}>{dDay}</span>
                       <DrawingQuickOpen item={task} />
-                      <button type="button" aria-label={`${task.clientName || "업무"} 카드 펼치기`} aria-expanded={false} title="펼치기" onClick={() => toggleOfficeCard(task.id)} className="shrink-0 rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-blue-700 cursor-pointer">
+                      <button type="button" aria-label={`${task.clientName || "업무"} 카드 펼치기`} aria-expanded={false} title="펼치기" onClick={() => toggleCard(task.id, expanded)} className="shrink-0 rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-blue-700 cursor-pointer">
                         <ChevronDown className="h-3.5 w-3.5" />
                       </button>
                     </div>;
@@ -280,16 +307,6 @@ export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) 
                                 <span className="sr-only">공장 인계</span>
                                 <ArrowRight className="w-3.5 h-3.5" />
                               </button>
-                              <button
-                                type="button"
-                                aria-label={`${task.clientName || "업무"} 카드 접기`}
-                                aria-expanded={true}
-                                title="한 줄로 접기"
-                                onClick={() => toggleOfficeCard(task.id)}
-                                className="p-1 rounded-md text-slate-500 hover:bg-slate-100 hover:text-blue-700 cursor-pointer"
-                              >
-                                <Minus className="w-3.5 h-3.5" />
-                              </button>
                             </div>
                           )}
 
@@ -343,9 +360,12 @@ export function KanbanBoard({ items, showCompleted = false }: KanbanBoardProps) 
                               </button>
                             </div>
                           )}
+                          <button type="button" aria-label={`${task.clientName || "업무"} 카드 접기`} aria-expanded={true} title="한 줄로 접기" onClick={() => toggleCard(task.id, expanded)} className="p-1 rounded-md text-slate-500 hover:bg-slate-100 hover:text-blue-700 cursor-pointer">
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                         {/* Keep the title clear of the compact handoff controls. */}
-                        <h5 className={cn("text-[15px] font-semibold leading-6 text-slate-900 [overflow-wrap:anywhere]", col.status === "오피스" ? "pr-24" : "pr-14")}>
+                        <h5 className="text-[15px] font-semibold leading-6 text-slate-900 [overflow-wrap:anywhere] pr-24">
                           <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedTask(task); }} className="block w-full text-left cursor-pointer hover:text-blue-600" title={task.title}>
                             <span className="line-clamp-2">{getWorkTitle(task)}</span>
                           </button>

@@ -49,6 +49,7 @@ interface DataContextType {
   dismissError: () => void;
   addWorkItem: (item: Omit<WorkItem, "id" | "createdAt">) => Promise<void>;
   updateWorkItem: (id: string, updates: Partial<WorkItem>) => Promise<void>;
+  completePastInstallations: () => Promise<number>;
   deleteWorkItem: (id: string) => Promise<void>;
   advanceWorkStatus: (id: string) => Promise<void>;
   addAsItem: (item: Omit<AsItem, "id" | "createdAt">) => Promise<void>;
@@ -231,6 +232,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     await save("/api/posts", "PUT", { ...updates, id, type: "work" });
     detailCache.current.delete(id);
     setWorkItems((prev) => prev.map((item) => item.id === id ? { ...item, ...updates } : item));
+  };
+
+  const completePastInstallations = async () => {
+    const result = await save<string[]>("/api/posts", "PUT", { type: "work", action: "complete-past-installations" });
+    if (!Array.isArray(result.data)) throw new Error("일괄 완료 결과를 확인하지 못했습니다.");
+    const completed = new Set(result.data);
+    detailCache.current.clear();
+    listCache.current.clear();
+    setWorkItems(previous => previous.map(item => completed.has(item.id) ? { ...item, status: "시공완료", progress: 100 } : item));
+    return completed.size;
   };
 
   const deleteWorkItem = async (id: string) => {
@@ -510,6 +521,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         dismissError: () => setError(null),
         addWorkItem: observeAction(addWorkItem),
         updateWorkItem: observeAction(updateWorkItem),
+        completePastInstallations,
         deleteWorkItem: observeAction(deleteWorkItem),
         advanceWorkStatus: observeAction(advanceWorkStatus),
         addAsItem: observeAction(addAsItem),
