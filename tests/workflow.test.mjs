@@ -1395,6 +1395,9 @@ test("drawing icon opens the PDF directly, stops the card click and stays off wi
   nodes=walk(render());
   assert.ok(nodes.some(node=>node.type==="dialog"));
   assert.equal(nodes.find(node=>node.type===PdfPreview).props.url,"/api/posts?type=work&attachment_id=drawing%20id");
+  const download=nodes.find(node=>node.type?.name==="DrawingDownloadButton");
+  assert.equal(download.props.name,"현장.pdf");
+  assert.equal(download.props.url,nodes.find(node=>node.type===PdfPreview).props.url);
   nodes.find(node=>node.props?.["aria-label"]==="도면 닫기").props.onClick();
   assert.ok(!walk(render()).some(node=>node.type==="dialog"));
   item.drawingAttachment=null;
@@ -1512,4 +1515,42 @@ test("gallery ZIP stops on failure, cancellation and size limit instead of silen
   const oversized=loadModule("src/lib/gallery-download.ts",{"@/lib/photo-access":{isProtectedPhoto:()=>true,fetchPhotoBlob:async()=>({size:101*1024*1024})}});
   await assert.rejects(()=>oversized.createGalleryArchive(images,"token",new AbortController().signal,()=>{}),/100MB/);
   await assert.rejects(()=>failing.createGalleryArchive([],"token",new AbortController().signal,()=>{}),/선택/);
+});
+
+test("drawing download saves original bytes and Korean filename, blocks duplicate taps, and allows retry after failure", async () => {
+  const React=nativeRequire("react"),slots=[];let cursor=0,finish,requests=0,mode="pending";
+  const hooks={...React,useRef(value){const i=cursor++;return slots[i]??(slots[i]={current:value});},useState(value){const i=cursor++;if(!(i in slots))slots[i]=value;return [slots[i],next=>slots[i]=next];}};
+  const pdf=new Blob(["%PDF-1.7 fixture"],{type:"application/pdf"}),saved=[],revoked=[],timers=[];
+  let receivedBlob;
+  const document={body:{appendChild(link){link.attached=true;}},createElement(tag){assert.equal(tag,"a");return {click(){assert.ok(this.attached);saved.push({href:this.href,name:this.download});},remove(){this.attached=false;}};}};
+  const {DrawingDownloadButton}=loadModule("src/components/common/DrawingDownloadButton.tsx",{react:hooks},{document,
+    URL:{createObjectURL(blob){receivedBlob=blob;return "blob:fixture";},revokeObjectURL(url){revoked.push(url);}},
+    window:{setTimeout(callback,delay){timers.push({callback,delay});}},
+    fetch:async url=>{requests++;assert.equal(url,"/api/posts?type=work&attachment_id=pdf");if(mode==="pending")return new Promise(resolve=>finish=resolve);if(mode==="failed")return new Response("Forbidden",{status:403});if(mode==="html")return new Response("login",{headers:{"Content-Type":"text/html"}});return new Response(pdf);},
+  });
+  const walk=node=>Array.isArray(node)?node.flatMap(walk):node&&typeof node==="object"?[node,...walk(node.props?.children)]:[];
+  const render=()=>{cursor=0;return walk(DrawingDownloadButton({url:"/api/posts?type=work&attachment_id=pdf",name:"서울 현장 최종 도면.pdf"}));};
+  const button=()=>render().find(node=>node.type==="button");
+  const tap=button().props.onClick,pending=tap();await tap();assert.equal(requests,1);assert.equal(button().props.disabled,true);
+  finish(new Response(pdf));await pending;
+  assert.equal(await receivedBlob.text(),await pdf.text());assert.deepEqual(saved,[{href:"blob:fixture",name:"서울 현장 최종 도면.pdf"}]);
+  assert.equal(button().props.disabled,false);assert.equal(revoked.length,0);assert.ok(timers[0].delay>=1000);timers[0].callback();assert.deepEqual(revoked,["blob:fixture"]);
+  for(mode of ["failed","html"]){await button().props.onClick();assert.ok(render().some(node=>node.props?.role==="alert"));assert.equal(saved.length,1);assert.equal(button().props.disabled,false);}
+  mode="success";await button().props.onClick();assert.equal(saved.length,2);assert.ok(!render().some(node=>node.props?.role==="alert"));
+});
+
+test("installer drawing viewer downloads the selected PDF with its own filename and keeps close working", () => {
+  const React=nativeRequire("react"),slots=[];let cursor=0;
+  const hooks={...React,useState(value){const i=cursor++;if(!(i in slots))slots[i]=value;return [slots[i],next=>slots[i]=next];}};
+  const attachments=[{id:"a",name:"1층.pdf",url:"/api/posts?type=work&attachment_id=a",fileType:"pdf"},{id:"b",name:"2층.PDF",url:"/uploads/floor2.pdf",fileType:"file"}];
+  const item={id:"work",attachments,comments:[]};
+  const {InstallerTaskDetail}=loadModule("src/components/dashboard/InstallerTaskDetail.tsx",{react:hooks,"@/context/AuthContext":{useAuth:()=>({user:{name:"시공자"}})},"@/context/DataContext":{useData:()=>({workItems:[item]})},"@/lib/use-modal-back":{useModalBack(){}}});
+  const walk=node=>Array.isArray(node)?node.flatMap(walk):node&&typeof node==="object"?[node,...walk(node.props?.children)]:[];
+  const render=()=>{cursor=0;return walk(InstallerTaskDetail({item,onClose(){}}));};
+  for(const file of attachments){
+    render().find(node=>node.type==="button"&&node.props.children===file.name).props.onClick();
+    const nodes=render(),download=nodes.find(node=>node.type?.name==="DrawingDownloadButton"),preview=nodes.find(node=>node.type?.name==="PdfPreview");
+    assert.equal(download.props.name,file.name);assert.equal(download.props.url,file.url);assert.equal(preview.props.url,file.url);
+    nodes.find(node=>node.props?.["aria-label"]==="도면 닫기").props.onClick();assert.ok(!render().some(node=>node.props?.["aria-label"]==="도면 보기"));
+  }
 });

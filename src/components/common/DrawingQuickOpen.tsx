@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Download, FileText, X } from "lucide-react";
+import { FileText, X } from "lucide-react";
 import type { WorkItem } from "@/types";
 import { getDrawingAttachment } from "@/lib/drawing-attachments";
 import { useModalBack } from "@/lib/use-modal-back";
 import { PdfPreview } from "./PdfPreview";
+import { DrawingDownloadButton } from "./DrawingDownloadButton";
 import { cn } from "@/lib/utils";
 
 export function DrawingQuickOpen({ item, label }: { item: Pick<WorkItem, "attachments" | "drawingAttachment" | "detailsLoaded">; label?: string }) {
@@ -35,7 +36,7 @@ export function DrawingQuickOpen({ item, label }: { item: Pick<WorkItem, "attach
           <header className="flex shrink-0 items-center gap-3 border-b border-slate-200 px-4 py-3">
             <FileText className="h-5 w-5 shrink-0 text-emerald-600" />
             <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{drawing.name}</h2>
-            <a href={url} download={drawing.name} title="도면 다운로드" aria-label="도면 다운로드" className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><Download className="h-4 w-4" /></a>
+            <DrawingDownloadButton key={drawing.id} url={url} name={drawing.name} />
             <button type="button" autoFocus aria-label="도면 닫기" onClick={() => setOpen(false)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><X className="h-5 w-5" /></button>
           </header>
           <PdfPreview url={url} />
