@@ -1,5 +1,5 @@
 export function isProtectedPhoto(url: string) {
-  return url.startsWith("/api/gallery?") || url.startsWith("/api/construction-photo?") || url.startsWith("/api/carbide?photo=");
+  return url.startsWith("/api/gallery?") || url.startsWith("/api/construction-photo?") || url.startsWith("/api/carbide?photo=") || url.startsWith("/api/posts?type=as&photo=");
 }
 
 export async function fetchPhotoBlob(url: string, token: string, signal: AbortSignal): Promise<Blob> {

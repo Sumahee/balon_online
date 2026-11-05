@@ -29,22 +29,51 @@ export function classifyShipping(note: string): ShippingMode | "" | null {
   return null;
 }
 const transport=/(?:대신\s*)?(?:선불택배|택배선불|착불택배|택배착불|선불화물|화물선불|착불화물|화물착불|후불택배|택배후불|후불화물|화물후불)|(?:대신|(?<![가-힣]))(?:선택|착택|선화|착화)(?=[^가-힣]|$)|대신(?:택배|화물)/g;
+function isShippingAddress(value: string) {
+  return /(?:영업소|영업점|지점|대리점|취급소|터미널|물류센터)(?:\s|\(|$)|점$/.test(value)
+    || /(?:^|\s)(?:서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충남|충북|전남|전북|경남|경북|제주)(?:특별자치도|특별자치시|특별시|광역시|도|시)?(?=\s|\d)/.test(value)
+    || /(?:^|\s)[가-힣]+(?:시|군|구|읍|면)\s/.test(value)
+    || /(?:^|\s)[가-힣0-9]+(?:동|리)\s+.*\d/.test(value)
+    || /[가-힣0-9·.]+(?:대로|로|길|읍|면|동|리)\s*\d/.test(value);
+}
+
+function shippingRecipient(customer: string, extracted: string, direct: boolean) {
+  const ledger = customer.trim();
+  const compact = ledger.replace(/\s/g, "");
+  if (/일반[（(]b2b[）)]/i.test(compact)) return extracted;
+  const company = compact.replace(/\(주\)|㈜|주식회사/g, "");
+  if (/^하만(?:$|[(/（])/.test(company)) {
+    const name = extracted.replace(/^하만\s*[（(](.*)[）)]$/, "$1").trim();
+    if (direct) return name;
+    return name && name !== "하만" ? `하만(${name})` : "하만";
+  }
+  // 홈파트너는 별도 발송업체이며 실제 받는 분은 기존처럼 적요에서 찾습니다.
+  if (compact.includes("홈파트너")) return extracted || ledger;
+  return ledger || extracted;
+}
+
 export function extractRecipient(note: string, customer: string) {
-  const phones=[...note.matchAll(/(?:0(?:1[016789]|2|[3-6][1-5]|70|50[2-8]))[- .]?\d{3,4}[- .]?\d{4}/g)];
+  const phonePattern=/(?:0(?:1[016789]|2|[3-6][1-5]|70|50[2-8]))[- .]?\d{3,4}[- .]?\d{4}/g;
+  const phones=[...note.matchAll(phonePattern)];
   const last=phones.at(-1);const raw=last?.[0] || "";
   const digits=raw.replace(/\D/g,"");
   const phone=digits ? digits.replace(/^(02|050[2-8]|0\d{2})(\d{3,4})(\d{4})$/,"$1-$2-$3") : "";
-  const body=(last ? note.slice(0,last.index) : note).replace(/^\s*\([^)]*\)\s*/,"").replace(transport,"");
-  const parts=body.split(/[\/\n]+/).map(v=>v.trim()).filter(Boolean);
-  const isAddress=(v:string)=> /(?:서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충[남북청]|전[남북라]|경[남북상]|제주|[가-힣]+(?:시|군|구)\s|(?:읍|면|동|로|길)\s*\d|(?:지점|점)$)/.test(v);
-  const addressIndex=parts.findIndex(isAddress);
+  const body=note.replace(phonePattern, "")
+    .replace(/^\s*\([^)]*(?:과장|대리|부장|팀장|실장|대표|사원|이사|차장|주임)\)\s*/, "")
+    .replace(transport, "").replace(/대신\s*(?:착불|선불)/g, "")
+    .replace(/\(\s*직송\s*\)/g, "");
+  const parts=body.split(/[\/\n]+/).map(v=>v.trim()
+    .replace(/^(?:직송|직접\s*배송)(?:\s*[:：-]\s*|\s+|$)/, "")
+    .replace(/\s+직송$/, "").trim()).filter(Boolean);
+  const isRecipient=(v:string)=>v.length<=40&&!isShippingAddress(v)&&!/출고|보드|강과장|택배|화물|직송|직접픽업|문앞|경비실|부재|배송|부탁|연락|놓아|\d+\s*(?:층|호|동|번지)/.test(v)&&!/^\(?\d[-\d .]+\)?$/.test(v);
+  const addressIndex=parts.findIndex(isShippingAddress);
   let recipient="",address="";
   if(addressIndex>=0){
-    const preceding=parts.slice(0,addressIndex).filter(v=>v.length<=40&&!/출고|보드|강과장|택배|화물/.test(v));
+    const preceding=parts.slice(0,addressIndex).filter(isRecipient);
     recipient=preceding.at(-1)||"";
     const tail=parts.slice(addressIndex);
     const trailing=tail.at(-1)||"";
-    if(tail.length>1 && !isAddress(trailing) && !/문앞|경비실|부재|배송|사무실|부탁|연락|놓아/.test(trailing) && trailing.length<=30){
+    if(tail.length>1 && isRecipient(trailing) && !/사무실/.test(trailing) && trailing.length<=30){
       recipient=recipient||tail.pop()!;
     }
     address=tail.join(" / ");
@@ -53,9 +82,9 @@ export function extractRecipient(note: string, customer: string) {
       if(business){recipient=business[1];address=address.slice(0,business.index).trim();}
     }
   } else {
-    recipient=parts.find(v=>v.length<=30&&!/출고|보드|강과장|택배|화물/.test(v))||"";
+    recipient=parts.find(isRecipient)||"";
   }
-  return {recipient:recipient||customer.replace(/\([^)]*\)/g,"").trim(),address,phone};
+  return {recipient:shippingRecipient(customer,recipient,/직송|직접\s*배송/.test(note)),address,phone};
 }
 export function shipmentWarnings(entry: Shipment) {
   const warnings:string[]=[];

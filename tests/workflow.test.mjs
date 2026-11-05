@@ -822,7 +822,7 @@ test("AS intake persists installation, received and scheduled dates with paid re
   });
   const response = await handlers.POST(request({ type: "as", clientName: "고객", siteAddress: "현장", reason: "서랍 수리", constructDate: "2026-01-01", installer: "시공자", receivedDate: "2026-10-12", asDate: "2026-10-15", technician: "처리기사", serviceType: "유상", paidReason: "기간만료" }));
   assert.equal(response.status, 201);
-  assert.deepEqual(Array.from(writes[0].args.slice(12)), ["시공자", "2026-10-12", "2026-10-15", "유상", "기간만료"]);
+  assert.deepEqual(Array.from(writes[0].args.slice(12,17)), ["시공자", "2026-10-12", "2026-10-15", "유상", "기간만료"]);
   const listed = await (await handlers.GET({url:"http://localhost/api/posts?type=as"})).json();
   assert.equal(listed.data[0].installer, "시공자");
   assert.equal(listed.data[0].asDate, "2026-10-15");

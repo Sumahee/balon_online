@@ -98,6 +98,8 @@ export interface AsItem {
   reason: string; // A/S 발생 사유
   resultStatus: AsStatus; // 접수 / 처리중 / 완료
   resolutionDetails?: string; // 처리내용/조치사항
+  intakePhotos?: string[]; // A/S 접수 당시 사진
+  photosRevision?: number;
   resultPhotos?: string[]; // 조치 결과 현장 사진 URL/Base64 목록
   images?: string[]; // 조치 결과 현장 사진 목록 (동의어)
   technician?: string; // 담당 기사

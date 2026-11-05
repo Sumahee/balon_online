@@ -1,6 +1,7 @@
 "use client";
 
 import { AsIntakeFields } from "@/components/as/AsIntakeFields";
+import { AsPhotoEditor } from "@/components/as/AsPhotoEditor";
 import { WorkEditorModal } from "@/components/common/WorkEditorModal";
 import { useData } from "@/context/DataContext";
 import { getToday } from "@/lib/date";
@@ -11,6 +12,7 @@ import React,{ useState } from "react";
 
 export function QuickModals() {
   const { quickModalType, setQuickModalType, addAsItem, isSaving } = useData();
+  const [photosBusy, setPhotosBusy] = useState(false);
   // AS form state
   const [asForm, setAsForm] = useState<{
     installer: string;
@@ -25,6 +27,7 @@ export function QuickModals() {
     technician: string;
     contactPhone: string;
     priority: Priority;
+    intakePhotos: string[];
   }>({
     installer: "",
     receivedDate: "",
@@ -38,6 +41,7 @@ export function QuickModals() {
     technician: "",
     contactPhone: "010-",
     priority: "긴급",
+    intakePhotos: [],
   });
 
   if (!quickModalType) return null;
@@ -46,7 +50,7 @@ export function QuickModals() {
 
   const handleAsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSaving) return;
+    if (isSaving || photosBusy) return;
     try {
       if (!asForm.clientName.trim() || !asForm.siteAddress.trim() || !asForm.reason.trim()) {
         alert("업체명, 현장주소, A/S 사유를 모두 입력해 주세요.");
@@ -69,6 +73,7 @@ export function QuickModals() {
         technician: asForm.technician,
         contactPhone: asForm.contactPhone,
         priority: asForm.priority,
+        intakePhotos: asForm.intakePhotos,
       });
 
       setAsForm({
@@ -84,6 +89,7 @@ export function QuickModals() {
         technician: "",
         contactPhone: "010-",
         priority: "긴급",
+        intakePhotos: [],
       });
       setQuickModalType(null);
     } catch {
@@ -114,6 +120,7 @@ export function QuickModals() {
             </div>
           </div>
           <button
+            disabled={isSaving || photosBusy}
             onClick={() => setQuickModalType(null)}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 transition cursor-pointer"
           >
@@ -188,6 +195,7 @@ export function QuickModals() {
               />
             </div>
 
+            <AsPhotoEditor label="A/S 접수 사진" photos={asForm.intakePhotos} disabled={isSaving || photosBusy} onBusyChange={setPhotosBusy} onChange={intakePhotos => setAsForm(current => ({ ...current, intakePhotos }))} />
             <AsIntakeFields value={{...asForm, receivedDate: asForm.receivedDate || getToday()}} onChange={patch=>setAsForm({...asForm,...patch})} />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
@@ -229,13 +237,14 @@ export function QuickModals() {
             <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
               <button
                 type="button"
+                disabled={isSaving || photosBusy}
                 onClick={() => setQuickModalType(null)}
                 className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
               >
                 취소
               </button>
               <button
-                type="submit" disabled={isSaving} aria-busy={isSaving}
+                type="submit" disabled={isSaving || photosBusy} aria-busy={isSaving || photosBusy}
                 className="px-5 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 text-xs font-bold shadow-md shadow-rose-500/20 transition cursor-pointer"
               >
                 A/S 즉시 접수하기

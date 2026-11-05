@@ -280,8 +280,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateAsItem = async (id: string, updates: Partial<AsItem>) => {
-    await save("/api/posts", "PUT", { ...updates, id, type: "as" });
-    setAsItems((prev) => prev.map((item) => item.id === id ? { ...item, ...updates } : item));
+    const result = await save<Partial<AsItem>>("/api/posts", "PUT", { ...updates, id, type: "as" });
+    setAsItems((prev) => prev.map((item) => item.id === id ? { ...item, ...updates, ...result.data } : item));
   };
 
   const deleteAsItem = async (id: string) => {

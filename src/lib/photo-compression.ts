@@ -7,7 +7,7 @@ export function readPhotoFile(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
-export async function compressPhoto(dataUrl: string): Promise<string> {
+export async function compressPhoto(dataUrl: string, maxBytes = 500 * 1024): Promise<string> {
   if (!dataUrl.startsWith("data:image/")) return dataUrl;
   const image = new Image();
   image.src = dataUrl;
@@ -18,7 +18,7 @@ export async function compressPhoto(dataUrl: string): Promise<string> {
   canvas.height = Math.max(1,Math.round(image.naturalHeight*ratio));
   const context = canvas.getContext("2d");
   if (!context) throw new Error("사진 압축을 시작하지 못했습니다.");
-  const target = 500 * 1024 * 4 / 3;
+  const target = maxBytes * 4 / 3;
   let encoded = ratio === 1 && /^data:image\/(jpeg|png|webp);/.test(dataUrl) ? dataUrl : "";
   for (let attempt=0; attempt<4; attempt++) {
     context.fillStyle="#fff"; context.fillRect(0,0,canvas.width,canvas.height);
@@ -31,6 +31,6 @@ export async function compressPhoto(dataUrl: string): Promise<string> {
     canvas.width=Math.max(1,Math.round(canvas.width*0.8));
     canvas.height=Math.max(1,Math.round(canvas.height*0.8));
   }
-  if (encoded.length > target) throw new Error("사진을 500KB 이하로 줄이지 못했습니다. 작은 사진으로 다시 첨부해주세요.");
+  if (encoded.length > target) throw new Error(`사진을 ${Math.round(maxBytes / 1024)}KB 이하로 줄이지 못했습니다. 작은 사진으로 다시 첨부해주세요.`);
   return encoded;
 }

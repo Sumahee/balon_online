@@ -121,7 +121,7 @@ export default function ShippingPage(){
         <label className={primary+" cursor-pointer"}><FileUp size={17}/>택배 리스트 올리기<input ref={fileInput} type="file" accept=".xls,.xlsx" className="sr-only" aria-label="택배 리스트 올리기" disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(file)void importFile(file);}}/></label>
         <span className="text-sm text-slate-500">{sourceName||".xls / .xlsx · 최대 10MB"}</span>
       </div>
-      {editing&&<p className="text-xs leading-6 text-slate-500">적요의 선택 → 택배 선불, 착택·착불택배 → 택배 착불, 선화 → 화물 선불, 착화·화물착불 → 화물 착불. 홈파트너 장부는 홈파트너로, 나머지는 바론으로 분류합니다. 품명·수량이 없으면 빈칸으로 둡니다.</p>}
+      {editing&&<div className="space-y-1 text-xs leading-6 text-slate-500"><p>적요의 선택 → 택배 선불, 착택·착불택배 → 택배 착불, 선화 → 화물 선불, 착화·화물착불 → 화물 착불. 홈파트너 장부는 별도 홈파트너 발송 목록으로, 나머지는 바론으로 분류합니다. 품명·수량이 없으면 빈칸으로 둡니다.</p><p>받는 분은 기본적으로 장부의 업체명입니다. 일반(B2B)·홈파트너는 적요의 수신인, 하만은 하만(수신인)으로 표시하며 하만 직송은 수신인만 표시합니다.</p></div>}
       {notice&&<p role="status" className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800">{notice}</p>}
       {error&&<p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       {busy&&<p role="status" className="text-sm text-slate-500">처리 중…</p>}

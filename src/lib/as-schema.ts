@@ -7,7 +7,7 @@ export async function ensureAsSchema() {
     const result = await executeQuery("PRAGMA table_info(bo_as_items)");
     if (!result.success) throw new Error("A/S 저장 구조를 확인하지 못했습니다.");
     const columns = new Set(result.rows.map(row => String(row.name)));
-    for (const [name, definition] of Object.entries({ installer: "TEXT", received_date: "TEXT", as_date: "TEXT", service_type: "TEXT", paid_reason: "TEXT" })) {
+    for (const [name, definition] of Object.entries({ installer: "TEXT", received_date: "TEXT", as_date: "TEXT", service_type: "TEXT", paid_reason: "TEXT", intake_photos: "TEXT NOT NULL DEFAULT '[]'", result_photos: "TEXT NOT NULL DEFAULT '[]'", photo_revision: "INTEGER NOT NULL DEFAULT 0" })) {
       if (!columns.has(name)) {
         try { await executeMutation(`ALTER TABLE bo_as_items ADD COLUMN ${name} ${definition}`); }
         catch (error) {

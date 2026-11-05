@@ -10,6 +10,8 @@ import { WorkItem, AsItem } from "@/types";
 import { getToday } from "@/lib/date";
 import { asReceivedDate } from "@/lib/as-report";
 import { ensureAsSchema } from "@/lib/as-schema";
+import { asPhotoSummary } from "@/lib/as-photos";
+import { AsPhotoError, prepareAsPhotos, readAsPhoto } from "@/lib/as-photo-storage";
 import { ensureWorkConfirmationSchema } from "@/lib/work-confirmation-schema";
 import { ensureWorkCalendarSchema } from "@/lib/work-calendar-schema";
 import { workSummary, WORK_SUMMARY_COLUMNS } from "@/lib/work-list";
@@ -225,8 +227,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, count: items.length, data: items, isDb: false });
   } else if (type === "as") {
     await ensureAsSchema();
+    if (searchParams.has("photo")) return readAsPhoto(request);
     if (db) {
-      let sql = "SELECT * FROM bo_as_items";
+      let sql = "SELECT id,type,client_name,construct_date,installer,received_date,as_date,service_type,paid_reason,site_address,reason,result_status,resolution_details,technician,contact_phone,priority,created_at,photo_revision,COALESCE(json_array_length(intake_photos),0) AS intake_photo_count,COALESCE(json_array_length(result_photos),0) AS result_photo_count FROM bo_as_items";
       const conditions: string[] = [];
       const args: any[] = [];
 
@@ -247,6 +250,7 @@ export async function GET(request: NextRequest) {
       if (!res.success) return NextResponse.json({ success: false, message: "업무 데이터를 불러오지 못했습니다." }, { status: 503 });
       if (res.success && res.rows) {
         const items: AsItem[] = res.rows.map((row: any) => ({
+          ...asPhotoSummary(String(row.id), Number(row.intake_photo_count || 0), Number(row.result_photo_count || 0), Number(row.photo_revision || 0)),
           id: String(row.id),
           type: "as",
           clientName: String(row.client_name || ""),
@@ -474,6 +478,7 @@ export async function POST(request: NextRequest) {
       }
 
       const id = body.id || `as-${Date.now()}`;
+      const photos = await prepareAsPhotos(body, id, true);
       const safeConstructDate = constructDate || "";
       const safeReceivedDate = receivedDate || getToday();
       if ((serviceType !== undefined && serviceType !== "유상" && serviceType !== "무상") || (serviceType === "유상" && paidReason !== "고객과실" && paidReason !== "기간만료")) return NextResponse.json({ success: false, message: "유상/무상 구분과 유상 사유를 확인해주세요." }, { status: 400 });
@@ -487,8 +492,8 @@ export async function POST(request: NextRequest) {
       if (db) {
         await executeMutation(
           `INSERT INTO bo_as_items 
-           (id, type, client_name, construct_date, site_address, reason, result_status, resolution_details, technician, contact_phone, priority, created_at, installer, received_date, as_date, service_type, paid_reason)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, type, client_name, construct_date, site_address, reason, result_status, resolution_details, technician, contact_phone, priority, created_at, installer, received_date, as_date, service_type, paid_reason, intake_photos, result_photos, photo_revision)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
             "as",
@@ -507,11 +512,13 @@ export async function POST(request: NextRequest) {
             asDate || "",
             serviceType || null,
             serviceType === "유상" ? paidReason : "",
+            JSON.stringify(photos?.intake || []), JSON.stringify(photos?.result || []), photos?.revision || 0,
           ]
         );
       }
 
       const newItem = serverStore.addAsItem({
+        ...asPhotoSummary(id, photos?.intake.length || 0, photos?.result.length || 0, photos?.revision || 0),
         type: "as",
         clientName,
         constructDate: safeConstructDate,
@@ -532,7 +539,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: false, message: "Invalid type field" }, { status: 400 });
-  } catch {
+  } catch (error) {
+    if (error instanceof AsPhotoError) return NextResponse.json({ success: false, message: error.message }, { status: error.status });
     return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });
   }
 }
@@ -685,6 +693,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: true, data: updated || { id, ...updates } });
     } else if (type === "as") {
       await ensureAsSchema();
+      const photos = await prepareAsPhotos(updates, id, false);
       if ((updates.serviceType !== undefined && updates.serviceType !== "유상" && updates.serviceType !== "무상") || (updates.serviceType === "유상" && updates.paidReason !== "고객과실" && updates.paidReason !== "기간만료") || (updates.paidReason !== undefined && !["", "고객과실", "기간만료"].includes(updates.paidReason))) return NextResponse.json({ success: false, message: "유상/무상 구분과 유상 사유를 확인해주세요." }, { status: 400 });
       if (updates.serviceType === "무상") updates.paidReason = "";
       if (db) {
@@ -713,18 +722,29 @@ export async function PUT(request: NextRequest) {
           if (updates[key] !== undefined) { fields.push(`${column} = ?`); args.push(updates[key]); }
         }
 
-        if (fields.length > 0) {
+        if (fields.length > 0 || photos) {
           args.push(id);
-          await executeMutation(`UPDATE bo_as_items SET ${fields.join(", ")} WHERE id = ?`, args);
+          if (photos) {
+            args.pop();
+            fields.push("intake_photos = ?", "result_photos = ?", "photo_revision = ?");
+            args.push(JSON.stringify(photos.intake), JSON.stringify(photos.result), photos.revision, id, photos.previousRevision);
+            const saved = await executeMutation(`UPDATE bo_as_items SET ${fields.join(", ")} WHERE id = ? AND photo_revision = ? RETURNING id`, args);
+            if (!saved.rows.length) throw new AsPhotoError("사진이 변경되거나 기록이 삭제됐습니다. 새로고침 후 다시 수정해주세요.", 409);
+          } else await executeMutation(`UPDATE bo_as_items SET ${fields.join(", ")} WHERE id = ?`, args);
         }
       }
 
+      if (photos) {
+        Object.assign(updates, asPhotoSummary(id, photos.intake.length, photos.result.length, photos.revision));
+        delete updates.images;
+      }
       const updated = serverStore.updateAsItem(id, updates);
       return NextResponse.json({ success: true, data: updated || { id, ...updates } });
     }
 
     return NextResponse.json({ success: false, message: "Invalid type" }, { status: 400 });
-  } catch {
+  } catch (error) {
+    if (error instanceof AsPhotoError) return NextResponse.json({ success: false, message: error.message }, { status: error.status });
     return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });
   }
 }

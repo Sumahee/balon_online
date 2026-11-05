@@ -3,6 +3,7 @@
 import { useEffect, useId } from "react";
 import { Edit2, Printer, X } from "lucide-react";
 import type { AsItem } from "@/types";
+import { PhotoImage } from "@/components/common/PhotoImage";
 
 interface AsDetailModalProps {
   item: AsItem;
@@ -19,7 +20,10 @@ export function AsDetailModal({ item, onClose, onEdit, onPrint, onOpenPhoto }: A
     window.addEventListener("keydown", closeWithEscape);
     return () => window.removeEventListener("keydown", closeWithEscape);
   }, [onClose]);
-  const photos = item.resultPhotos?.length ? item.resultPhotos : item.images || [];
+  const photoGroups = [
+    { label: "A/S 접수 사진", photos: item.intakePhotos || [] },
+    { label: "조치 후 사진", photos: item.resultPhotos ?? item.images ?? [] },
+  ];
 
   return (
     <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-6" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -43,10 +47,9 @@ export function AsDetailModal({ item, onClose, onEdit, onPrint, onOpenPhoto }: A
           </dl>
           <section><h3 className="mb-2 text-sm font-bold text-slate-900">A/S 발생 사유</h3><p className="whitespace-pre-wrap break-words rounded-xl bg-amber-50 p-4 text-sm leading-7 text-slate-800">{item.reason || "등록된 사유가 없습니다."}</p></section>
           <section><h3 className="mb-2 text-sm font-bold text-slate-900">처리 및 조치 결과</h3><p className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">{item.resolutionDetails || "아직 조치 결과가 등록되지 않았습니다."}</p></section>
-          {photos.length > 0 && <section><h3 className="mb-3 text-sm font-bold text-slate-900">현장 사진 · {photos.length}장</h3><div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{photos.map((url, index) => <button key={`${url}-${index}`} type="button" onClick={() => onOpenPhoto(url)} aria-label={`현장 사진 ${index + 1} 확대`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={`현장 사진 ${index + 1}`} className="max-h-80 w-full rounded-lg object-contain" />
-          </button>)}</div></section>}
+          {photoGroups.map(({ label, photos }) => <section key={label}><h3 className="mb-3 text-sm font-bold text-slate-900">{label} · {photos.length}장</h3>{photos.length ? <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{photos.map((url, index) => <button key={`${url}-${index}`} type="button" onClick={() => onOpenPhoto(url)} aria-label={`${label} ${index + 1} 확대`}>
+            <PhotoImage src={url} alt={`${label} ${index + 1}`} loading="lazy" className="max-h-80 w-full rounded-lg object-contain" />
+          </button>)}</div> : <p className="text-sm text-slate-500">등록된 사진이 없습니다.</p>}</section>)}
         </div>
         <footer className="flex justify-end gap-2 border-t border-slate-200 p-4">
           <button type="button" onClick={onPrint} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><Printer className="h-4 w-4" />접수증 인쇄</button>

@@ -13,7 +13,6 @@ import {
   Printer,
   Edit2,
   Trash2,
-  Camera,
   X} from "lucide-react";
 import { useData } from "@/context/DataContext";
 import { AsItem, AsStatus, Priority } from "@/types";
@@ -21,6 +20,8 @@ import { AsDetailModal } from "@/components/as/AsDetailModal";
 import { cn } from "@/lib/utils";
 import { AsIntakeFields } from "@/components/as/AsIntakeFields";
 import { AsReportDialog } from "@/components/as/AsReportDialog";
+import { AsPhotoEditor } from "@/components/as/AsPhotoEditor";
+import { PhotoImage } from "@/components/common/PhotoImage";
 
 export default function AsBoardPage() {
   const { asItems, updateAsItem, deleteAsItem, advanceAsStatus, setQuickModalType, isSaving } = useData();
@@ -38,42 +39,10 @@ export default function AsBoardPage() {
 
   // Edit modal
   const [editingItem, setEditingItem] = useState<AsItem | null>(null);
+  const [photosBusy, setPhotosBusy] = useState(false);
 
   // Photo Preview Lightbox
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
-
-  const handleResultPhotoUpload = (files: FileList | null) => {
-    if (!files || files.length === 0 || !editingItem) return;
-
-    const newPhotoUrls: string[] = [];
-    let count = 0;
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        if (evt.target?.result) {
-          newPhotoUrls.push(evt.target.result as string);
-        }
-        count++;
-        if (count === files.length) {
-          const existing = editingItem.resultPhotos || editingItem.images || [];
-          setEditingItem({
-            ...editingItem,
-            resultPhotos: [...existing, ...newPhotoUrls],
-          });
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handleRemoveResultPhoto = (index: number) => {
-    if (!editingItem) return;
-    const existing = editingItem.resultPhotos || editingItem.images || [];
-    setEditingItem({
-      ...editingItem,
-      resultPhotos: existing.filter((_: string, i: number) => i !== index),
-    });
-  };
 
   const filteredItems = asItems.filter((item) => {
     const query = searchQuery.toLowerCase();
@@ -115,7 +84,7 @@ export default function AsBoardPage() {
 
   const handleEditSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSaving) return;
+    if (isSaving || photosBusy) return;
     try {
       if (!editingItem) return;
       await updateAsItem(editingItem.id, editingItem);
@@ -335,7 +304,8 @@ export default function AsBoardPage() {
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                 <span>{item.asDate ? `A/S 처리 예정일 ${item.asDate}` : "A/S 처리 예정일 미정"}</span>
                 <div className="flex items-center gap-3">
-                  {(item.resultPhotos?.length || item.images?.length || 0) > 0 && <span>사진 {item.resultPhotos?.length || item.images?.length}장</span>}
+                  {!!item.intakePhotos?.length && <span>접수 사진 {item.intakePhotos.length}장</span>}
+                  {(item.resultPhotos ?? item.images ?? []).length > 0 && <span>조치 사진 {(item.resultPhotos ?? item.images ?? []).length}장</span>}
                   <span className="font-medium text-blue-700">상세보기 →</span>
                 </div>
               </div>
@@ -457,6 +427,7 @@ export default function AsBoardPage() {
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <h3 className="font-bold text-base text-slate-900">A/S 접수 정보 수정</h3>
               <button
+                disabled={isSaving || photosBusy}
                 onClick={() => setEditingItem(null)}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded"
               >
@@ -511,6 +482,7 @@ export default function AsBoardPage() {
                 />
               </div>
 
+              <AsPhotoEditor label="A/S 접수 사진" photos={editingItem.intakePhotos || []} disabled={isSaving || photosBusy} onBusyChange={setPhotosBusy} onChange={intakePhotos => setEditingItem(current => current ? { ...current, intakePhotos } : current)} />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">처리 상태</label>
@@ -577,17 +549,6 @@ export default function AsBoardPage() {
                   <label className="block text-xs font-bold text-slate-700">
                     처리 내용 및 조치 결과
                   </label>
-                  <label className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 cursor-pointer hover:bg-blue-100 transition">
-                    <Camera className="w-3.5 h-3.5 text-blue-600" />
-                    <span>📷 조치 사진 첨부</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => handleResultPhotoUpload(e.target.files)}
-                    />
-                  </label>
                 </div>
                 <textarea
                   rows={2}
@@ -599,39 +560,20 @@ export default function AsBoardPage() {
                   className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
 
-                {/* 첨부된 조치 결과 사진 썸네일 & 삭제 */}
-                {((editingItem.resultPhotos && editingItem.resultPhotos.length > 0) || (editingItem.images && editingItem.images.length > 0)) && (
-                  <div className="mt-2.5 space-y-1">
-                    <span className="text-xs font-bold text-slate-600">첨부된 조치 결과 현장 사진 ({(editingItem.resultPhotos || editingItem.images || []).length}장):</span>
-                    <div className="flex flex-wrap gap-2">
-                      {(editingItem.resultPhotos || editingItem.images || []).map((imgUrl: string, idx: number) => (
-                        <div key={idx} className="w-16 h-16 rounded-xl border border-slate-300 overflow-hidden relative group shadow-2xs">
-                          <img src={imgUrl} alt={`조치사진 #${idx + 1}`} className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveResultPhoto(idx)}
-                            className="absolute top-1 right-1 p-0.5 bg-rose-600 text-white rounded-full opacity-80 hover:opacity-100 transition"
-                            title="사진 삭제"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <div className="mt-3"><AsPhotoEditor label="조치 후 사진" photos={editingItem.resultPhotos ?? editingItem.images ?? []} disabled={isSaving || photosBusy} onBusyChange={setPhotosBusy} onChange={resultPhotos => setEditingItem(current => current ? { ...current, resultPhotos } : current)} /></div>
               </div>
 
               <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
+                  disabled={isSaving || photosBusy}
                   onClick={() => setEditingItem(null)}
                   className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
                 >
                   취소
                 </button>
                 <button
-                  type="submit" disabled={isSaving} aria-busy={isSaving}
+                  type="submit" disabled={isSaving || photosBusy} aria-busy={isSaving || photosBusy}
                   className="px-5 py-2 rounded-lg bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 shadow-xs cursor-pointer"
                 >
                   수정 저장
@@ -649,9 +591,9 @@ export default function AsBoardPage() {
           className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in"
         >
           <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center">
-            <img
+            <PhotoImage
               src={previewPhotoUrl}
-              alt="조치 사진 확대"
+              alt="A/S 사진 확대"
               className="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl border border-slate-700"
             />
             <button

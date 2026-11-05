@@ -35,8 +35,8 @@ test("daily ledger yields 4 BARON and 4 homepartner shipments, excludes direct d
   const result=shipping.parseShippingRows(rows,"Sheet1");assert.equal(result.entries.length,8);assert.equal(result.excluded.length,1);
   assert.equal(result.entries.filter(e=>e.sender==="baron").length,4);
   assert.equal(result.entries.filter(e=>e.sender==="homepartner").length,4);
-  assert.equal(result.entries.find(e=>e.customer==="다른장부/해주").recipient,"해주주방가구");
-  assert.equal(result.entries.at(-1).recipient,"삼양가구");assert.equal(result.entries.at(-1).address,"제주화북점");
+  assert.equal(result.entries.find(e=>e.customer==="다른장부/해주").recipient,"다른장부/해주");
+  assert.equal(result.entries.at(-1).recipient,"삼양가구(제주도)");assert.equal(result.entries.at(-1).address,"제주화북점");
   assert.equal(result.entries[1].phone,"010-2222-3333");
   assert.ok(result.entries.at(-2).address.endsWith("/ 문앞"));
   assert.ok(result.entries.every(e=>e.product===""&&e.quantity===null));
@@ -48,6 +48,70 @@ test("all 4 modes, ambiguous modes, address words and cancelled inbound rows",()
   assert.equal(shipping.parseShippingRows([["unrelated"]],"S"),null);
   assert.equal(shipping.extractRecipient("대신착택/고객/대전시 선화로 1/010-1234-5678","원장").address,"대전시 선화로 1");
   assert.equal(shipping.extractRecipient("대신착택/고객/서울시 서초구 1/02-123-4567/010-9876-5432","원장").phone,"010-9876-5432");
+});
+
+test("general B2B ledgers take recipients from notes and keep branch destinations out of names",()=>{
+  for(const customer of ["일반(B2B)★ 일반/미수", "일반(b2b)", "일반 ( B2B ) ★ 일반/미수", "일반（B2B）"]){
+    const parsed=shipping.extractRecipient("(강과장)대신선택/스테인//성남시 중원구 광명로 176 신흥하늘/010-1234-5678",customer);
+    assert.equal(parsed.recipient,"스테인");assert.equal(parsed.address,"성남시 중원구 광명로 176 신흥하늘");
+    assert.equal(parsed.phone,"010-1234-5678");
+  }
+  for(const address of ["김해한림영업소","대신택배 김해한림영업소","대구 월배점","광주하남지점","부산사상 영업소 (방문수령)"]){
+    const parsed=shipping.extractRecipient(`(이팀장)대신착택/엘도하우징/${address}/010-1234-5678`,"일반(B2B)★ 일반/미수");
+    assert.equal(parsed.recipient,"엘도하우징");assert.equal(parsed.address,address.replace("대신택배 ",""));
+  }
+  const missing=shipping.extractRecipient("대신착택/김해한림영업소/010-1234-5678","일반(B2B)★ 일반/미수");
+  assert.equal(missing.recipient,"");assert.equal(missing.address,"김해한림영업소");
+  assert.ok(shipping.shipmentWarnings({...batch().entries[0],...missing}).includes("받는 분 없음"));
+});
+
+test("ordinary companies use the ledger name including corporate and legacy name qualifiers",()=>{
+  for(const customer of ["신창앤오랜지(주)","(주)릴리프 코리아","㈜아이튼우드","엘엑스엔비(구 우리들기업)","아이튼우드/구)우드텍"]){
+    const parsed=shipping.extractRecipient("(강과장)대신착택/다른수신인/김해한림영업소/010-1234-5678",customer);
+    assert.equal(parsed.recipient,customer);assert.equal(parsed.address,"김해한림영업소");
+  }
+  const apartment=shipping.extractRecipient("(강과장)대신선택/릴리프 코리아//이촌동 삼성리버스위트 106-101/010-1234-5678","릴리프 코리아");
+  assert.equal(apartment.recipient,"릴리프 코리아");assert.equal(apartment.address,"이촌동 삼성리버스위트 106-101");
+  const addressOnly=shipping.extractRecipient("대신선택/경기도 광주시 고불로 235/상가 1층/010-1234-5678","정상업체");
+  assert.equal(addressOnly.address,"경기도 광주시 고불로 235 / 상가 1층");
+});
+
+test("Haman normally wraps the note recipient but direct shipments use only that recipient",()=>{
+  for(const customer of ["하만","하만(주)","(주)하만","㈜하만","주식회사 하만"]){
+    const normal=shipping.extractRecipient("(강과장)대신착택/서울퍼니처/김해한림영업소/010-1234-5678",customer);
+    assert.equal(normal.recipient,"하만(서울퍼니처)");assert.equal(normal.address,"김해한림영업소");
+    for(const mark of ["직송/", "직송: ", "(직송)"]){
+      const direct=shipping.extractRecipient(`(강과장)대신착택/${mark}서울퍼니처/경기도 광주시 고불로 235/010-1234-5678`,customer);
+      assert.equal(direct.recipient,"서울퍼니처");assert.equal(direct.address,"경기도 광주시 고불로 235");
+    }
+  }
+  assert.equal(shipping.extractRecipient("대신착택/(주)한샘/김해한림영업소/010-1234-5678","하만").recipient,"하만((주)한샘)");
+  assert.equal(shipping.extractRecipient("대신착택/하만(한샘)/김해한림영업소/010-1234-5678","하만").recipient,"하만(한샘)");
+  assert.equal(shipping.extractRecipient("대신착택/하만/김해한림영업소/010-1234-5678","하만").recipient,"하만");
+  assert.equal(shipping.extractRecipient("대신착택/직송/김해한림영업소/010-1234-5678","하만").recipient,"");
+  assert.equal(shipping.extractRecipient("대신착택/한샘/김해한림영업소/010-1234-5678","하만디자인").recipient,"하만디자인");
+});
+
+test("homepartner stays a separate sender with note recipients, and source notes remain unchanged",()=>{
+  const source=[header,
+    ["홈파트너","출고","제품매출","대신선택/박혜민/경기도 광주시 고불로 235/010-1111-2222"],
+    ["하만","출고","제품매출","대신착택/직송/강상욱/김해한림영업소/010-3333-4444"],
+    ["일반(B2B)★ 일반/미수","출고","제품매출","대신선화/엘도하우징/인천시 서구 가정로 1/010-5555-6666"],
+    ["홈파트너","입금","외상매출금","대신선택/입금전표"],
+  ];
+  const parsed=shipping.parseShippingRows(source,"일일거래내역");
+  assert.equal(parsed.entries.length,3);assert.equal(parsed.excluded.length,1);
+  assert.deepEqual(Array.from(parsed.entries,e=>[e.sender,e.recipient]),[["homepartner","박혜민"],["baron","강상욱"],["baron","엘도하우징"]]);
+  for(let i=0;i<3;i++)assert.equal(parsed.entries[i].note,source[i+1][3]);
+  assert.deepEqual(Array.from(parsed.entries,e=>e.mode),["택배 선불","택배 착불","화물 선불"]);
+  const separate={...batch(),entries:parsed.entries};
+  for(const [sender,expected] of [["homepartner","박혜민"],["baron","강상욱"]]){
+    const bytes=exporter.makeShippingExcel(readFileSync(`public/shipping-templates/${sender}.xlsx`),separate,sender);
+    const workbook=XLSX.read(bytes,{type:"array"});
+    assert.equal(workbook.Sheets[workbook.SheetNames[0]].B8.v,expected);
+    const sheetText=JSON.stringify(workbook.Sheets[workbook.SheetNames[0]]);
+    assert.ok(!sheetText.includes(sender==="homepartner"?"강상욱":"박혜민"));
+  }
 });
 test("server validates dates, destinations, categories, duplicate rows and null versus zero quantities",()=>{
   assert.equal(shipping.validateShippingBatch(batch()).entries.length,8);
