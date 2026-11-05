@@ -2,7 +2,10 @@
 
 import { PageHeader } from "@/components/common/PageHeader";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
+import { PhotoInputArea } from "@/components/common/PhotoInputArea";
+import { clipboardFiles } from "@/lib/clipboard-files";
+import { compressPhoto, readPhotoFile } from "@/lib/photo-compression";
 import { useData } from "@/context/DataContext";
 import { OnlinePurchaseItem } from "@/types";
 import {
@@ -34,6 +37,11 @@ export default function PurchasesPage() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OnlinePurchaseItem | null>(null);
+  const photoLock = useRef(false);
+  const saveLock = useRef(false);
+  const [photosBusy, setPhotosBusy] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  const formBusy = isSaving || photosBusy;
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<string | null>(null);
   const selectedPurchase = purchaseItems.find(item => item.id === selectedPurchaseId);
 
@@ -103,6 +111,8 @@ export default function PurchasesPage() {
 
   // Open Add Modal
   const handleOpenAddModal = () => {
+    if (photoLock.current || saveLock.current || isSaving) return;
+    setPhotoError("");
     setEditingItem(null);
     setFormData({
       mallName: "",
@@ -122,6 +132,8 @@ export default function PurchasesPage() {
 
   // Open Edit Modal
   const handleOpenEditModal = (item: OnlinePurchaseItem) => {
+    if (photoLock.current || saveLock.current || isSaving) return;
+    setPhotoError("");
     setEditingItem(item);
     setFormData({
       mallName: item.mallName || "",
@@ -139,28 +151,29 @@ export default function PurchasesPage() {
     setIsModalOpen(true);
   };
 
-  // Handle Photo Upload (Convert file to Base64 data URL)
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  // File selection, drop and clipboard images share one ordered, atomic update.
+  const addPhotos = async (files: File[]) => {
+    if (!files.length || photoLock.current || saveLock.current || isSaving) return;
+    photoLock.current = true; setPhotosBusy(true); setPhotoError("");
+    try {
+      const added: string[] = [];
+      for (const file of files) {
+        if (!file.type.startsWith("image/") || !file.size || file.size > 25 * 1024 * 1024) throw new Error("25MB 이하의 사진을 첨부해주세요.");
+        added.push(await compressPhoto(await readPhotoFile(file)));
+      }
+      setFormData(current => ({ ...current, photos: [...current.photos, ...added] }));
+    } catch (cause) {
+      setPhotoError(cause instanceof Error ? cause.message : "사진을 준비하지 못했습니다. 다시 첨부해주세요.");
+    } finally { photoLock.current = false; setPhotosBusy(false); }
+  };
 
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (uploadEvent) => {
-        const result = uploadEvent.target?.result as string;
-        if (result) {
-          setFormData((prev) => ({
-            ...prev,
-            photos: [...prev.photos, result],
-          }));
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+  const closeEditor = () => {
+    if (!photoLock.current && !saveLock.current && !isSaving) setIsModalOpen(false);
   };
 
   // Remove Photo from Form
   const handleRemovePhoto = (indexToRemove: number) => {
+    if (photoLock.current || saveLock.current || isSaving) return;
     setFormData((prev) => ({
       ...prev,
       photos: prev.photos.filter((_, idx) => idx !== indexToRemove),
@@ -170,7 +183,8 @@ export default function PurchasesPage() {
   // Form Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSaving) return;
+    if (isSaving || photoLock.current || saveLock.current) return;
+    saveLock.current = true;
     try {
       if (!formData.itemName.trim()) {
         alert("품목명을 입력해주세요.");
@@ -186,7 +200,7 @@ export default function PurchasesPage() {
       setIsModalOpen(false);
     } catch {
       // DataContext displays the error; leave the form open for retry.
-    }
+    } finally { saveLock.current = false; }
   };
 
   // Delete Handler
@@ -586,7 +600,7 @@ export default function PurchasesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 relative my-8">
             <button
-              onClick={() => setIsModalOpen(false)}
+              onClick={closeEditor} disabled={formBusy} aria-label="구매 등록·수정 닫기"
               className="absolute top-5 right-5 p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -606,7 +620,11 @@ export default function PurchasesPage() {
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+            <form onSubmit={handleSubmit} onPaste={event => {
+              const files = clipboardFiles(event.clipboardData).filter(file => file.type.startsWith("image/"));
+              if (!files.length) return;
+              event.preventDefault(); event.stopPropagation(); void addPhotos(files);
+            }} className="mt-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* 쇼핑몰업체 */}
                 <div>
@@ -750,6 +768,10 @@ export default function PurchasesPage() {
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   상품 / 자재 실물 사진
                 </label>
+                <PhotoInputArea label="자재 구매 사진" disabled={formBusy} onFiles={addPhotos}>
+                <p className="text-xs text-slate-500">복사한 사진은 이 창 어디서든 Ctrl+V로 첨부할 수 있습니다. 사진은 자동 압축되며 저장 버튼을 눌러야 보관됩니다.</p>
+                {photosBusy && <p role="status" className="text-xs text-blue-700">사진 준비 중…</p>}
+                {photoError && <p role="alert" className="text-xs text-rose-700">{photoError}</p>}
                 <div className="flex flex-wrap items-center gap-3">
                   {formData.photos.map((photo, idx) => (
                     <div
@@ -759,6 +781,7 @@ export default function PurchasesPage() {
                       <img src={photo} alt="자재 사진" className="w-full h-full object-cover" />
                       <button
                         type="button"
+                        disabled={formBusy} aria-label={`자재 사진 ${idx + 1} 제거`}
                         onClick={() => handleRemovePhoto(idx)}
                         className="absolute top-1 right-1 bg-black/70 text-white p-1 rounded-full hover:bg-red-600 transition opacity-90 cursor-pointer"
                       >
@@ -774,24 +797,26 @@ export default function PurchasesPage() {
                       type="file"
                       accept="image/*"
                       multiple
-                      onChange={handlePhotoUpload}
+                      aria-label="자재 구매 사진 파일 선택" disabled={formBusy}
+                      onChange={event => { const files = Array.from(event.target.files || []); event.target.value = ""; void addPhotos(files); }}
                       className="hidden"
                     />
                   </label>
                 </div>
+                </PhotoInputArea>
               </div>
 
               {/* Submit Buttons */}
               <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={closeEditor} disabled={formBusy}
                   className="px-5 py-2.5 rounded-xl border border-slate-300 font-semibold text-slate-700 text-sm hover:bg-slate-50 transition cursor-pointer"
                 >
                   취소
                 </button>
                 <button
-                  type="submit" disabled={isSaving} aria-busy={isSaving}
+                  type="submit" disabled={formBusy} aria-busy={formBusy}
                   className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md transition cursor-pointer"
                 >
                   {editingItem ? "수정 완료" : "구매 등록 저장"}
