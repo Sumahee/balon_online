@@ -27,8 +27,16 @@ export async function linkDrawingProject(workItemId: string, selectedId?: string
   if (result.rows[0]) return String(result.rows[0].project_id);
   if (selectedId) throw new Error('선택한 도면은 이 업무와 연결되어 있지 않습니다.');
   // Deterministic initial ID prevents repeated launches from creating duplicate empty projects.
-  const projectId = `online-${crypto.createHash('sha256').update(workItemId).digest('hex').slice(0,40)}`;
+  let projectId = `online-${crypto.createHash('sha256').update(workItemId).digest('hex').slice(0,40)}`;
   await executeMutation("INSERT INTO bo_drawing_links(project_id,work_item_id,sheet_manifest,updated_at,revision) VALUES(?,?,'{}',?,0) ON CONFLICT(project_id) DO NOTHING", [projectId,workItemId,new Date().toISOString()]);
+  const existing = await executeQuery('SELECT work_item_id FROM bo_drawing_links WHERE project_id=?', [projectId]);
+  if (!existing.success || !existing.rows.length) throw new Error('도면 연결 정보를 확인하지 못했습니다.');
+  // A reset may have moved the deterministic project to another work or disconnected it.
+  if (existing.rows[0].work_item_id !== workItemId) {
+    projectId = 'online-' + crypto.randomUUID();
+    const inserted = await executeMutation("INSERT INTO bo_drawing_links(project_id,work_item_id,sheet_manifest,updated_at,revision) VALUES(?,?,'{}',?,0)", [projectId,workItemId,new Date().toISOString()]);
+    if (!inserted.success) throw new Error('도면 연결을 만들지 못했습니다.');
+  }
   await connectionCode(db!, projectId);
   return projectId;
 }

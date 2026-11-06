@@ -44,3 +44,20 @@ test('web-first shared links expose per-sheet latest PDFs and retained export hi
     assert.equal(await linkDrawingProject('work-1'),'web-first-project');
   } finally {db.close();}
 });
+
+
+test('launching an original work after reset never reuses a moved or disconnected project',async()=>{
+  const {db,linkDrawingProject}=await fixture();
+  try {
+    const first=await linkDrawingProject('work-1');
+    await db.execute({sql:'UPDATE bo_drawing_links SET work_item_id=? WHERE project_id=?',args:['other-work',first]});
+    const replacement=await linkDrawingProject('work-1');
+    assert.notEqual(replacement,first);
+    assert.equal(await linkDrawingProject('work-1'),replacement);
+    await db.execute({sql:"UPDATE bo_drawing_links SET work_item_id='' WHERE project_id=?",args:[replacement]});
+    const reconnected=await linkDrawingProject('work-1');
+    assert.notEqual(reconnected,first);assert.notEqual(reconnected,replacement);
+    const row=(await db.execute({sql:'SELECT work_item_id FROM bo_drawing_links WHERE project_id=?',args:[reconnected]})).rows[0];
+    assert.equal(row.work_item_id,'work-1');
+  } finally {db.close();}
+});
