@@ -7,10 +7,10 @@ import ts from "typescript";
 
 const nativeRequire = createRequire(import.meta.url);
 function load(path, mocks = {}) {
-  const module = { exports: {} };
-  const code = ts.transpileModule(readFileSync(path, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  new Function("require", "module", "exports", code)(name => name in mocks ? mocks[name] : nativeRequire(name), module, module.exports);
-  return module.exports;
+  const loadedModule = { exports: {} };
+  const code = ts.transpileModule(readFileSync(path, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
+  new Function("require", "module", "exports", code)(name => name in mocks ? mocks[name] : nativeRequire(name), loadedModule, loadedModule.exports);
+  return loadedModule.exports;
 }
 const model = load("src/lib/document-board.ts");
 test("document body links preserve text, queries, Korean paths and balanced parentheses", () => {
@@ -28,6 +28,8 @@ function fixture() {
   const db = createClient({ url: "file::memory:" });
   let user = { id: "writer", name: "문서 담당자", onlineRole: "staff" };
   const handler = load("src/lib/api-handlers/documents.ts", {
+    "@/lib/drawer-reference": load("src/lib/drawer-reference.ts"),
+    "@/data/drawer-review-580-3.json": nativeRequire("../src/data/drawer-review-580-3.json"),
     "@/lib/db": { db }, "@/lib/document-board": model,
     "@/lib/access": { isInstaller: u => u.onlineRole === "installer" },
     "./auth": { VERIFY: async () => user ? Response.json({ user }) : Response.json({ success: false }, { status: 401 }) },

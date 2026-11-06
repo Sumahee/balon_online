@@ -65,6 +65,7 @@ export interface WorkItem {
   assignee: string;
   priority: Priority;
   status: WorkStatus; // 대기 -> 오피스 -> 공장 -> 준비완료 -> 시공완료
+  kanbanOrder?: number | null;
   confirmationCompleted?: boolean; // 업체 컨펌 완료
   confirmationPending?: boolean; // 업체 컨펌 대기 표시 (공정 상태와 별도)
   calendarVisible?: boolean;
@@ -148,6 +149,8 @@ export interface DrawerCutPart {
 }
 
 export interface DrawerHardware {
+  id?: string;
+  unit?: string;
   name: string;
   spec: string;
   count: number;
@@ -155,6 +158,7 @@ export interface DrawerHardware {
 }
 
 export interface DrawerCalcInput {
+  backPanelHeight?: number; // 검토표 뒷판 높이 직접 확인값 (mm)
   productType?: 'custom' | 'ceiling-floor' | 'ceiling-floating' | 'island-channel' | 'island-handle';
   cabinetQuantity?: number;
   cabinetWidth: number; // 외경 가로 mm

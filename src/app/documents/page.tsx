@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { useAuth } from "@/context/AuthContext";
 import { requestApi } from "@/lib/api-client";
 import { DOCUMENT_FILE_COUNT, DOCUMENT_FILE_LIMIT, documentBodyParts, type DocumentAttachment, type DocumentPost } from "@/lib/document-board";
+import { DRAWER_REFERENCE } from "@/lib/drawer-reference";
 
 type PendingFile = { key: string; file: File; uploaded?: DocumentAttachment };
 const button = "inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed";
@@ -122,6 +123,7 @@ export default function DocumentsPage() {
         <label className="flex-1 max-w-lg"><span className="sr-only">제목, 본문, 작성자 검색</span><input className={field} value={query} onChange={e => setQuery(e.target.value)} placeholder="제목, 본문, 작성자 검색" maxLength={200} /></label>
         <button className={button} disabled={busy}><Search size={16} />검색</button>
       </form>
+      {page === 0 && `${DRAWER_REFERENCE.title} ${DRAWER_REFERENCE.body}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()) && <button onClick={() => open(DRAWER_REFERENCE.id)} disabled={busy} className="flex w-full items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-5 text-left disabled:opacity-50"><FileText className="shrink-0 text-blue-600" size={24} /><span className="min-w-0 flex-1"><span className="mb-1 block text-xs font-semibold text-blue-700">보관 양식 · 원본 1개</span><span className="block text-sm font-bold text-slate-800">{DRAWER_REFERENCE.title}</span><span className="mt-1 block text-xs text-slate-600">치수 보정 메모·철물 수량표 · 원본 PNG 내려받기</span></span><Paperclip className="shrink-0 text-blue-600" size={16} /></button>}
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_110px_110px] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-sm font-semibold text-slate-500"><span>제목</span><span>작성자</span><span>등록일</span></div>
         {loading ? <p role="status" className="p-12 text-center text-sm text-slate-500">문서를 불러오는 중…</p> : error ? <p className="p-12 text-center text-sm text-slate-500">목록을 불러오지 못했습니다.</p> : items.length === 0 ? <div className="p-12 text-center text-slate-500"><FileText className="mx-auto mb-3 text-slate-300" size={32} /><p>{search ? "검색 결과가 없습니다." : "등록된 문서가 없습니다. 첫 문서를 올려보세요."}</p></div> : items.map(item =>

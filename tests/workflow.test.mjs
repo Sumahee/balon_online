@@ -20,6 +20,7 @@ function loadModule(file, mocks = {}, globals = {}, cache = new Map()) {
   }).outputText;
   const require = (name) => {
     if (name in mocks) return mocks[name];
+    if (name.startsWith("@/") && name.endsWith(".json")) return JSON.parse(readFileSync(`src/${name.slice(2)}`, "utf8"));
     if (name.startsWith("@/")) return loadModule(`src/${name.slice(2)}.ts`, mocks, globals, cache);
     if (name.startsWith("./") || name.startsWith("../")) return loadModule(resolve(path, "..", `${name}.ts`), mocks, globals, cache);
     return nativeRequire(name);

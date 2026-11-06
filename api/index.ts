@@ -1,4 +1,5 @@
 import * as documentsHandler from "@/lib/api-handlers/documents";
+import * as drawerPricesHandler from "@/lib/api-handlers/drawer-prices";
 import * as carbideHandler from "@/lib/api-handlers/carbide";
 import { authorizeApi } from "@/lib/api-access";
 import * as equipmentHandler from "@/lib/api-handlers/equipment";
@@ -55,6 +56,8 @@ export async function GET(request: NextRequest, context?: RouteContext) {
     if (denied) return denied;
 
     switch (domain) {
+      case "drawer-prices":
+        return await drawerPricesHandler.GET(request);
       case "carbide":
         return await carbideHandler.GET(request);
       case "documents":
@@ -186,6 +189,8 @@ export async function PUT(request: NextRequest, context?: RouteContext) {
     if (denied) return denied;
 
     switch (domain) {
+      case "drawer-prices":
+        return await drawerPricesHandler.PUT(request);
       case "carbide":
         return await carbideHandler.PUT(request);
       case "documents":

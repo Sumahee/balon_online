@@ -14,6 +14,7 @@ export async function POST(request: NextRequest) {
       railType,
       marginGap,
       productType,
+      backPanelHeight,
       cabinetQuantity,
       hasGrain,
     } = body;
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest) {
     }
 
     const input: DrawerCalcInput = {
+      ...(backPanelHeight === undefined ? {} : { backPanelHeight: Number(backPanelHeight) }),
       productType,
       cabinetQuantity: cabinetQuantity === undefined ? 1 : Number(cabinetQuantity),
       hasGrain: hasGrain === true,

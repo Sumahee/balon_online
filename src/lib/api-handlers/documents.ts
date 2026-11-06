@@ -5,6 +5,8 @@ import { VERIFY } from "./auth";
 import { isInstaller } from "@/lib/access";
 import { DOCUMENT_FILE_LIMIT, validateDocumentPost } from "@/lib/document-board";
 import type { Row } from "@libsql/client";
+import { DRAWER_REFERENCE, DRAWER_REFERENCE_FILE_ID } from "@/lib/drawer-reference";
+import drawerReferenceImage from "@/data/drawer-review-580-3.json";
 
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
 let pending: Promise<void> | undefined;
@@ -34,8 +36,17 @@ function post(row: Row) {
 export async function GET(request: Request) {
   const auth = await staff(request); if (auth.denied) return auth.denied;
   try {
-    await schema();
     const p = new URL(request.url).searchParams;
+    // A bundled original remains available in the library without a DB migration.
+    // It is never served from public/, and uses the same staff checks as uploads.
+    if (p.get("file") === DRAWER_REFERENCE_FILE_ID) return new Response(Buffer.from(drawerReferenceImage.base64, "base64"), { headers: {
+      "Content-Type": "image/png", "Content-Disposition": `attachment; filename="drawer-review-580-3.png"; filename*=UTF-8''${encodeURIComponent("서랍장 제작 기준 검토표_580_3단_원본.png")}`,
+      "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
+    } });
+    if (p.get("id") === DRAWER_REFERENCE.id) return json({ success: true, data: { ...DRAWER_REFERENCE,
+      attachments: [{ id: DRAWER_REFERENCE_FILE_ID, name: "서랍장 제작 기준 검토표_580_3단_원본.png", size: drawerReferenceImage.size }],
+    } });
+    await schema();
     if (p.has("file")) {
       const result = await db!.execute({ sql: "SELECT f.name,f.data FROM bo_document_files f JOIN bo_document_posts p ON p.id=f.post_id WHERE f.id=?", args: [p.get("file")!] });
       if (!result.rows.length) return json({ success: false, error: "첨부파일을 찾을 수 없습니다." }, 404);

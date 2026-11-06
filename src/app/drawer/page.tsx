@@ -18,9 +18,11 @@ import {
 } from "lucide-react";
 import { DrawerCalcInput, DrawerCalcResult } from "@/types";
 import { calculateDrawer } from "@/lib/drawerEngine";
-import { DRAWER_TEMPLATES, templateDimensions } from "@/lib/drawerTemplates";
+import { DRAWER_TEMPLATES, REVIEWED_BACK_PANEL_HEIGHT, templateDimensions } from "@/lib/drawerTemplates";
 import { cn } from "@/lib/utils";
 import DrawerDrawing from "./DrawerDrawing";
+import DrawerCostPanel, { drawerCostText, useDrawerPriceBook } from "./DrawerCostPanel";
+import { isReviewedDrawer } from "@/lib/drawer-pricing";
 
 const PRESETS: { label: string; values: DrawerCalcInput }[] = [
   {
@@ -69,16 +71,18 @@ export default function DrawerAutomationPage() {
     productType: "ceiling-floor",
     cabinetQuantity: 1,
     cabinetWidth: 580,
-    cabinetHeight: 444,
+    cabinetHeight: 627,
     cabinetDepth: 400,
     boardThickness: 18,
-    drawerCount: 2,
+    drawerCount: 3,
     railType: "ball3stage",
     marginGap: 3,
     hasGrain: true,
   });
 
   const [copied, setCopied] = useState(false);
+  const pricing = useDrawerPriceBook();
+  const reviewed = isReviewedDrawer(inputs);
   const template = DRAWER_TEMPLATES.find(t => t.id === inputs.productType);
 
   // Real-time calculated result
@@ -93,7 +97,7 @@ export default function DrawerAutomationPage() {
   const handleCopyClipboard = () => {
     const textLines = [
       `=== [BALON INT] 서랍장 부재 재단 및 부속/원장 산출표 ===`,
-      `캐비닛 외경: ${inputs.cabinetWidth} x ${inputs.cabinetHeight} x ${inputs.cabinetDepth} mm (${inputs.boardThickness}T, ${inputs.drawerCount}단)`,
+      `캐비닛 외경: ${result.input.cabinetWidth} x ${result.input.cabinetHeight} x ${result.input.cabinetDepth} mm (${result.input.boardThickness}T, ${inputs.drawerCount}단)`,
       `적용 레일: ${result.railSpec.name}`,
       result.summaryNote,
       ...(result.warnings ?? []).map(w => `확인 사항: ${w}`),
@@ -114,7 +118,9 @@ export default function DrawerAutomationPage() {
       `>> 총 필요 4x8 원장: ${totalSheetsNeeded}장`,
       ``,
       `[소요 하드웨어]`,
-      ...result.hardware.map((h) => `${h.name}: ${h.count}개 (${h.notes})`),
+      ...result.hardware.map((h) => `${h.name}: ${h.count}${h.unit ?? "개"} (${h.notes})`),
+      "",
+      ...drawerCostText(result, pricing.book),
     ].join("\n");
 
     navigator.clipboard.writeText(textLines).then(() => {
@@ -196,12 +202,14 @@ export default function DrawerAutomationPage() {
             <button
               onClick={() =>
                 setInputs({
-                  cabinetWidth: 800,
-                  cabinetHeight: 850,
-                  cabinetDepth: 600,
+                  productType: "ceiling-floor",
+                  cabinetQuantity: 1,
+                  cabinetWidth: 580,
+                  cabinetHeight: 627,
+                  cabinetDepth: 400,
                   boardThickness: 18,
                   drawerCount: 3,
-                  railType: "undermount",
+                  railType: "ball3stage",
                   marginGap: 3,
                   hasGrain: true,
                 })
@@ -219,18 +227,23 @@ export default function DrawerAutomationPage() {
               <select id="product-type" value={inputs.productType ?? "custom"} className="w-full rounded-lg border border-slate-200 p-2" onChange={e => {
                 const selected = DRAWER_TEMPLATES.find(t => t.id === e.target.value);
                 if (!selected) { setInputs({ ...PRESETS[0].values, productType: "custom" }); return; }
-                const count = selected.counts[0];
+                const count = selected.id === "ceiling-floor" ? 3 : selected.counts[0];
                 const dims = templateDimensions(selected.id, count);
                 setInputs({ ...inputs, productType: selected.id, cabinetWidth: selected.width, cabinetHeight: dims.height, cabinetDepth: dims.depth, drawerCount: count, boardThickness: 18, railType: "ball3stage", cabinetQuantity: inputs.cabinetQuantity ?? 1 });
               }}>
                 {DRAWER_TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                 <option value="custom">일반 서랍 박스 계산</option>
               </select>
-              <p className="mt-2 text-slate-500">엑셀 유형은 18T 몸통·15T 서랍·4.5T 우라를 적용합니다. 에보라·옴니버스는 원본 치수 확인 후 추가가 필요합니다.</p>
+              <p className="mt-2 text-slate-500">바닥형 3단은 제공한 검토표의 18T 몸통·15T 서랍·5T 우라를 적용합니다. 다른 유형·단수는 기존 엑셀 치수를 유지합니다.</p>
             </div>
             {template && <div>
               <label htmlFor="cabinet-quantity" className="block font-bold text-slate-700 mb-1.5">세대 수 / 제작 수량</label>
               <input id="cabinet-quantity" type="number" min={1} max={100} value={inputs.cabinetQuantity ?? 1} onChange={e => setInputs({ ...inputs, cabinetQuantity: Math.min(100, Math.max(1, Math.trunc(Number(e.target.value)))) })} className="w-full rounded-lg border border-slate-200 p-2" />
+            </div>}
+            {reviewed && <div>
+              <label htmlFor="back-panel-height" className="mb-1.5 block font-bold text-slate-700">뒷판 재단 높이 (mm)</label>
+              <input id="back-panel-height" type="number" min={100} max={1200} value={inputs.backPanelHeight ?? REVIEWED_BACK_PANEL_HEIGHT} onChange={e => setInputs({ ...inputs, backPanelHeight: Math.min(1200, Math.max(100, Number(e.target.value))) })} className="w-full rounded-lg border border-slate-200 p-2" />
+              <p className="mt-2 text-slate-500">홈에 끼우는 우라 · 기존 3단 재단 높이 {REVIEWED_BACK_PANEL_HEIGHT}mm 기준. 가구발을 포함한 외경 높이로 계산하지 않습니다.</p>
             </div>}
             {/* Cabinet Outer Width */}
             <div>
@@ -474,6 +487,7 @@ export default function DrawerAutomationPage() {
             {(result.warnings ?? []).map(w => <p key={w} className="text-xs text-amber-800">확인 사항: {w}</p>)}
             <p className="text-xs text-slate-500">도면은 구조 참고용입니다. 상단과 하단의 정확한 재단 치수는 부재 목록을 사용해주세요.</p>
           </div>}
+          <DrawerCostPanel result={result} pricing={pricing} />
           <DrawerDrawing key={`${inputs.productType}-${inputs.drawerCount}-${inputs.cabinetWidth}`} result={result} />
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
@@ -521,7 +535,11 @@ export default function DrawerAutomationPage() {
                 </tbody>
               </table>
             </div>
-            {template && <div className="p-4 border-t border-slate-200 bg-blue-50 text-xs text-slate-700 space-y-1">
+            {reviewed && <div className="space-y-1 border-t border-slate-200 bg-blue-50 p-4 text-xs text-slate-700">
+              <p className="font-bold">580 3단 제작 기준 검토표 적용</p><p>상판 W×400 · 옆판 601×380 · 보강대 W−37 · 서랍 전·뒤판 W−94 · 밑판 W−81 · 받침대 319×50 · 뒷판·밑판 5T</p>
+              <p>레일 350mm × 45mm · {3 * (inputs.cabinetQuantity ?? 1)}조 (좌우 한 세트). 레일 본체는 검토표의 부품 단가 목록에 없습니다.</p>
+            </div>}
+            {template && !reviewed && <div className="p-4 border-t border-slate-200 bg-blue-50 text-xs text-slate-700 space-y-1">
               <p className="font-bold">제작 메모</p>
               <p>우라홈 깊이 7mm</p>
               <p>3단 볼레일 공제 25~26mm · 원본 메모: 몸통 36 / 레일 25 / 서랍판 30, 합계 91~92mm 제외</p>
@@ -552,7 +570,7 @@ export default function DrawerAutomationPage() {
                   </div>
                   <div className="text-right">
                     <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-bold rounded-lg text-xs">
-                      {hw.count}{template ? "조" : "개"}
+                      {hw.count}{hw.unit ?? "개"}
                     </span>
                     <span className="text-[10px] text-slate-400 block mt-0.5">{hw.spec}</span>
                   </div>
@@ -569,7 +587,7 @@ export default function DrawerAutomationPage() {
                 </div>
                 <div>
                   <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
-                    <span>4×8 원장 소요 장수 & 톱질 최적화 재단 (Standard 4×8 Full Sheet)</span>
+                    <span>4×8 원장 소요 장수 · 재단 배치 예상</span>
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
                     기본 규격 <strong>1,220mm × 2,440mm (2.98m²)</strong> 원장 기준 | 톱날 낭비 유격 <strong>4mm</strong> 반영
@@ -629,7 +647,7 @@ export default function DrawerAutomationPage() {
                     <th className="py-2.5 px-3">부재 조각 수</th>
                     <th className="py-2.5 px-3">순 부재 면적</th>
                     <th className="py-2.5 px-3">원장 소요 수량</th>
-                    <th className="py-2.5 px-3">최소 톱질 횟수 (절단)</th>
+                    <th className="py-2.5 px-3">배치 기준 절단 횟수</th>
                     <th className="py-2.5 px-3">자재 수율 (Yield)</th>
                     <th className="py-2.5 px-3">스크랩/로스율</th>
                   </tr>
@@ -660,7 +678,7 @@ export default function DrawerAutomationPage() {
                 <div className="flex items-center gap-2">
                   <LayoutGrid className="w-4.5 h-4.5 text-amber-600" />
                   <h4 className="font-bold text-sm text-slate-900">
-                    원장별 2D 톱질 최소화 재단 배치도 (Minimum Saw Pass Maps)
+                    원장별 재단 배치 예상도
                   </h4>
                 </div>
                 <div className="flex items-center gap-3 text-[11px]">
@@ -678,7 +696,7 @@ export default function DrawerAutomationPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
-                    <span className="text-slate-600 font-medium">{template ? "4.5T 우라" : "9T 밑판"}</span>
+                    <span className="text-slate-600 font-medium">{reviewed ? "5T 우라" : template ? "4.5T 우라" : "9T 밑판"}</span>
                   </div>
                 </div>
               </div>
