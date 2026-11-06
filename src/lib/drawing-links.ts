@@ -1,3 +1,4 @@
+import { connectionCode } from './drawing-connection-code';
 import crypto from 'node:crypto';
 import { db, executeMutation, executeQuery } from './db';
 
@@ -28,6 +29,7 @@ export async function linkDrawingProject(workItemId: string, selectedId?: string
   // Deterministic initial ID prevents repeated launches from creating duplicate empty projects.
   const projectId = `online-${crypto.createHash('sha256').update(workItemId).digest('hex').slice(0,40)}`;
   await executeMutation("INSERT INTO bo_drawing_links(project_id,work_item_id,sheet_manifest,updated_at,revision) VALUES(?,?,'{}',?,0) ON CONFLICT(project_id) DO NOTHING", [projectId,workItemId,new Date().toISOString()]);
+  await connectionCode(db!, projectId);
   return projectId;
 }
 
@@ -37,5 +39,5 @@ export async function drawingLinksForWork(workItemId: string) {
   if (!result.success) throw new Error('도면 연결 내역을 불러오지 못했습니다.');
   const history = await executeQuery('SELECT id,project_id,pdf_url,file_name,sheets,created_at FROM bo_drawing_versions WHERE work_item_id = ? ORDER BY created_at DESC', [workItemId]);
   if (!history.success) throw new Error('도면 전송 이력을 불러오지 못했습니다.');
-  return result.rows.map(row => ({ projectId:String(row.project_id),blueprintId:row.blueprint_id,syncedAt:String(row.updated_at),revision:Number(row.revision),sheets:Object.values(JSON.parse(String(row.sheet_manifest || '{}'))),versions:history.rows.filter(v => v.project_id === row.project_id).map(v => ({ id:v.id,url:v.pdf_url,name:v.file_name,sheets:JSON.parse(String(v.sheets || '[]')),createdAt:v.created_at })) }));
+  return Promise.all(result.rows.map(async row => ({ connectionCode: await connectionCode(db!, String(row.project_id)), projectId:String(row.project_id),blueprintId:row.blueprint_id,syncedAt:String(row.updated_at),revision:Number(row.revision),sheets:Object.values(JSON.parse(String(row.sheet_manifest || '{}'))),versions:history.rows.filter(v => v.project_id === row.project_id).map(v => ({ id:v.id,url:v.pdf_url,name:v.file_name,sheets:JSON.parse(String(v.sheets || '[]')),createdAt:v.created_at })) })));
 }

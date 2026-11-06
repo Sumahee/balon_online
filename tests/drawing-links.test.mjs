@@ -15,7 +15,9 @@ async function fixture() {
   const db=createClient({url:'file::memory:'});
   await db.executeMultiple("CREATE TABLE bo_work_items(id TEXT PRIMARY KEY);INSERT INTO bo_work_items VALUES('work-1')");
   const executeQuery=async(sql,args=[])=>({success:true,rows:(await db.execute({sql,args})).rows});
-  const module=load({'./db':{db,executeQuery,executeMutation:executeQuery}});
+  const helperCode=ts.transpileModule(readFileSync('src/lib/drawing-connection-code.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+  const helper={exports:{}};new Function('module','exports',helperCode)(helper,helper.exports);
+  const module=load({'./db':{db,executeQuery,executeMutation:executeQuery},'./drawing-connection-code':helper.exports});
   return {db,...module};
 }
 test('online launches share one persistent project ID and reject a project belonging to another work',async()=>{
@@ -38,7 +40,7 @@ test('web-first shared links expose per-sheet latest PDFs and retained export hi
     await db.execute({sql:'INSERT INTO bo_drawing_links VALUES(?,?,?,?,?,?,?)',args:['web-first-project','work-1',42,JSON.stringify(manifest),'2026-10-24T01:00:00Z','https://files.example/latest.pdf',2]});
     await db.execute({sql:'INSERT INTO bo_drawing_versions VALUES(?,?,?,?,?,?,?,?)',args:['version-1','web-first-project','work-1','export-1','https://files.example/old.pdf','이전 도면.pdf',JSON.stringify(Object.values(manifest)),'2026-10-23T01:00:00Z']});
     const links=await drawingLinksForWork('work-1');
-    assert.equal(links.length,1);assert.equal(links[0].sheets[0].name,'안방 1');assert.equal(links[0].versions[0].name,'이전 도면.pdf');assert.equal(links[0].blueprintId,42);
+    assert.match(links[0].connectionCode,/^\d{7,}$/);assert.equal(links.length,1);assert.equal(links[0].sheets[0].name,'안방 1');assert.equal(links[0].versions[0].name,'이전 도면.pdf');assert.equal(links[0].blueprintId,42);
     assert.equal(await linkDrawingProject('work-1'),'web-first-project');
   } finally {db.close();}
 });
